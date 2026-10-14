@@ -1,0 +1,554 @@
+<title>Project Deck</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: keynote-style stage. A centred 4-inch phone runs the live widget under an ambient glow in the current project's brand colour,
+   annotated on both sides; below it, feature bands (sizes, account routing, the scanned projects, the build sequence). */
+@property --brand{syntax:'<color>';inherits:true;initial-value:#1A6FDB}
+:root{
+  --bg:#F5F5F7; --surface:#FFFFFF; --surface-2:#EFEFF3; --fg:#1D1D1F; --muted:#6E6E73; --faint:#C7C7CC;
+  --line:rgba(0,0,0,.08); --accent:#0A66E8; --good:#1F8A4C; --warn:#A35F00;
+  --glass:rgba(255,255,255,.70); --glass-edge:rgba(255,255,255,.85); --tile:rgba(40,40,60,.06); --scrim:rgba(0,0,0,.22);
+  --toast-bg:#1D1D1F; --toast-fg:#FFFFFF; --glow:.38;
+  --wall-1:#F6F1EA; --wall-2:#C9D5E2; --wall-3:#E2E6EC;
+  --display:"Plus Jakarta Sans","Heebo",system-ui,sans-serif;
+  --font:"Heebo",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#050506; --surface:#121215; --surface-2:#1C1C20; --fg:#F5F5F7; --muted:#9A9AA2; --faint:#3A3A40;
+  --line:rgba(255,255,255,.08); --accent:#5A9BFF; --good:#4CC27E; --warn:#F0A43A;
+  --glass:rgba(30,30,36,.62); --glass-edge:rgba(255,255,255,.10); --tile:rgba(255,255,255,.065); --scrim:rgba(0,0,0,.55);
+  --toast-bg:#F5F5F7; --toast-fg:#0B0B0C; --glow:.5;
+  --wall-1:#1C2433; --wall-2:#0E1A1F; --wall-3:#0A0C11; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#050506; --surface:#121215; --surface-2:#1C1C20; --fg:#F5F5F7; --muted:#9A9AA2; --faint:#3A3A40;
+  --line:rgba(255,255,255,.08); --accent:#5A9BFF; --good:#4CC27E; --warn:#F0A43A;
+  --glass:rgba(30,30,36,.62); --glass-edge:rgba(255,255,255,.10); --tile:rgba(255,255,255,.065); --scrim:rgba(0,0,0,.55);
+  --toast-bg:#F5F5F7; --toast-fg:#0B0B0C; --glow:.5;
+  --wall-1:#1C2433; --wall-2:#0E1A1F; --wall-3:#0A0C11; color-scheme:dark}
+
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased;transition:background .3s}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#app{transition:--brand .6s ease;overflow-x:clip}
+.container{max-width:1120px;margin:0 auto;padding-inline:20px}
+@media (max-width:600px){.container{padding-inline:16px}}
+
+/* ---------- hero ---------- */
+.hero{padding-block:56px 24px;text-align:center;position:relative}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;font-weight:500;color:var(--muted);padding:5px 12px;border:1px solid var(--line);border-radius:999px;background:var(--surface)}
+.eyebrow i{width:6px;height:6px;border-radius:50%;background:var(--brand);box-shadow:0 0 10px var(--brand)}
+h1{font-family:var(--display);font-weight:800;font-size:clamp(52px,9vw,104px);line-height:.95;letter-spacing:-.045em;margin:18px 0 16px;direction:ltr}
+h1 span{background:linear-gradient(100deg,var(--fg) 30%,color-mix(in srgb,var(--brand) 70%,var(--fg)));-webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{font-size:clamp(16px,2.1vw,19px);color:var(--muted);max-width:46ch;margin:0 auto;text-wrap:balance}
+
+.stage{position:relative;display:grid;grid-template-columns:minmax(0,1fr) 336px minmax(0,1fr);gap:28px;margin-top:44px;align-items:start}
+.stage::before{content:"";position:absolute;left:50%;top:44%;width:760px;height:620px;transform:translate(-50%,-50%);border-radius:50%;
+  background:radial-gradient(closest-side,color-mix(in srgb,var(--brand) 70%,transparent),transparent);filter:blur(30px);opacity:var(--glow);pointer-events:none;z-index:0}
+.side{position:relative;height:586px;z-index:1}
+.co{position:absolute;inset-inline:0;display:flex;align-items:center;gap:14px;transform:translateY(-50%)}
+.co-t{text-align:start;max-width:190px;flex:none}
+.side.end .co-t{text-align:end}
+.co-t b{display:block;font-size:14px;font-weight:600}
+.co-t span{font-size:13px;color:var(--muted);line-height:1.4}
+.co-l{flex:1;height:1px;background:linear-gradient(to left,var(--faint),transparent);position:relative;min-width:24px}
+.side.end .co-l{background:linear-gradient(to right,var(--faint),transparent)}
+.co-l::before{content:"";position:absolute;top:-3px;width:7px;height:7px;border-radius:50%;background:var(--surface);border:1.5px solid var(--fg)}
+.side.start .co-l::before{left:-2px}
+.side.end .co-l::before{right:-2px}
+@media (max-width:980px){.stage{grid-template-columns:minmax(0,336px);justify-content:center}.side{display:none}.stage::before{width:520px;height:520px}}
+
+/* ---------- phone ---------- */
+.phone{position:relative;z-index:1;width:336px;max-width:100%;padding:9px;border-radius:46px;background:linear-gradient(160deg,#2A2A2E,#0C0C0E 40%,#1A1A1D);
+  box-shadow:0 0 0 1px rgba(255,255,255,.08) inset,0 0 0 1.5px #000,0 50px 80px -40px rgba(0,0,0,.55),0 30px 60px -30px color-mix(in srgb,var(--brand) 50%,transparent)}
+.phone::before,.phone::after{content:"";position:absolute;left:-3px;width:3px;border-radius:2px 0 0 2px;background:#1A1A1D}
+.phone::before{top:120px;height:56px}.phone::after{top:190px;height:34px}
+.screen{position:relative;height:568px;border-radius:37px;overflow:hidden;color:var(--fg);display:flex;flex-direction:column;
+  background:radial-gradient(90% 55% at 15% 8%,var(--wall-1),transparent 70%),radial-gradient(100% 70% at 95% 95%,var(--wall-2),transparent 70%),var(--wall-3)}
+.screen::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:20;border-radius:inherit;
+  background:linear-gradient(125deg,rgba(255,255,255,.10),transparent 32%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.04)}
+.cam{position:absolute;top:9px;left:50%;width:10px;height:10px;margin-left:-5px;border-radius:50%;background:#050505;box-shadow:0 0 0 2px rgba(0,0,0,.25);z-index:3}
+.status{height:28px;flex:none;display:flex;align-items:center;justify-content:space-between;padding-inline:22px;font-size:12px;font-weight:600;direction:ltr;font-variant-numeric:tabular-nums}
+.status em{font-style:normal;display:flex;gap:5px;align-items:center}
+.status svg{width:14px;height:14px}
+.clock{height:96px;flex:none;padding:14px 20px 0;direction:rtl;text-align:start}
+.clock b{display:block;font-family:var(--display);font-size:50px;font-weight:600;line-height:1;letter-spacing:-.04em;font-variant-numeric:tabular-nums;direction:ltr;text-align:right}
+.clock span{font-size:13px;color:var(--muted);font-weight:500}
+.home-apps{margin-top:auto;padding:0 14px;display:grid;grid-template-columns:repeat(4,1fr);gap:6px;direction:rtl}
+.app{display:flex;flex-direction:column;align-items:center;gap:5px;font-size:10.5px;font-weight:500}
+.app i,.dock i{width:46px;height:46px;border-radius:15px;background:var(--glass);border:1px solid var(--glass-edge);display:grid;place-items:center;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+.app svg,.dock svg{width:21px;height:21px;opacity:.72}
+.dock{margin:12px 12px 4px;padding:8px;border-radius:26px;background:var(--glass);border:1px solid var(--glass-edge);display:grid;grid-template-columns:repeat(4,1fr);justify-items:center;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+.dock i{border-radius:50%;background:var(--tile);border:0}
+.gesture{height:18px;flex:none;display:grid;place-items:center}
+.gesture::after{content:"";width:100px;height:4px;border-radius:2px;background:var(--fg);opacity:.3}
+
+/* ---------- widget ---------- */
+.wg{position:relative;direction:rtl;border-radius:26px;padding:12px;display:flex;flex-direction:column;gap:10px;text-align:start;isolation:isolate;
+  background:radial-gradient(120% 110% at 100% 0%,color-mix(in srgb,var(--brand) 22%,transparent),transparent 58%),var(--glass);
+  border:1px solid var(--glass-edge);backdrop-filter:blur(30px) saturate(1.7);-webkit-backdrop-filter:blur(30px) saturate(1.7);
+  box-shadow:0 1px 0 rgba(255,255,255,.35) inset,0 22px 40px -26px color-mix(in srgb,var(--brand) 60%,rgba(0,0,0,.5))}
+.screen .wg{margin-inline:12px}
+.wg-m,.wg-l{width:296px;max-width:100%}
+.wg-s{width:148px;padding:11px;gap:9px;border-radius:24px}
+.wg-head{display:flex;align-items:center;gap:6px;height:40px}
+.wg-id{flex:1;min-width:0;display:flex;align-items:center;gap:10px;border-radius:12px;text-align:start}
+.lg{--c:var(--lb,var(--brand));flex:none;width:34px;height:34px;border-radius:11px;display:grid;place-items:center;color:#fff;
+  font-family:var(--display);font-weight:800;font-size:15px;letter-spacing:-.02em;
+  background:linear-gradient(150deg,color-mix(in srgb,var(--c) 70%,#fff) 0%,var(--c) 45%,color-mix(in srgb,var(--c) 72%,#000) 100%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.35),inset 0 -1px 0 rgba(0,0,0,.15),0 6px 14px -6px var(--c)}
+.wg-t{min-width:0;display:flex;flex-direction:column;line-height:1.2}
+.wg-t b{font-size:15.5px;font-weight:700;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wg-t small{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
+.wg-t small i{width:6px;height:6px;border-radius:50%;background:var(--good);flex:none;box-shadow:0 0 0 2px color-mix(in srgb,var(--good) 25%,transparent)}
+.count{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;font-weight:500;padding-inline:4px;direction:ltr}
+.nav{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--tile);flex:none;transition:transform .12s,background .2s}
+.nav svg{width:15px;height:15px}
+.nav:hover{background:color-mix(in srgb,var(--brand) 16%,var(--tile))}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.tile{height:66px;border-radius:17px;background:var(--tile);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;transition:transform .14s,background .2s;position:relative}
+.tile svg{width:22px;height:22px}
+.tile span{font-size:10.5px;line-height:1;color:var(--muted);font-weight:500;max-width:100%;padding-inline:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile:hover{background:color-mix(in srgb,var(--brand) 13%,var(--tile))}
+.tile.primary{color:#fff;background:linear-gradient(160deg,color-mix(in srgb,var(--brand) 78%,#fff),var(--brand) 55%,color-mix(in srgb,var(--brand) 82%,#000));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.3),0 8px 18px -10px var(--brand)}
+.tile.primary span{color:rgba(255,255,255,.92)}
+.nav:active,.tile:active{transform:scale(.93)}
+.wg-s .wg-id{flex-direction:column;align-items:flex-start;gap:7px}
+.wg-s .wg-head{height:auto}
+.wg-s .grid{grid-template-columns:repeat(4,1fr);gap:6px}
+.wg-s .tile{height:38px;border-radius:12px}
+.wg-s .tile svg{width:18px;height:18px}
+.wg-s .tile span{display:none}
+.wg-s .lg{width:30px;height:30px;border-radius:10px;font-size:13px}
+.in-n .wg-body,.in-p .wg-body{animation:slide .38s cubic-bezier(.2,.8,.2,1)}
+.in-p .wg-body{--dx:14px}.in-n .wg-body{--dx:-14px}
+.in-n .lg,.in-p .lg{animation:pop .45s cubic-bezier(.3,1.4,.5,1)}
+@keyframes slide{from{opacity:0;transform:translateX(var(--dx))}to{opacity:1;transform:none}}
+@keyframes pop{from{transform:scale(.7);opacity:.3}to{transform:none;opacity:1}}
+.wg-body{display:flex;flex-direction:column;gap:10px}
+
+/* ---------- sheets ---------- */
+.scrim{position:absolute;inset:0;background:var(--scrim);opacity:0;pointer-events:none;transition:opacity .25s;z-index:10}
+.scrim.on{opacity:1;pointer-events:auto}
+.sheet{position:absolute;inset-inline:0;bottom:0;max-height:84%;z-index:11;background:var(--surface);border-radius:28px 28px 0 0;transform:translateY(105%);
+  transition:transform .32s cubic-bezier(.2,.85,.2,1);display:flex;flex-direction:column;direction:rtl;overflow:hidden;text-align:start}
+.sheet.on{transform:none}
+.sheet::before{content:"";position:absolute;inset:0 0 auto 0;height:120px;background:radial-gradient(80% 100% at 100% 0%,color-mix(in srgb,var(--brand) 18%,transparent),transparent);pointer-events:none}
+.handle{width:38px;height:5px;border-radius:3px;background:var(--fg);opacity:.18;margin:8px auto 2px;flex:none}
+.sheet-head{position:relative;padding:8px 18px 12px;display:flex;align-items:center;gap:12px}
+.sheet-head h3{margin:0;font-size:17px;font-weight:700}
+.sheet-body{position:relative;overflow:auto;padding:0 10px 16px}
+.search{position:relative;margin:0 10px 8px;display:flex;align-items:center;gap:8px;background:var(--surface-2);border-radius:12px;padding:0 12px;height:40px}
+.search svg{width:16px;height:16px;color:var(--muted);flex:none}
+.search input{flex:1;min-width:0;border:0;background:none;font:inherit;font-size:14px;color:var(--fg);outline:none}
+.row{width:100%;display:flex;align-items:center;gap:12px;padding:8px;border-radius:14px;text-align:start}
+.row:hover{background:var(--surface-2)}
+.row .lg{width:32px;height:32px;font-size:13px;border-radius:10px}
+.row .t{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.25}
+.row .t b{font-size:14px;font-weight:600}
+.row .t small{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .ic{width:32px;height:32px;border-radius:10px;background:var(--surface-2);display:grid;place-items:center;flex:none}
+.row .ic svg{width:17px;height:17px}
+.check{width:18px;height:18px;color:var(--brand)}
+.chip{font-size:10.5px;font-weight:500;padding:3px 9px;border-radius:999px;background:var(--surface-2);color:var(--muted);white-space:nowrap;flex:none}
+.chip.alt{color:var(--warn);background:color-mix(in srgb,var(--warn) 12%,transparent)}
+.label{font-size:11px;font-weight:600;letter-spacing:.06em;color:var(--muted);padding:12px 8px 4px}
+.mono{font-family:var(--mono);font-size:11.5px}
+.copybtn{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;color:var(--brand);background:color-mix(in srgb,var(--brand) 10%,transparent);flex:none}
+.copybtn svg{width:16px;height:16px}
+.toast{position:absolute;left:50%;bottom:126px;z-index:15;transform:translate(-50%,10px) scale(.96);opacity:0;transition:.25s cubic-bezier(.2,.8,.2,1);
+  background:var(--toast-bg);color:var(--toast-fg);font-size:12px;font-weight:500;padding:9px 15px;border-radius:999px;white-space:nowrap;max-width:92%;overflow:hidden;text-overflow:ellipsis;pointer-events:none;direction:rtl;
+  box-shadow:0 10px 24px -10px rgba(0,0,0,.4)}
+.toast.on{opacity:1;transform:translate(-50%,0) scale(1)}
+
+/* ---------- rail + controls ---------- */
+.rail{position:relative;z-index:1;margin-top:28px;display:flex;gap:8px;overflow-x:auto;padding:6px 4px 10px;scrollbar-width:none;justify-content:safe center}
+.rail::-webkit-scrollbar{display:none}
+.pchip{flex:none;display:flex;align-items:center;gap:8px;padding:5px 12px 5px 6px;border-radius:999px;border:1px solid var(--line);background:color-mix(in srgb,var(--surface) 70%,transparent);font-size:13px;font-weight:500;color:var(--muted);transition:.2s}
+.pchip .lg{width:24px;height:24px;border-radius:8px;font-size:11px;box-shadow:none}
+.pchip[aria-pressed="true"]{color:var(--fg);background:var(--surface);border-color:color-mix(in srgb,var(--lb) 45%,var(--line));box-shadow:0 6px 16px -10px var(--lb)}
+.controls{position:relative;z-index:1;display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:14px}
+.seg{display:flex;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:3px}
+.seg button{font-size:13px;font-weight:500;padding:5px 14px;border-radius:999px;color:var(--muted);font-variant-numeric:tabular-nums}
+.seg button[aria-pressed="true"]{background:var(--fg);color:var(--bg)}
+
+/* ---------- bands ---------- */
+.band{padding-block:88px 0}
+.band h2{font-family:var(--font);font-size:clamp(28px,4.4vw,44px);line-height:1.1;letter-spacing:-.025em;font-weight:800;margin:0 0 14px;max-width:22ch;text-wrap:balance}
+.band h2 span{color:var(--muted);font-weight:700}
+.band .sub{color:var(--muted);font-size:16px;margin:0 0 32px;max-width:60ch}
+
+.wall{border-radius:32px;padding:44px 24px;display:flex;flex-wrap:wrap;gap:32px;justify-content:center;align-items:flex-end;position:relative;overflow:hidden;
+  background:radial-gradient(70% 90% at 15% 0%,var(--wall-1),transparent 70%),radial-gradient(80% 90% at 95% 100%,var(--wall-2),transparent 70%),var(--wall-3);border:1px solid var(--line)}
+.wall::before{content:"";position:absolute;inset:auto 10% -40% 10%;height:70%;background:radial-gradient(closest-side,color-mix(in srgb,var(--brand) 55%,transparent),transparent);opacity:var(--glow);filter:blur(20px)}
+.wall figure{position:relative;margin:0;display:flex;flex-direction:column;align-items:center;gap:14px}
+.wall figcaption{font-size:13px;color:var(--muted);font-weight:500}
+.wall figcaption b{color:var(--fg);font-family:var(--display);font-weight:700;margin-inline-end:6px;direction:ltr;unicode-bidi:isolate}
+.wall .tile{pointer-events:none}
+
+.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+@media (max-width:900px){.cards{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:28px;overflow:hidden;display:flex;flex-direction:column}
+.vis{height:176px;background:var(--surface-2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:16px;position:relative;overflow:hidden}
+.card .body{padding:22px 22px 24px;display:flex;flex-direction:column;gap:8px;flex:1}
+.card h3{margin:0;font-size:18px;font-weight:700;letter-spacing:-.01em}
+.card p{margin:0;font-size:14px;color:var(--muted)}
+.state{align-self:flex-start;margin-top:auto;font-size:12px;font-weight:600;padding:4px 11px;border-radius:999px}
+.state.ok{color:var(--good);background:color-mix(in srgb,var(--good) 12%,transparent)}
+.state.once{color:var(--warn);background:color-mix(in srgb,var(--warn) 12%,transparent)}
+.url{font-family:var(--mono);font-size:11px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:7px 10px;direction:ltr;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.url em{font-style:normal;color:var(--accent)}
+.down{width:16px;height:16px;color:var(--muted)}
+.acct{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:500;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:4px 12px 4px 4px;direction:ltr}
+.acct i{width:22px;height:22px;border-radius:50%;background:var(--brand);color:#fff;font-style:normal;display:grid;place-items:center;font-size:11px;font-weight:700}
+.chromes{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.cr{display:flex;flex-direction:column;align-items:center;gap:7px;font-size:11px;color:var(--muted);font-weight:500;text-align:center;line-height:1.25}
+.cr i{width:44px;height:44px;border-radius:50%;position:relative;background:conic-gradient(from 210deg,var(--c1) 0 33%,var(--c2) 0 66%,var(--c3) 0);box-shadow:0 6px 14px -8px rgba(0,0,0,.5)}
+.cr i::after{content:"";position:absolute;inset:12px;border-radius:50%;background:var(--c4);box-shadow:0 0 0 3px #fff}
+.cr b{color:var(--fg);font-weight:600;font-size:11.5px}
+.flow{display:flex;align-items:center;gap:10px;direction:ltr}
+.flow .tile{width:58px;height:58px;color:#fff;background:linear-gradient(160deg,#3a3a40,#1d1d1f)}
+.flow .tile span{color:rgba(255,255,255,.8)}
+.arrow{width:30px;height:1px;background:var(--muted);position:relative}
+.arrow::after{content:"";position:absolute;right:-1px;top:-3px;border:3.5px solid transparent;border-left:5px solid var(--muted)}
+
+.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
+.pc{position:relative;text-align:start;background:var(--surface);border:1px solid var(--line);border-radius:22px;padding:18px;display:flex;flex-direction:column;gap:14px;overflow:hidden;transition:transform .2s,box-shadow .2s,border-color .2s}
+.pc::before{content:"";position:absolute;inset:-40% -40% auto auto;width:180px;height:180px;background:radial-gradient(closest-side,color-mix(in srgb,var(--lb) 30%,transparent),transparent);pointer-events:none}
+.pc:hover{transform:translateY(-2px);box-shadow:0 18px 30px -22px var(--lb)}
+.pc[aria-pressed="true"]{border-color:color-mix(in srgb,var(--lb) 60%,var(--line));box-shadow:0 0 0 1px color-mix(in srgb,var(--lb) 60%,transparent),0 18px 30px -22px var(--lb)}
+.pc .top{display:flex;align-items:center;gap:12px;position:relative}
+.pc .lg{width:42px;height:42px;border-radius:13px;font-size:17px}
+.pc .nm{display:flex;flex-direction:column;line-height:1.25;min-width:0}
+.pc .nm b{font-size:15px;font-weight:700}
+.pc .nm small{font-size:12px;color:var(--muted)}
+.pc .svc{position:relative;font-size:12px;color:var(--muted);direction:ltr;text-align:right;line-height:1.5}
+.tmp{position:absolute;top:14px;left:14px;font-size:10.5px;font-weight:600;color:var(--warn);background:color-mix(in srgb,var(--warn) 12%,transparent);padding:2px 8px;border-radius:999px}
+.footnote{font-size:13px;color:var(--muted);margin-top:16px}
+
+.steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;counter-reset:s}
+@media (max-width:900px){.steps{grid-template-columns:minmax(0,1fr)}}
+.step{counter-increment:s;border-top:2px solid var(--line);padding-top:18px}
+.step.now{border-top-color:var(--brand)}
+.step header{display:flex;align-items:baseline;gap:10px;margin-bottom:12px}
+.step header::before{content:counter(s);font-family:var(--display);font-weight:800;font-size:30px;line-height:1;color:var(--faint)}
+.step.now header::before{color:var(--brand)}
+.step h3{margin:0;font-size:17px;font-weight:700}
+.step .tag{font-size:11px;font-weight:600;color:var(--brand);margin-inline-start:auto}
+.step ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
+.step li{font-size:14px;color:var(--muted);display:flex;gap:10px}
+.step li::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor;flex:none;margin-top:9px;opacity:.6}
+.step.now li{color:var(--fg)}
+
+.asks{background:var(--surface);border:1px solid var(--line);border-radius:28px;padding:8px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+@media (max-width:900px){.asks{grid-template-columns:minmax(0,1fr)}}
+.ask{padding:20px;border-radius:22px;background:var(--surface-2);display:flex;flex-direction:column;gap:10px}
+.ask svg{width:24px;height:24px;color:var(--brand)}
+.ask b{font-size:15px}
+.ask span{font-size:14px;color:var(--muted)}
+footer{padding-block:72px 56px;color:var(--muted);font-size:13.5px;text-align:center}
+footer b{color:var(--fg);font-weight:600}
+footer code{font-family:var(--mono);font-size:12px;background:var(--surface-2);padding:2px 7px;border-radius:6px;color:var(--fg)}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}html{scroll-behavior:auto}}
+</style>
+
+<div id="app" dir="rtl">
+<section class="hero container">
+  <span class="eyebrow"><i></i>אב־טיפוס · Android · מסך 4 אינץ'</span>
+  <h1><span>Project Deck</span></h1>
+  <p class="lede">כל הפרויקטים שלך בווידג'ט אחד. כל פרויקט עם הלוגו והצבע שלו, וכל כפתור פותח את הדשבורד הנכון בחשבון הנכון.</p>
+
+  <div class="stage" id="stage">
+    <div class="side start" aria-hidden="true">
+      <div class="co" style="top:165px"><div class="co-t"><b>שם הפרויקט</b><span>לחיצה פותחת רשימה עם חיפוש</span></div><i class="co-l"></i></div>
+      <div class="co" style="top:228px"><div class="co-t"><b>הפעולה הראשית</b><span>תמיד ראשונה ובצבע של הפרויקט</span></div><i class="co-l"></i></div>
+    </div>
+
+    <div class="phone">
+      <div class="screen" id="screen">
+        <span class="cam"></span>
+        <div class="status"><span>20:15</span><em>
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M2 20h3v-4H2zm5 0h3v-8H7zm5 0h3V8h-3zm5 0h3V4h-3z"/></svg>
+          <svg viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="7" width="18" height="10" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="4" y="9" width="12" height="6" rx="1"/><rect x="21" y="10" width="1.6" height="4" rx=".8"/></svg></em></div>
+        <div class="clock"><b>20:15</b><span>שבת, 10 באוקטובר</span></div>
+        <div id="phoneWidget"></div>
+        <div class="home-apps" aria-hidden="true">
+          <div class="app"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3.2"/></svg></i>Chrome</div>
+          <div class="app"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="m4.5 7 7.5 6 7.5-6"/></svg></i>Gmail</div>
+          <div class="app"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4" y="4.5" width="16" height="15.5" rx="4"/><path d="M4 9.5h16M9 3v3M15 3v3"/></svg></i>יומן</div>
+          <div class="app"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3 2"/></svg></i>שעון</div>
+        </div>
+        <div class="dock" aria-hidden="true">
+          <i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 4h3l1.5 4-2 1.3a10 10 0 0 0 6.2 6.2l1.3-2 4 1.5v3a2 2 0 0 1-2 2A15 15 0 0 1 4 6a2 2 0 0 1 2-2z"/></svg></i>
+          <i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v8a2.5 2.5 0 0 1-2.5 2.5H9l-5 3.5z"/></svg></i>
+          <i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.6 2.5 14.4 0 17M12 3.5c-2.5 2.6-2.5 14.4 0 17"/></svg></i>
+          <i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3.5" y="6.5" width="17" height="13" rx="3"/><circle cx="12" cy="13" r="3.5"/><path d="M9 6.5 10 4h4l1 2.5"/></svg></i>
+        </div>
+        <div class="gesture" aria-hidden="true"></div>
+
+        <div class="scrim" id="scrim"></div>
+        <div class="sheet" id="picker" role="dialog" aria-label="בחירת פרויקט">
+          <div class="handle"></div>
+          <div class="sheet-head"><h3>פרויקטים</h3></div>
+          <label class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4-4"/></svg><input id="q" type="search" placeholder="חיפוש פרויקט" autocomplete="off"></label>
+          <div class="sheet-body" id="plist"></div>
+        </div>
+        <div class="sheet" id="more" role="dialog" aria-label="כל הקישורים">
+          <div class="handle"></div>
+          <div class="sheet-head" id="moreHead"></div>
+          <div class="sheet-body" id="mlist"></div>
+        </div>
+        <div class="toast" id="toast" role="status"></div>
+      </div>
+    </div>
+
+    <div class="side end" aria-hidden="true">
+      <div class="co" style="top:165px"><i class="co-l"></i><div class="co-t"><b>מעבר בין פרויקטים</b><span>חצים, בלי להיכנס לאפליקציה</span></div></div>
+      <div class="co" style="top:228px"><i class="co-l"></i><div class="co-t"><b>עוד</b><span>כל הקישורים וכפתורי העתקה</span></div></div>
+    </div>
+  </div>
+
+  <div class="rail" id="rail" role="group" aria-label="בחירת פרויקט"></div>
+  <div class="controls">
+    <div class="seg" role="group" aria-label="גודל הווידג'ט"><button id="sm" aria-pressed="true">4×2</button><button id="sl" aria-pressed="false">4×3</button></div>
+    <div class="seg" role="group" aria-label="מצב תצוגה"><button id="tLight" aria-pressed="false">בהיר</button><button id="tDark" aria-pressed="false">כהה</button></div>
+  </div>
+</section>
+
+<section class="band container">
+  <h2>שלושה גדלים. <span>אותו פרויקט, בכל מקום שנוח לך במסך.</span></h2>
+  <p class="sub">הגודל הקטן מתאים לפינה של המסך, ברירת המחדל לשורה העליונה, והמורחב למי שרוצה שמונה פעולות בלי לפתוח כלום.</p>
+  <div class="wall">
+    <figure><div id="szS"></div><figcaption><b>2×2</b>קומפקטי</figcaption></figure>
+    <figure><div id="szM"></div><figcaption><b>4×2</b>ברירת מחדל</figcaption></figure>
+    <figure><div id="szL"></div><figcaption><b>4×3</b>מורחב</figcaption></figure>
+  </div>
+</section>
+
+<section class="band container">
+  <h2>החשבון הנכון. <span>בכל לחיצה, בלי לבחור ידנית.</span></h2>
+  <p class="sub">כרום באנדרואיד לא תומך בפרופילים, אז הווידג'ט בוחר מסלול לפי סוג השירות.</p>
+  <div class="cards">
+    <article class="card">
+      <div class="vis">
+        <div class="url">play.google.com/console</div>
+        <svg class="down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14m-5-5 5 5 5-5"/></svg>
+        <div class="url">accounts.google.com/AccountChooser?<em>Email=yonidev0101</em>…</div>
+        <div class="acct"><i>Y</i>yonidev0101@gmail.com</div>
+      </div>
+      <div class="body"><h3>שירותי גוגל</h3><p>Play Console, Firebase, Gmail, Drive ו־Analytics עוברים דרך בורר החשבונות של גוגל עם המייל של הפרויקט, ונפתחים ישר בחשבון הנכון.</p><span class="state ok">עובד בלי הגדרה</span></div>
+    </article>
+    <article class="card">
+      <div class="vis">
+        <div class="chromes">
+          <div class="cr"><i style="--c1:#DB4437;--c2:#F4B400;--c3:#0F9D58;--c4:#4285F4"></i><b>Chrome</b>חשבון 1</div>
+          <div class="cr"><i style="--c1:#5C6BC0;--c2:#7986CB;--c3:#3949AB;--c4:#1E2A78"></i><b>Beta</b>חשבון 2</div>
+          <div class="cr"><i style="--c1:#616161;--c2:#9E9E9E;--c3:#424242;--c4:#212121"></i><b>Dev</b>חשבון 3</div>
+          <div class="cr"><i style="--c1:#F9A825;--c2:#FBC02D;--c3:#F57F17;--c4:#E65100"></i><b>Canary</b>חשבון 4</div>
+        </div>
+      </div>
+      <div class="body"><h3>כמה חשבונות Vercel</h3><p>כל חשבון מקבל אפליקציית כרום משלה מ־Play. כל אחת שומרת התחברות נפרדת, אז מתחברים פעם אחת והווידג'ט פותח כל פרויקט ישר בחשבון שלו.</p><span class="state once">התחברות חד־פעמית</span></div>
+    </article>
+    <article class="card">
+      <div class="vis">
+        <div class="flow"><div class="tile" id="flowTile"></div><span class="arrow"></span><div class="url">github.com/yonidev0101/…</div></div>
+      </div>
+      <div class="body"><h3>שירות עם חשבון אחד</h3><p>GitHub, Railway, MongoDB, Cloudinary, Neon ושאר השירותים נפתחים בכרום הרגיל, ישר לדף של הפרויקט.</p><span class="state ok">עובד בלי הגדרה</span></div>
+    </article>
+  </div>
+</section>
+
+<section class="band container">
+  <h2>12 פרויקטים. <span>כבר מזוהים מתוך התיקייה שלך.</span></h2>
+  <p class="sub">השירותים זוהו מה־git remotes, מקובצי ההגדרות ומשמות המשתנים בקבצי ה־env. ערכים, סיסמאות ומפתחות לא נקראו. לחיצה על פרויקט מציגה אותו בווידג'ט.</p>
+  <div class="gallery" id="gallery"></div>
+  <p class="footnote">צבע שמסומן "זמני" מחכה לצבע המותג האמיתי. החשבונות והקישורים בווידג'ט הם לדוגמה עד שתאשר אותם.</p>
+</section>
+
+<section class="band container">
+  <h2>הדרך לטלפון. <span>שלושה שלבים.</span></h2>
+  <p class="sub">כל שלב עובד בפני עצמו, כך שתוכל להשתמש בווידג'ט כבר אחרי הראשון.</p>
+  <div class="steps">
+    <div class="step now"><header><h3>גרסה ראשונה</h3><span class="tag">הבא בתור</span></header><ul>
+      <li>ווידג'ט בשלושה גדלים</li><li>מעבר בין פרויקטים בחצים וברשימה</li><li>פתיחה בחשבון ובכרום הנכונים</li><li>חלונית "עוד" עם העתקה</li><li>בהיר וכהה, עובד בלי אינטרנט</li></ul></div>
+    <div class="step"><header><h3>סנכרון ועריכה</h3></header><ul>
+      <li>ההגדרות מסתנכרנות מ־repo פרטי</li><li>עמוד עריכה נוח מהמחשב</li><li>הלוגואים האמיתיים מתיקיות ה־brand</li></ul></div>
+    <div class="step"><header><h3>ליטוש</h3></header><ul>
+      <li>Custom Tab עם סרגל בצבע הפרויקט</li><li>מוצמדים ואחרונים בראש הרשימה</li><li>אנימציות מעבר בווידג'ט</li></ul></div>
+  </div>
+</section>
+
+<section class="band container">
+  <h2>שלושה דברים ממך. <span>ואז מתחילים לכתוב קוד.</span></h2>
+  <p class="sub">בלעדיהם הקישורים בווידג'ט נשארים לדוגמה.</p>
+  <div class="asks">
+    <div class="ask"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 19.5c1.2-3.4 3.8-5 7-5s5.8 1.6 7 5"/></svg><b>חשבונות גוגל</b><span>איזה חשבון שייך לכל פרויקט: Play Console, Firebase והמייל שלו.</span></div>
+    <div class="ask"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 4.5 20.5 19h-17z"/></svg><b>חשבונות Vercel</b><span>כמה חשבונות יש לך, ואילו פרויקטים יושבים בכל אחד.</span></div>
+    <div class="ask"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 0 0 17z" fill="currentColor"/></svg><b>צבעים ובחירה</b><span>צבע מותג לפרויקטים הזמניים, ואילו פרויקטים להכניס לווידג'ט.</span></div>
+  </div>
+</section>
+
+<footer class="container"><b>Kotlin · Jetpack Glance · Compose</b><br>ההגדרות נשמרות בקובץ <code>projects.json</code> אחד, וטיוטה ראשונה שלו כבר נמצאת בתיקיית הפרויקט.</footer>
+</div>
+
+<script>
+(function(){
+const ME='yonidev0101@gmail.com';
+const G={
+ tri:'<path d="M12 4.5 20.5 19h-17z" fill="currentColor" stroke="none"/>',
+ play:'<path d="M7.5 4.8v14.4L19 12z"/>',
+ flame:'<path d="M12 3.5c.6 3 4.5 4.8 4.5 9.5a4.5 4.5 0 0 1-9 0c0-2.2 1.2-3.4 2-4.6.4 1.2 1 2 2 2.4.2-2.4-.4-4.8.5-7.3z"/>',
+ mail:'<rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="m4.5 7 7.5 6 7.5-6"/>',
+ drive:'<path d="M9 4h6l6 10.5-3 5H6l-3-5z"/><path d="M3 14.5h18M9 4l6 15.5M15 4 9 19.5"/>',
+ chart:'<path d="M5 19v-7M12 19V5M19 19v-5"/>',
+ globe:'<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.6 2.5 14.4 0 17M12 3.5c-2.5 2.6-2.5 14.4 0 17"/>',
+ branch:'<circle cx="7" cy="5.5" r="2"/><circle cx="7" cy="18.5" r="2"/><circle cx="17" cy="8" r="2"/><path d="M7 7.5v9M17 10c0 4-10 2.5-10 6.5"/>',
+ db:'<ellipse cx="12" cy="6" rx="7" ry="2.8"/><path d="M5 6v12c0 1.5 3.1 2.8 7 2.8s7-1.3 7-2.8V6M5 12c0 1.5 3.1 2.8 7 2.8s7-1.3 7-2.8"/>',
+ bolt:'<path d="M13 3 5.5 13.5H12L11 21l7.5-10.5H12z"/>',
+ rail:'<path d="M8 3.5 6 20.5M16 3.5l2 16.9M7.5 8h9M7 13h10M6.4 18h11.2"/>',
+ pulse:'<path d="M3 12h4l2.5-6 5 12 2.5-6h4"/>',
+ cloud:'<path d="M7.5 18.5h9.5a4 4 0 0 0 .4-8 5.5 5.5 0 0 0-10.6 1.5 3.3 3.3 0 0 0 .7 6.5z"/>',
+ send:'<path d="M20.5 3.5 3.5 10.5l7 3 3 7z"/><path d="m10.5 13.5 4-4"/>',
+ spark:'<path d="M12 3.5c.7 4.6 3.9 7.8 8.5 8.5-4.6.7-7.8 3.9-8.5 8.5-.7-4.6-3.9-7.8-8.5-8.5 4.6-.7 7.8-3.9 8.5-8.5z"/>',
+ copy:'<rect x="8.5" y="8.5" width="11" height="11" rx="2.5"/><path d="M15.5 8.5V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7.5a2 2 0 0 0 2 2h2.5"/>',
+ dots:'<circle cx="6" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="18" cy="12" r="1.5" fill="currentColor"/>',
+ check:'<path d="m5 12.5 4.5 4.5L19 7.5"/>',
+ next:'<path d="m15 6-6 6 6 6"/>', prev:'<path d="m9 6 6 6-6 6"/>', down:'<path d="m7 10 5 5 5-5"/>'
+};
+const svg=(k,w)=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w||1.7}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${G[k]}</svg>`;
+const S={
+ play:['Play Console','play','google','play.google.com/console'],
+ firebase:['Firebase','flame','google','console.firebase.google.com'],
+ gmail:['Gmail','mail','google','mail.google.com'],
+ drive:['Drive','drive','google','drive.google.com'],
+ analytics:['Analytics','chart','google','analytics.google.com'],
+ store:['בחנות','globe','chrome','play.google.com/store'],
+ site:['האתר','globe','chrome',''],
+ vercel:['Vercel','tri','vercel','vercel.com'],
+ github:['GitHub','branch','chrome','github.com'],
+ mongodb:['MongoDB','db','chrome','cloud.mongodb.com'],
+ neon:['Neon','db','chrome','console.neon.tech'],
+ supabase:['Supabase','bolt','chrome','supabase.com/dashboard'],
+ railway:['Railway','rail','chrome','railway.com'],
+ sentry:['Sentry','pulse','chrome','sentry.io'],
+ cloudinary:['Cloudinary','cloud','chrome','console.cloudinary.com'],
+ cloudflare:['Cloudflare','cloud','chrome','dash.cloudflare.com'],
+ upstash:['Upstash','bolt','chrome','console.upstash.com'],
+ mixpanel:['Mixpanel','chart','chrome','mixpanel.com'],
+ resend:['Resend','send','chrome','resend.com'],
+ openai:['OpenAI','spark','chrome','platform.openai.com'],
+ anthropic:['Anthropic','spark','chrome','console.anthropic.com']
+};
+// Projects from the folder scan (d = detected services). Accounts, Vercel channels and colours marked tmp are examples until confirmed.
+const P=[
+ {name:'YVoice',d:'Android · Play',mono:'Y',color:'#1A6FDB',kind:'אפליקציית Android',google:ME,a:['play','firebase','gmail','store','drive','analytics','github'],c:[['Package','com.yonidev.yvoice']]},
+ {name:'על המקום',d:'Vercel · GitHub · MongoDB · Sentry · Cloudinary · Upstash · Mixpanel · GA · Clarity · Cardcom · OpenAI',mono:'ע',color:'#00A35B',kind:'אתר + אפליקציה',google:'חשבון גוגל של הפרויקט',vercel:['Chrome Beta','חשבון 2'],a:['vercel','github','mongodb','sentry','cloudinary','upstash','mixpanel','analytics','play'],c:[['Package','com.yonidev.alhamacom'],['Repo','main-al-hamacom/al-hamacom']],gh:'github.com/main-al-hamacom/al-hamacom'},
+ {name:'Musican',d:'Android · Play',mono:'M',color:'#ED3D33',kind:'אפליקציית Android',google:ME,a:['play','firebase','gmail','site','store','drive'],c:[['Package','com.yonidev.musican']]},
+ {name:'YMelo',d:'Android · Play',mono:'Y',color:'#E0645A',tmp:1,kind:'אפליקציית Android',google:ME,a:['play','gmail','store','drive'],c:[['Package','com.yonidev.ymelo']]},
+ {name:'Receipt Scanner',d:'Vercel · MongoDB · Cloudinary · Anthropic',mono:'R',color:'#0E8F7E',tmp:1,kind:'אתר',google:ME,vercel:['Chrome','חשבון 1'],a:['vercel','mongodb','cloudinary','anthropic'],c:[['Vercel project','receipt-scanner']]},
+ {name:'Sheviler',d:'Railway · Postgres · Resend',mono:'S',color:'#C2410C',tmp:1,kind:'אתר',google:ME,a:['railway','resend','gmail'],c:[['Repo','sheviler']]},
+ {name:'Afikim Manager',d:'Neon · GitHub',mono:'A',color:'#7C3AED',tmp:1,kind:'אתר',google:ME,a:['neon','github','gmail'],c:[['Repo','yonidev0101/afikim-manager']],gh:'github.com/yonidev0101/afikim-manager'},
+ {name:'Categories Game',d:'Railway · MongoDB · Redis · OpenAI · GitHub',mono:'C',color:'#DB2777',tmp:1,kind:'משחק ווב',google:ME,a:['railway','mongodb','openai','github'],c:[['Repo','yonidev0101/categories-game']],gh:'github.com/yonidev0101/categories-game'},
+ {name:'YoniDev Cloud',d:'Cloudflare Workers',mono:'Y',color:'#3B3B44',tmp:1,kind:'Cloudflare Worker',google:ME,a:['cloudflare','gmail'],c:[['Worker','yonidev-cloud']]},
+ {name:'AirVoice',d:'Android · Play',mono:'A',color:'#2F80ED',kind:'אפליקציית Android',google:ME,a:['play','gmail','store'],c:[['Package','com.yonidev.airvoice']]},
+ {name:'Sync to Drive',d:'Android · Play',mono:'S',color:'#3D88FF',kind:'אפליקציית Android',google:ME,a:['play','drive','gmail'],c:[['Package','com.yonidev.synctodrive']]},
+ {name:'Recipe Book',d:'Supabase · Cloudinary · OpenAI · GitHub',mono:'R',color:'#CA8A04',tmp:1,kind:'אתר',google:ME,a:['supabase','cloudinary','openai','github'],c:[['Repo','yonidev0101/recipe-book']],gh:'github.com/yonidev0101/recipe-book'}
+];
+const $=id=>document.getElementById(id);
+const app=$('app');
+let cur=0,size='m';
+try{const s=+localStorage.getItem('pd-cur');if(s>=0&&s<P.length)cur=s}catch(e){}
+
+const short=e=>e.includes('@')?e.split('@')[0]:e;
+function route(p,k){
+  const t=S[k][2];
+  if(t==='google')return {app:'Chrome',who:short(p.google),alt:false};
+  if(t==='vercel'&&p.vercel)return {app:p.vercel[0],who:'Vercel '+p.vercel[1],alt:p.vercel[0]!=='Chrome'};
+  return {app:'Chrome',who:'',alt:false};
+}
+const host=(p,k)=>k==='github'&&p.gh?p.gh:(S[k][3]||'הדומיין של הפרויקט');
+
+function widget(p,sz,live,anim){
+  const n=sz==='l'?7:3;
+  const tiles=p.a.slice(0,n).map((k,i)=>`<button class="tile${i===0?' primary':''}" data-k="${k}" aria-label="${S[k][0]}"${live?'':' tabindex="-1"'}>${svg(S[k][1])}<span>${S[k][0]}</span></button>`).join('')
+    +`<button class="tile" data-act="more" aria-label="כל הקישורים"${live?'':' tabindex="-1"'}>${svg('dots')}<span>עוד</span></button>`;
+  const id=`<button class="wg-id" data-act="${live?'picker':''}" aria-label="בחירת פרויקט"${live?'':' tabindex="-1"'}><span class="lg">${p.mono}</span><span class="wg-t"><b>${p.name}</b><small><i></i>${short(p.google)}</small></span></button>`;
+  const head=sz==='s'?`<div class="wg-head">${id}</div>`
+    :`<div class="wg-head">${id}<span class="count">${cur+1}/${P.length}</span><button class="nav" data-act="prev" aria-label="הפרויקט הקודם">${svg('prev',2)}</button><button class="nav" data-act="next" aria-label="הפרויקט הבא">${svg('next',2)}</button></div>`;
+  return `<div class="wg wg-${sz} ${anim||''}">${sz==='s'?head+`<div class="wg-body"><div class="grid">${tiles}</div></div>`:`<div class="wg-body">${head}<div class="grid">${tiles}</div></div>`}</div>`;
+}
+
+let tt;
+function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('on'),2200)}
+function openLink(p,k){const r=route(p,k);toast(`נפתח ב־${r.app}${r.who?' · '+r.who:''}`)}
+
+function render(dir){
+  const p=P[cur],anim=dir>0?'in-n':dir<0?'in-p':'';
+  app.style.setProperty('--brand',p.color);
+  $('phoneWidget').innerHTML=widget(p,size,true,anim);
+  $('szS').innerHTML=widget(p,'s',false,anim);
+  $('szM').innerHTML=widget(p,'m',false,anim);
+  $('szL').innerHTML=widget(p,'l',false,anim);
+  $('flowTile').innerHTML=svg('branch')+'<span>GitHub</span>';
+  $('rail').querySelectorAll('[data-i]').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.i===cur));
+  $('gallery').querySelectorAll('[data-i]').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.i===cur));
+  try{localStorage.setItem('pd-cur',cur)}catch(e){}
+}
+function go(i,dir){if(i===cur)return;cur=(i+P.length)%P.length;render(dir)}
+
+document.addEventListener('click',e=>{
+  const a=e.target.closest('[data-act]');
+  if(a){const v=a.dataset.act;
+    if(v==='next')go(cur+1,1);else if(v==='prev')go(cur-1,-1);
+    else if(v==='picker'){$('q').value='';plist();sheet('picker',true)}
+    else if(v==='more')openMore();
+    return}
+  const t=e.target.closest('#phoneWidget [data-k]');if(t)openLink(P[cur],t.dataset.k);
+});
+
+function sheet(id,on){$(id).classList.toggle('on',on);$('scrim').classList.toggle('on',on)}
+function closeAll(){sheet('picker',false);sheet('more',false)}
+$('scrim').onclick=closeAll;
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeAll()});
+
+function plist(){
+  const q=$('q').value.trim().toLowerCase();
+  $('plist').innerHTML=P.map((p,i)=>({p,i})).filter(({p})=>!q||p.name.toLowerCase().includes(q)||p.kind.toLowerCase().includes(q)).map(({p,i})=>
+   `<button class="row" data-pi="${i}"><span class="lg" style="--lb:${p.color}">${p.mono}</span><span class="t"><b>${p.name}</b><small>${p.kind}</small></span>${i===cur?`<span class="check">${svg('check',2.4)}</span>`:''}</button>`).join('')
+   ||'<p style="padding:16px;color:var(--muted);font-size:13px;margin:0">אין פרויקט בשם הזה</p>';
+}
+$('q').addEventListener('input',plist);
+$('plist').addEventListener('click',e=>{const b=e.target.closest('[data-pi]');if(!b)return;sheet('picker',false);go(+b.dataset.pi,1)});
+
+function openMore(){
+  const p=P[cur];
+  $('moreHead').innerHTML=`<span class="lg">${p.mono}</span><span class="wg-t"><b>${p.name}</b><small><i></i>${p.google}</small></span>`;
+  $('mlist').innerHTML='<div class="label">קישורים</div>'+p.a.map(k=>{const r=route(p,k);return `<button class="row" data-mk="${k}"><span class="ic">${svg(S[k][1])}</span><span class="t"><b>${S[k][0]}</b><small dir="ltr" style="text-align:right">${host(p,k)}</small></span><span class="chip${r.alt?' alt':''}">${r.app}</span></button>`}).join('')
+   +'<div class="label">העתקה</div>'+p.c.map(([l,v])=>`<div class="row"><span class="t"><b>${l}</b><small class="mono" dir="ltr" style="text-align:right">${v}</small></span><button class="copybtn" data-v="${v}" aria-label="העתקת ${l}">${svg('copy')}</button></div>`).join('');
+  sheet('more',true);
+}
+$('mlist').addEventListener('click',e=>{
+  const c=e.target.closest('[data-v]');
+  if(c){const v=c.dataset.v,done=()=>toast('הועתק: '+v);try{navigator.clipboard.writeText(v).then(done,done)}catch(err){done()}return}
+  const b=e.target.closest('[data-mk]');if(b)openLink(P[cur],b.dataset.mk);
+});
+
+$('rail').innerHTML=P.map((p,i)=>`<button class="pchip" data-i="${i}" style="--lb:${p.color}" aria-pressed="false"><span class="lg">${p.mono}</span>${p.name}</button>`).join('');
+$('rail').addEventListener('click',e=>{const b=e.target.closest('[data-i]');if(b)go(+b.dataset.i,+b.dataset.i>cur?1:-1)});
+$('gallery').innerHTML=P.map((p,i)=>`<button class="pc" data-i="${i}" style="--lb:${p.color}" aria-pressed="false">${p.tmp?'<span class="tmp">צבע זמני</span>':''}<span class="top"><span class="lg">${p.mono}</span><span class="nm"><b>${p.name}</b><small>${p.kind}</small></span></span><span class="svc">${p.d}</span></button>`).join('');
+$('gallery').addEventListener('click',e=>{const b=e.target.closest('[data-i]');if(!b)return;go(+b.dataset.i,+b.dataset.i>cur?1:-1);$('stage').scrollIntoView({block:'center'})});
+
+function setSize(s){size=s;$('sm').setAttribute('aria-pressed',s==='m');$('sl').setAttribute('aria-pressed',s==='l');$('phoneWidget').innerHTML=widget(P[cur],size,true,'')}
+$('sm').onclick=()=>setSize('m');$('sl').onclick=()=>setSize('l');
+function setTheme(t){document.documentElement.dataset.theme=t;$('tLight').setAttribute('aria-pressed',t==='light');$('tDark').setAttribute('aria-pressed',t==='dark')}
+$('tLight').onclick=()=>setTheme('light');$('tDark').onclick=()=>setTheme('dark');
+{const d=matchMedia('(prefers-color-scheme: dark)').matches;$('tLight').setAttribute('aria-pressed',!d);$('tDark').setAttribute('aria-pressed',d)}
+
+render(0);
+})();
+</script>

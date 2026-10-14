@@ -1,0 +1,44 @@
+<?xml version="1.0" ?>
+<!-- The installer's screens (WiX 3, linked by jpackage): YDeck's own images and words, no folder picker.
+     Welcome → install → "YDeck is ready" (with "Open YDeck now", checked: the app opens with its sting).
+     @DIALOG@ / @BANNER@ are filled in by the build (images from store/brand/installer/make.cjs). -->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi" xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
+  <Fragment>
+    <WixVariable Id="WixUIDialogBmp" Value="@DIALOG@"/>
+    <WixVariable Id="WixUIBannerBmp" Value="@BANNER@"/>
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="!(loc.YdOpenNow)"/>
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1"/>
+    <Property Id="ARPNOMODIFY" Value="1"/>
+    <CustomAction Id="YdOpenApp" Directory="INSTALLDIR" ExeCommand="&quot;[INSTALLDIR]YDeck.exe&quot;" Return="asyncNoWait"/>
+
+    <UI Id="JpUI">
+      <TextStyle Id="WixUI_Font_Normal" FaceName="Segoe UI" Size="9"/>
+      <TextStyle Id="WixUI_Font_Bigger" FaceName="Segoe UI Semibold" Size="15"/>
+      <TextStyle Id="WixUI_Font_Title" FaceName="Segoe UI Semibold" Size="9"/>
+      <Property Id="DefaultUIFont" Value="WixUI_Font_Normal"/>
+      <Property Id="WixUI_Mode" Value="Minimal"/>
+
+      <DialogRef Id="ErrorDlg"/>
+      <DialogRef Id="FatalError"/>
+      <DialogRef Id="FilesInUse"/>
+      <DialogRef Id="MsiRMFilesInUse"/>
+      <DialogRef Id="PrepareDlg"/>
+      <DialogRef Id="ProgressDlg"/>
+      <DialogRef Id="ResumeDlg"/>
+      <DialogRef Id="UserExit"/>
+      <DialogRef Id="WelcomeDlg"/>
+
+      <Publish Dialog="WelcomeDlg" Control="Next" Event="EndDialog" Value="Return" Order="2">1</Publish>
+
+      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="YdOpenApp" Order="1">WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed</Publish>
+      <Publish Dialog="ExitDialog" Control="Finish" Event="EndDialog" Value="Return" Order="999">1</Publish>
+
+      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="MaintenanceTypeDlg">1</Publish>
+      <Publish Dialog="MaintenanceWelcomeDlg" Control="Next" Event="NewDialog" Value="MaintenanceTypeDlg">1</Publish>
+      <Publish Dialog="MaintenanceTypeDlg" Control="RepairButton" Event="NewDialog" Value="VerifyReadyDlg">1</Publish>
+      <Publish Dialog="MaintenanceTypeDlg" Control="RemoveButton" Event="NewDialog" Value="VerifyReadyDlg">1</Publish>
+      <Publish Dialog="MaintenanceTypeDlg" Control="Back" Event="NewDialog" Value="MaintenanceWelcomeDlg">1</Publish>
+    </UI>
+    <UIRef Id="WixUI_Common"/>
+  </Fragment>
+</Wix>

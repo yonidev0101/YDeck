@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- jpackage's own strings, plus YDeck's words for the WixUI screens (these override WixUI's defaults). -->
+<WixLocalization Culture="en-us" xmlns="http://schemas.microsoft.com/wix/2006/localization" Codepage="1252">
+  <String Id="message.install.dir.exist">The folder [INSTALLDIR] already exist. Would you like to install to that folder anyway?</String>
+  <String Id="MainFeatureTitle">YDeck</String>
+  <String Id="DowngradeErrorMessage">A newer version of [ProductName] is already installed.</String>
+  <String Id="DisallowUpgradeErrorMessage">An older version of [ProductName] is already installed. Upgrades disabled. Setup will now exit.</String>
+  <String Id="ShortcutPromptDlg_Title">[ProductName] Setup</String>
+  <String Id="ShortcutPromptDlgTitle">{\WixUI_Font_Title}Shortcuts</String>
+  <String Id="ShortcutPromptDlgBannerBitmap">WixUI_Bmp_Banner</String>
+  <String Id="ShortcutPromptDlgDescription">Select shortcuts to create.</String>
+  <String Id="ShortcutPromptDlgDesktopShortcutControlLabel">Create desktop shortcut(s)</String>
+  <String Id="ShortcutPromptDlgStartMenuShortcutControlLabel">Create start menu shortcut(s)</String>
+  <String Id="InstallDirNotEmptyDlg_Title">[ProductName] Setup</String>
+  <String Id="ContextMenuCommandLabel">Open with [ProductName]</String>
+
+  <String Id="YdOpenNow">Open YDeck now</String>
+  <String Id="WelcomeDlg_Title" Overridable="yes">YDeck</String>
+  <String Id="WelcomeDlgTitle" Overridable="yes">{\WixUI_Font_Bigger}Nothing left open.</String>
+  <String Id="WelcomeDlgDescription" Overridable="yes">Your agents work. YDeck keeps track of what they did, what changed, and what still needs you, across every project.&#13;&#10;&#13;&#10;Click Install. It takes a few seconds.</String>
+  <String Id="WixUINext" Overridable="yes">&amp;Install</String>
+  <String Id="ProgressDlg_Title" Overridable="yes">YDeck</String>
+  <String Id="ProgressDlgTitleInstalling" Overridable="yes">{\WixUI_Font_Title}Installing YDeck</String>
+  <String Id="ProgressDlgTextInstalling" Overridable="yes">Just a few seconds...</String>
+  <String Id="ExitDialog_Title" Overridable="yes">YDeck</String>
+  <String Id="ExitDialogTitle" Overridable="yes">{\WixUI_Font_Bigger}YDeck is ready.</String>
+  <String Id="ExitDialogDescription" Overridable="yes">Connect your first project folder, and YDeck takes it from there.&#13;&#10;&#13;&#10;Hebrew or English: choose on the first screen.</String>
+  <String Id="UserExit_Title" Overridable="yes">YDeck</String>
+  <String Id="FatalError_Title" Overridable="yes">YDeck</String>
+  <String Id="MaintenanceWelcomeDlg_Title" Overridable="yes">YDeck</String>
+  <String Id="MaintenanceTypeDlg_Title" Overridable="yes">YDeck</String>
+  <String Id="VerifyReadyDlg_Title" Overridable="yes">YDeck</String>
+</WixLocalization>

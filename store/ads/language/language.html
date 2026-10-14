@@ -1,0 +1,306 @@
+<title>הקו הפתוח</title>
+<!--
+  "The open line": the YDeck drawing language. Anything can be drawn in it, and it always looks like the mark:
+    1. one stroke, the mark's own: thick, round ends, the same weight everywhere in a picture
+    2. no shape is ever closed: each one has the mark's opening, always at the top right
+    3. flat and frontal, built from straight lines and arcs; no perspective, no shading
+    4. one amber dot per picture, in the opening of the one thing still open; the rest stay empty or grey
+  Proportions from the mark: opening = 3.43 × stroke along the path, dot radius = 0.68 × stroke.
+  render.cjs saves every canvas to out/.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Hebrew:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+/* Layout: the rules, then the alphabet of drawings on one sheet, then two status ads drawn in it */
+@font-face { font-family: Plex; src: url("../../../app/src/main/res/font/plex_sans_hebrew_medium.ttf"); font-weight: 500; }
+@font-face { font-family: Plex; src: url("../../../app/src/main/res/font/plex_sans_hebrew_regular.ttf"); font-weight: 400; }
+:root{
+  --night:#0B0B0D; --hair:#26262C; --line:#F4F4F5; --soft:#C8C8CF; --mute:#8A8A94; --amber:#F5A524;
+  --f:Plex,'IBM Plex Sans Hebrew',system-ui,'Segoe UI',Arial,sans-serif; color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{background:var(--night);color:var(--line)}
+body{font-family:var(--f);direction:rtl}
+.wrap{max-width:1080px;margin:0 auto;padding-inline:16px;padding-block:44px 72px;display:flex;flex-direction:column;gap:40px}
+.eyebrow{font-size:12px;letter-spacing:.12em;color:var(--mute)}
+h1{font-weight:300;font-size:clamp(30px,4.6vw,48px);margin:10px 0 12px;text-wrap:balance}
+.lead{color:var(--mute);max-width:62ch;margin:0;line-height:1.65;font-size:15.5px}
+h2{font-weight:500;font-size:19px;margin:0 0 14px}
+.rules{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:20px}
+@media (max-width:860px){.rules{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:480px){.rules{grid-template-columns:minmax(0,1fr)}}
+.rules li{border-top:1px solid var(--hair);padding-top:14px;display:flex;flex-direction:column;gap:6px}
+.rules span{font-size:12px;color:var(--mute);font-variant-numeric:tabular-nums}
+.rules b{font-weight:500;font-size:16px}
+.rules p{margin:0;color:var(--soft);font-size:14px;line-height:1.6}
+canvas{display:block;width:100%;height:auto;border-radius:18px;border:1px solid var(--hair);background:var(--night)}
+#sheet{aspect-ratio:2/1}
+.ads{display:grid;grid-template-columns:repeat(2,minmax(0,340px));gap:28px;justify-content:start}
+@media (max-width:640px){.ads{grid-template-columns:minmax(0,1fr)}}
+.ads canvas{aspect-ratio:9/16}
+figure{margin:0;display:flex;flex-direction:column;gap:10px;min-width:0}
+figcaption{color:var(--soft);font-size:14px;line-height:1.6}
+#sheet2{aspect-ratio:2/1}
+.before{border-top:1px solid var(--hair);padding-top:40px;margin-top:24px}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">YDECK · שפה ויזואלית</div>
+    <h1>הקו שלא נגמר</h1>
+    <p class="lead">כל ציור כמעט גמור. מה שכבר נעשה מצויר בלבן, והחלק האחרון, הצעד הבא, בכתום. לא מוסיפים שום עיגול בצד. הכתום פשוט אומר כל פעם את אותו הדבר: כאן עצרנו. גם הלוגו כתוב בשפה הזאת, קו לבן שנעצר ומה שנשאר פתוח בכתום.</p>
+  </header>
+
+  <section>
+    <h2>החוקים</h2>
+    <ol class="rules">
+      <li><span>1</span><b>קו אחד</b><p>הקו של הלוגו: עבה, עם קצוות עגולים, באותו עובי בכל הציור.</p></li>
+      <li><span>2</span><b>לבן זה מה שנעשה</b><p>הצורות שלמות ונקיות, בלי פתחים ובלי תוספות.</p></li>
+      <li><span>3</span><b>כתום זה מה שנשאר</b><p>חלק אחד מהצורה, נפרד מהלבן ברווח ברור: פינה, שורה, סמן. תמיד רק דבר אחד.</p></li>
+      <li><span>4</span><b>אפור זה מה שנסגר</b><p>מה שגמור או לא פעיל עכשיו נשאר ברקע, באפור.</p></li>
+      <li><span>5</span><b>אינדיגו, רק טיפה</b><p>אחוז או שניים, ורק בתנועה: רגע אחד של "עובד עכשיו", כמו בפתיח "חושב". ברוב הדברים אין אותו בכלל, ואף פעם לא בתמונות סטטוס.</p></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>האלפבית</h2>
+    <canvas id="sheet2" width="1600" height="800" aria-label="שמונה ציורים לבנים, ובכל אחד החלק האחרון כתום: סוף המסגרת של המחשב, של הטלפון ושל התיקייה, הסמן בטרמינל, השורה השנייה בהודעה, יום אחד בלוח השנה, השורה האחרונה ברשימה, וסוף הקו של הראש"></canvas>
+  </section>
+
+  <section>
+    <h2>ככה זה נראה בפרסומת</h2>
+    <div class="ads">
+      <figure><canvas id="pocket2" width="1080" height="1920" aria-label="מחשב באפור וטלפון לבן שסוף המסגרת שלו כתום, והכותרת 'רחוק מהמחשב. הצעד הבא בכיס.'"></canvas>
+        <figcaption>המחשב באפור, והטלפון הוא זה שעוד פתוח.</figcaption></figure>
+      <figure><canvas id="folders2" width="1080" height="1920" aria-label="חמש תיקיות באפור ואחת לבנה שסוף המסגרת שלה כתום, והכותרת 'שישה פרויקטים. כל אחד יודע איפה עצר.'"></canvas>
+        <figcaption>חמש תיקיות סגורות, ואחת שהקו שלה עוד לא נגמר.</figcaption></figure>
+    </div>
+  </section>
+
+  <header class="before">
+    <div class="eyebrow">לשם השוואה · הגרסה הקודמת</div>
+    <h1>הקו הפתוח</h1>
+    <p class="lead">לכל צורה יש פתח בפינה ונקודה כתומה בתוכו, כמו בלוגו.</p>
+  </header>
+
+  <section>
+    <h2>ארבעה חוקים</h2>
+    <ol class="rules">
+      <li><span>1</span><b>קו אחד</b><p>הקו של הלוגו: עבה, עם קצוות עגולים, ובאותו עובי לכל אורך הציור.</p></li>
+      <li><span>2</span><b>אף צורה לא נסגרת</b><p>לכל צורה יש פתח כמו בלוגו, ותמיד בפינה הימנית העליונה.</p></li>
+      <li><span>3</span><b>שטוח ופשוט</b><p>רק קווים ישרים וקשתות, מלפנים. בלי פרספקטיבה ובלי צללים.</p></li>
+      <li><span>4</span><b>נקודה אחת</b><p>נקודה כתומה אחת בכל ציור, בפתח של הדבר שעוד פתוח. כל השאר ריק או אפור.</p></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>האלפבית</h2>
+    <canvas id="sheet" width="1600" height="800" aria-label="שמונה ציורים בשפת הקו הפתוח: מחשב, טלפון, תיקייה, טרמינל, הודעה, לוח שנה, אדם ונורה, לכל אחד פתח בפינה הימנית העליונה ונקודה כתומה בו"></canvas>
+  </section>
+
+  <section>
+    <h2>ככה זה נראה בפרסומת</h2>
+    <div class="ads">
+      <figure><canvas id="pocket" width="1080" height="1920" aria-label="מחשב באפור וטלפון בלבן עם נקודה כתומה, והכותרת 'רחוק מהמחשב. הצעד הבא בכיס.'"></canvas>
+        <figcaption>המחשב באפור כי הוא לא פעיל, והנקודה עברה לטלפון.</figcaption></figure>
+      <figure><canvas id="folders" width="1080" height="1920" aria-label="שש תיקיות באפור ואחת בלבן עם נקודה כתומה, והכותרת 'שישה פרויקטים. כל אחד יודע איפה עצר.'"></canvas>
+        <figcaption>כל תיקייה היא פרויקט, ורק אחת עם נקודה.</figcaption></figure>
+    </div>
+  </section>
+</div>
+
+<script>
+(() => {
+const D = Math.PI / 180;
+const NIGHT = '#0B0B0D', PAPER = '#F4F4F5', AMBER = '#F5A524', MUTED = '#8B8B93', DIM = '#3A3A42';
+const FONT = (w, s) => `${w} ${s}px Plex, "IBM Plex Sans Hebrew", sans-serif`;
+
+// ---------- the pen ----------
+const arcPts = (cx, cy, r, a0, a1, n = 24) => Array.from({ length: n + 1 }, (_, i) => { const a = (a0 + (a1 - a0) * i / n) * D; return [cx + r * Math.cos(a), cy + r * Math.sin(a)]; });
+// a rounded rectangle traced clockwise from the middle of its top-right corner, so the opening sits there
+function rrPath(x, y, w, h, r) {
+  return [...arcPts(x + w - r, y + r, r, -45, 0, 8), ...arcPts(x + w - r, y + h - r, r, 0, 90, 12), ...arcPts(x + r, y + h - r, r, 90, 180, 12),
+    ...arcPts(x + r, y + r, r, 180, 270, 12), ...arcPts(x + w - r, y + r, r, 270, 315, 8)];
+}
+function len(p) { let L = 0; for (let i = 1; i < p.length; i++) L += Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]); return L; }
+function slice(p, a, b) {
+  const out = []; let acc = 0;
+  for (let i = 1; i < p.length; i++) {
+    const d = Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]);
+    const s0 = acc, s1 = acc + d; acc = s1;
+    if (s1 < a || s0 > b) continue;
+    const at = s => { const k = d ? (s - s0) / d : 0; return [p[i - 1][0] + (p[i][0] - p[i - 1][0]) * k, p[i - 1][1] + (p[i][1] - p[i - 1][1]) * k]; };
+    if (!out.length) out.push(at(Math.max(a, s0)));
+    out.push(at(Math.min(b, s1)));
+  }
+  return out;
+}
+function Pen(g, s) {
+  const line = (p, c) => { g.strokeStyle = c; g.lineWidth = s; g.lineCap = 'round'; g.lineJoin = 'round';
+    g.beginPath(); g.moveTo(...p[0]); p.slice(1).forEach(q => g.lineTo(...q)); g.stroke(); };
+  const dot = (q) => { g.fillStyle = AMBER; g.beginPath(); g.arc(q[0], q[1], s * .68, 0, Math.PI * 2); g.fill(); };
+  // an open shape: the path starts at its opening; the gap is the mark's, 3.43 × stroke long
+  const open = (p, c, lit) => { const L = len(p), G = s * 3.43; line(slice(p, G / 2, L - G / 2), c); if (lit) dot(p[0]); };
+  return { line, dot, open, s };
+}
+
+// ---------- the alphabet (each drawn around cx, cy; `on` lights its dot, `c` is its colour) ----------
+const draw = {
+  laptop(P, cx, cy, c = PAPER, on = true) { P.open(rrPath(cx - 115, cy - 100, 230, 150, 18), c, on); P.line([[cx - 150, cy + 85], [cx + 150, cy + 85]], c); },
+  phone(P, cx, cy, c = PAPER, on = true) { P.open(rrPath(cx - 68, cy - 118, 136, 236, 30), c, on); P.line([[cx - 16, cy + 82], [cx + 16, cy + 82]], c); },
+  folder(P, cx, cy, c = PAPER, on = true) {
+    const x0 = cx - 120, x1 = cx + 120, y0 = cy - 70, y1 = cy + 92, r = 18;
+    const p = [...arcPts(x1 - r, y0 + r, r, -45, 0, 6), ...arcPts(x1 - r, y1 - r, r, 0, 90, 8), ...arcPts(x0 + r, y1 - r, r, 90, 180, 8),
+      ...arcPts(x0 + r, y0 - 30 + r, r, 180, 270, 8), [x0 + 78, y0 - 30], [x0 + 104, y0], ...arcPts(x1 - r, y0 + r, r, 270, 315, 6)];
+    P.open(p, c, on);
+  },
+  terminal(P, cx, cy, c = PAPER, on = true) {
+    P.open(rrPath(cx - 125, cy - 95, 250, 190, 24), c, on);
+    P.line([[cx - 72, cy - 30], [cx - 36, cy], [cx - 72, cy + 30]], c); P.line([[cx - 8, cy + 32], [cx + 44, cy + 32]], c);
+  },
+  chat(P, cx, cy, c = PAPER, on = true) {
+    const x0 = cx - 125, y1 = cy + 60;
+    P.open(rrPath(x0, cy - 100, 250, 160, 40), c, on);
+    P.line([[x0 + 52, y1], [x0 + 34, y1 + 50], [x0 + 104, y1]], c);
+  },
+  calendar(P, cx, cy, c = PAPER, on = true) {
+    P.open(rrPath(cx - 112, cy - 88, 224, 200, 26), c, on);
+    P.line([[cx - 52, cy - 118], [cx - 52, cy - 62]], c); P.line([[cx + 52, cy - 118], [cx + 52, cy - 62]], c);
+    P.line([[cx - 112, cy - 20], [cx + 112, cy - 20]], c);
+  },
+  person(P, cx, cy, c = PAPER, on = true) {
+    const r = 62, hy = cy - 52;
+    P.open([...arcPts(cx, hy, r, -40, 320, 60)], c, on);
+    P.line(arcPts(cx, cy + 165, 118, 205, 335, 30), c);
+  },
+  bulb(P, cx, cy, c = PAPER, on = true) {
+    const r = 78, hy = cy - 36;
+    P.open([...arcPts(cx, hy, r, -40, 320, 60)], c, on);
+    P.line([[cx - 38, cy + 76], [cx + 38, cy + 76]], c); P.line([[cx - 24, cy + 112], [cx + 24, cy + 112]], c);
+  },
+};
+
+// ---------- the status frame (the same in every ad) ----------
+function frame(g, W, head, answer) {
+  g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.direction = 'rtl';
+  g.font = FONT(500, 88); g.fillStyle = PAPER; g.fillText(head, W / 2, 470);
+  g.font = FONT(400, 88); g.fillStyle = MUTED;
+  const text = answer.replace(/\.$/, ''), tw = g.measureText(text).width, gap = 30;
+  g.fillText(text, W / 2 + gap / 2, 580);
+  g.fillStyle = AMBER; g.beginPath(); g.arc(W / 2 + gap / 2 - tw / 2 - gap + 8, 571, 10, 0, Math.PI * 2); g.fill();
+  g.direction = 'ltr'; g.font = FONT(500, 46); g.fillStyle = PAPER; g.fillText('YDeck', W / 2, 1688);
+  g.direction = 'rtl'; g.font = FONT(400, 30); g.fillStyle = MUTED; g.fillText('שום דבר לא נשאר פתוח.', W / 2, 1740);
+}
+const ctx = id => { const c = document.getElementById(id), g = c.getContext('2d'); g.fillStyle = NIGHT; g.fillRect(0, 0, c.width, c.height); return g; };
+
+function sheet() {
+  const g = ctx('sheet'), P = Pen(g, 20);
+  const names = ['laptop', 'phone', 'folder', 'terminal', 'chat', 'calendar', 'person', 'bulb'];
+  names.forEach((n, i) => draw[n](P, 1400 - (i % 4) * 400, 220 + Math.floor(i / 4) * 380));
+}
+function pocket() {
+  const g = ctx('pocket'), P = Pen(g, 20);
+  g.save(); g.translate(540, 1090); g.scale(1.3, 1.3); g.translate(-540, -1090);
+  draw.laptop(P, 650, 1080, DIM, false);
+  draw.phone(P, 330, 1095, PAPER, true);
+  g.restore();
+  frame(g, 1080, 'רחוק מהמחשב.', 'הצעד הבא בכיס.');
+}
+function folders() {
+  const g = ctx('folders'), P = Pen(g, 18);
+  const xs = [790, 290], ys = [830, 1080, 1330];
+  let i = 0;
+  ys.forEach(y => xs.forEach(x => { const on = i++ === 2; draw.folder(P, x, y, on ? PAPER : DIM, on); }));
+  frame(g, 1080, 'שישה פרויקטים.', 'כל אחד יודע איפה עצר.');
+}
+
+// ---------- "the unfinished line": white is what is done, amber is what is left ----------
+// closed shapes traced clockwise from just under their top-right corner, so the part left is always the last stretch to the top right
+function rrClosed(x, y, w, h, r) {
+  return [[x + w, y + r], ...arcPts(x + w - r, y + h - r, r, 0, 90, 12), ...arcPts(x + r, y + h - r, r, 90, 180, 12),
+    ...arcPts(x + r, y + r, r, 180, 270, 12), ...arcPts(x + w - r, y + r, r, 270, 360, 12)];
+}
+function Pen2(g, s) {
+  const P = Pen(g, s);
+  // a closed path whose last `left` part is its own amber piece, set apart from the white by a clear space at both ends
+  P.rest = (p, c, left = .22) => {
+    const L = len(p); if (!left) { P.line(p, c); return; }
+    const gap = s * 2.2, cut = L * (1 - left);
+    P.line(slice(p, gap / 2, cut - gap / 2), c); P.line(slice(p, cut + gap / 2, L - gap / 2), AMBER);
+  };
+  // a closed path that starts with one straight edge: that edge is the amber piece, the rest is white
+  P.edge = (p, edgeLen, c, lit = true) => {
+    const L = len(p); if (!lit) { P.line(p, c); return; }
+    const gap = s * 2.2;
+    P.line(slice(p, gap / 2, edgeLen - gap / 2), AMBER); P.line(slice(p, edgeLen + gap / 2, L - gap / 2), c);
+  };
+  return P;
+}
+// a rounded rectangle traced clockwise from the left end of its top edge, so the top edge comes first
+function rrTop(x, y, w, h, r) {
+  return [[[x + r, y], ...arcPts(x + w - r, y + r, r, 270, 360, 12), ...arcPts(x + w - r, y + h - r, r, 0, 90, 12),
+    ...arcPts(x + r, y + h - r, r, 90, 180, 12), ...arcPts(x + r, y + r, r, 180, 270, 12)], w - 2 * r];
+}
+const draw2 = {
+  laptop(P, cx, cy, c = PAPER, lit = true) { const [p, e] = rrTop(cx - 115, cy - 100, 230, 150, 18); P.edge(p, e, c, lit); P.line([[cx - 150, cy + 85], [cx + 150, cy + 85]], c); },
+  phone(P, cx, cy, c = PAPER, lit = true) { P.line(rrClosed(cx - 68, cy - 118, 136, 236, 30), c); P.line([[cx - 22, cy + 82], [cx + 22, cy + 82]], lit ? AMBER : c); },
+  folder(P, cx, cy, c = PAPER, lit = true) {
+    const x0 = cx - 120, x1 = cx + 120, y0 = cy - 70, y1 = cy + 92, r = 18;
+    P.edge([[x0 + 104, y0], ...arcPts(x1 - r, y0 + r, r, 270, 360, 8), ...arcPts(x1 - r, y1 - r, r, 0, 90, 8), ...arcPts(x0 + r, y1 - r, r, 90, 180, 8),
+      ...arcPts(x0 + r, y0 - 30 + r, r, 180, 270, 8), [x0 + 78, y0 - 30], [x0 + 104, y0]], x1 - r - (x0 + 104), c, lit);
+  },
+  terminal(P, cx, cy) {
+    P.line(rrClosed(cx - 125, cy - 95, 250, 190, 24), PAPER);
+    P.line([[cx - 72, cy - 30], [cx - 36, cy], [cx - 72, cy + 30]], PAPER); P.line([[cx - 8, cy + 32], [cx + 44, cy + 32]], AMBER);
+  },
+  chat(P, cx, cy) {
+    const x0 = cx - 125, y1 = cy + 60;
+    P.line(rrClosed(x0, cy - 100, 250, 160, 40), PAPER);
+    P.line([[x0 + 52, y1], [x0 + 34, y1 + 50], [x0 + 104, y1]], PAPER);
+    P.line([[x0 + 55, cy - 45], [x0 + 195, cy - 45]], PAPER); P.line([[x0 + 55, cy + 5], [x0 + 130, cy + 5]], AMBER);
+  },
+  calendar(P, cx, cy) {
+    P.line(rrClosed(cx - 112, cy - 88, 224, 200, 26), PAPER);
+    P.line([[cx - 52, cy - 118], [cx - 52, cy - 62]], PAPER); P.line([[cx + 52, cy - 118], [cx + 52, cy - 62]], PAPER);
+    P.line([[cx - 112, cy - 20], [cx + 112, cy - 20]], PAPER);
+    [[-55, 25], [0, 25], [55, 25], [-55, 70], [0, 70], [55, 70]].forEach(([dx, dy], i) => P.line([[cx + dx - 12, cy + dy], [cx + dx + 12, cy + dy]], i === 4 ? AMBER : PAPER));
+  },
+  list(P, cx, cy) {
+    [-80, 0, 80].forEach((dy, i) => {
+      const y = cy + dy, last = i === 2;
+      if (last) P.line(rrClosed(cx - 125, y - 22, 44, 44, 10), PAPER);
+      else P.line([[cx - 120, y], [cx - 104, y + 16], [cx - 78, y - 18]], PAPER);
+      P.line([[cx - 40, y], [cx + 125, y]], last ? AMBER : PAPER);
+    });
+  },
+  person(P, cx, cy) {
+    P.rest(arcPts(cx, cy - 52, 62, -10, 350, 60), PAPER);
+    P.line(arcPts(cx, cy + 165, 118, 205, 335, 30), PAPER);
+  },
+};
+function sheet2() {
+  const g = ctx('sheet2'), P = Pen2(g, 20);
+  ['laptop', 'phone', 'folder', 'terminal', 'chat', 'calendar', 'list', 'person']
+    .forEach((n, i) => draw2[n](P, 1400 - (i % 4) * 400, 220 + Math.floor(i / 4) * 380));
+}
+function pocket2() {
+  const g = ctx('pocket2'), P = Pen2(g, 20);
+  g.save(); g.translate(540, 1090); g.scale(1.3, 1.3); g.translate(-540, -1090);
+  draw2.laptop(P, 650, 1080, DIM, false);
+  draw2.phone(P, 330, 1095, PAPER, true);
+  g.restore();
+  frame(g, 1080, 'רחוק מהמחשב.', 'הצעד הבא בכיס.');
+}
+function folders2() {
+  const g = ctx('folders2'), P = Pen2(g, 18);
+  const xs = [790, 290], ys = [830, 1080, 1330];
+  let i = 0;
+  ys.forEach(y => xs.forEach(x => { const on = i++ === 2; draw2.folder(P, x, y, on ? PAPER : DIM, on); }));
+  frame(g, 1080, 'שישה פרויקטים.', 'כל אחד יודע איפה עצר.');
+}
+
+window.ready = Promise.all(['500 40px Plex', '400 40px Plex', '500 40px "IBM Plex Sans Hebrew"', '400 40px "IBM Plex Sans Hebrew"']
+  .map(f => document.fonts.load(f))).catch(() => {}).then(() => { sheet2(); pocket2(); folders2(); sheet(); pocket(); folders(); return true; });
+})();
+</script>

@@ -1,0 +1,195 @@
+<title>YDeck · סטטוס</title>
+<!--
+  Status images (1080×1920) in the brand's line. The first three go with the films: the clock ("The opening"), the grid
+  ("Everything open"), the terminals ("The journey"); the next six each show one thing YDeck does. The same frame on every one: the headline in white, its answer in
+  grey ending on the amber dot, the drawing in the middle, the signature at the bottom. No indigo in stills.
+  ?lang=en for English. render.cjs saves out/ydeck-status-<id>[-en].png.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Hebrew:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Layout: the three status images side by side (one column on a phone) */
+@font-face { font-family: Plex; src: url("../../../app/src/main/res/font/plex_sans_hebrew_medium.ttf"); font-weight: 500; }
+@font-face { font-family: Plex; src: url("../../../app/src/main/res/font/plex_sans_hebrew_regular.ttf"); font-weight: 400; }
+:root{ --night:#0B0B0D; --hair:#26262C; --line:#F4F4F5; --soft:#C8C8CF; --mute:#8A8A94;
+  --f:Plex,'IBM Plex Sans Hebrew',system-ui,'Segoe UI',Arial,sans-serif; color-scheme:dark; }
+*,*::before,*::after{box-sizing:border-box}
+html,body{background:var(--night);color:var(--line)}
+body{font-family:var(--f);direction:rtl}
+.wrap{max-width:1120px;margin:0 auto;padding-inline:16px;padding-block:40px 64px}
+h1{font-weight:400;font-size:clamp(24px,3.4vw,34px);margin:0 0 28px}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px}
+@media (max-width:860px){.grid{grid-template-columns:minmax(0,360px);justify-content:center}}
+canvas{display:block;width:100%;height:auto;aspect-ratio:9/16;border-radius:18px;border:1px solid var(--hair);background:var(--night)}
+</style>
+<div class="wrap">
+  <h1>פרסומות לסטטוס</h1>
+  <div class="grid">
+    <canvas id="opening" width="1080" height="1920" aria-label="שעון: יום עבודה מצויר בלבן, הלילה הוא הפתח, ובו נקודה כתומה"></canvas>
+    <canvas id="open" width="1080" height="1920" aria-label="רשת של צורות אפורות סגורות, ואחת לבנה שהחתיכה הכתומה שלה עוד בחוץ"></canvas>
+    <canvas id="agents" width="1080" height="1920" aria-label="שלושה טרמינלים בשם Nova, Orbit ו-Pulse, ובאמצעי סמן כתום"></canvas>
+    <canvas id="hidden" width="1080" height="1920" aria-label="שלושה חלונות זה על זה; מאחור, בחלון שכמעט לא רואים, מחכה סמן כתום"></canvas>
+    <canvas id="receipt" width="1080" height="1920" aria-label="דף עם שורות לבנות, והשורה האחרונה כתומה"></canvas>
+    <canvas id="commit" width="1080" height="1920" aria-label="קו של קומיטים לבנים, ומעליהם, ברווח, קומיט כתום שלא נדחף"></canvas>
+    <canvas id="day" width="1080" height="1920" aria-label="רשימה: שלוש שורות סגורות עם סימון, והאחרונה כתומה ליד תיבה ריקה"></canvas>
+    <canvas id="pocket" width="1080" height="1920" aria-label="מחשב באפור וטלפון לבן שהפס התחתון שלו כתום"></canvas>
+    <canvas id="memory" width="1080" height="1920" aria-label="שלושה סימנים: החלטה, הסשן האחרון, וחץ שראשו כתום"></canvas>
+  </div>
+</div>
+<script>
+(() => {
+const W = 1080, H = 1920, D = Math.PI / 180;
+const EN = new URLSearchParams(location.search).get('lang') === 'en';
+const T = (he, en) => EN ? en : he;
+const NIGHT = '#0B0B0D', PAPER = '#F4F4F5', MUTED = '#8B8B93', AMBER = '#F5A524', GREY = '#34343C', TICK = '#5A5A62';
+const FONT = (w, s) => `${w} ${s}px Plex, "IBM Plex Sans Hebrew", sans-serif`;
+
+// ---------- the frame every ad shares ----------
+function frame(g, head, answer) {
+  g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.direction = EN ? 'ltr' : 'rtl';
+  const fit = (s, w, size) => { g.font = FONT(w, size); while (g.measureText(s).width > 920) { size -= 2; g.font = FONT(w, size); } return size; };
+  fit(head, 500, 88); g.fillStyle = PAPER; g.fillText(head, W / 2, 470);
+  const body = answer.replace(/\.$/, ''), size = fit(answer, 400, 88), tw = g.measureText(body).width, gap = 30;
+  const sx = EN ? W / 2 - gap / 2 : W / 2 + gap / 2;
+  g.fillStyle = MUTED; g.fillText(body, sx, 580);
+  g.fillStyle = AMBER; g.beginPath(); g.arc(EN ? sx + tw / 2 + gap - 8 : sx - tw / 2 - gap + 8, 571, size / 8.8, 0, Math.PI * 2); g.fill();
+  g.direction = 'ltr'; g.font = FONT(500, 46); g.fillStyle = PAPER; g.fillText('YDeck', W / 2, 1688);
+  g.direction = EN ? 'ltr' : 'rtl'; g.font = FONT(400, 30); g.fillStyle = MUTED; g.fillText(T('שום דבר לא נשאר פתוח.', 'Nothing left open.'), W / 2, 1740);
+}
+const pen = (g, w) => { g.lineWidth = w; g.lineCap = 'round'; g.lineJoin = 'round'; };
+function line(g, pts, color) { g.strokeStyle = color; g.beginPath(); g.moveTo(...pts[0]); pts.slice(1).forEach(p => g.lineTo(...p)); g.stroke(); }
+
+// ---------- 1 · the clock: the day is the ring, the night the opening ----------
+function opening(g) {
+  const cx = 540, cy = 1085, r = 300; pen(g, 22);
+  for (let k = 0; k <= 10; k++) { const a = (-10 + 30 * k) * D; g.lineWidth = 8;
+    line(g, [[cx + Math.cos(a) * (r + 44), cy + Math.sin(a) * (r + 44)], [cx + Math.cos(a) * (r + 68), cy + Math.sin(a) * (r + 68)]], TICK); }
+  pen(g, 22); g.strokeStyle = PAPER; g.beginPath(); g.arc(cx, cy, r, -10 * D, 290 * D); g.stroke();
+  const dx = cx + Math.cos(-40 * D) * r, dy = cy + Math.sin(-40 * D) * r;
+  const gl = g.createRadialGradient(dx, dy, 0, dx, dy, 70); gl.addColorStop(0, 'rgba(245,165,36,.22)'); gl.addColorStop(1, 'rgba(245,165,36,0)');
+  g.fillStyle = gl; g.beginPath(); g.arc(dx, dy, 70, 0, Math.PI * 2); g.fill();
+  g.fillStyle = AMBER; g.beginPath(); g.arc(dx, dy, 22, 0, Math.PI * 2); g.fill();
+  g.font = FONT(400, 104); g.fillStyle = PAPER; g.textAlign = 'center'; g.textBaseline = 'middle'; g.direction = 'ltr';
+  [...'19:00'].forEach((ch, i) => g.fillText(ch, cx + (i - 2) * 62, cy + 6));
+  frame(g, T('הלילה הוא הפתח.', 'The night is the opening.'), T('משם מתחילים מחר.', 'Tomorrow starts there.'));
+}
+
+// ---------- 2 · the grid: everything closed but the next step ----------
+const arcPts = (cx, cy, r, a0, a1, n = 12) => Array.from({ length: n + 1 }, (_, i) => { const a = (a0 + (a1 - a0) * i / n) * D; return [cx + r * Math.cos(a), cy + r * Math.sin(a)]; });
+function outline(x0, y0, w, h, r) {
+  const x = x0 - w / 2, y = y0 - h / 2;
+  return [...arcPts(x + w - r, y + r, r, -45, 0, 8), ...arcPts(x + w - r, y + h - r, r, 0, 90), ...arcPts(x + r, y + h - r, r, 90, 180),
+    ...arcPts(x + r, y + r, r, 180, 270), ...arcPts(x + w - r, y + r, r, 270, 315, 8)];
+}
+function len(p) { let L = 0; for (let i = 1; i < p.length; i++) L += Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]); return L; }
+function slice(p, a, b) {
+  const o = []; let acc = 0;
+  for (let i = 1; i < p.length; i++) {
+    const d = Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]), s0 = acc, s1 = acc + d; acc = s1;
+    if (s1 < a || s0 > b) continue;
+    const at = s => { const k = d ? (s - s0) / d : 0; return [p[i - 1][0] + (p[i][0] - p[i - 1][0]) * k, p[i - 1][1] + (p[i][1] - p[i - 1][1]) * k]; };
+    if (!o.length) o.push(at(Math.max(a, s0)));
+    o.push(at(Math.min(b, s1)));
+  }
+  return o;
+}
+const KINDS = {
+  term: [180, 118, 22, (g, x, y, c) => { line(g, [[x - 62, y - 18], [x - 46, y], [x - 62, y + 18]], c); line(g, [[x - 22, y], [x + 40, y]], c); }],
+  doc: [118, 150, 20, (g, x, y, c) => { [-34, -4, 26].forEach((d, i) => line(g, [[x - 30, y + d], [x + [30, 18, 24][i], y + d]], c)); }],
+  chat: [180, 110, 32, (g, x, y, c) => { line(g, [[x - 54, y - 14], [x + 54, y - 14]], c); line(g, [[x - 54, y + 16], [x + 16, y + 16]], c); }],
+  phone: [96, 150, 22, (g, x, y, c) => { line(g, [[x - 14, y + 48], [x + 14, y + 48]], c); }],
+};
+function open(g) {
+  const COLS = [250, 540, 830], ROWS = [800, 1000, 1200, 1400];
+  const ORDER = ['term', 'doc', 'chat', 'phone', 'term', 'doc', 'chat', 'phone', 'doc', 'term', 'chat', 'doc'];
+  pen(g, 13);
+  ORDER.forEach((kind, i) => {
+    const [w, h, r, inner] = KINDS[kind], x = COLS[i % 3], y = ROWS[Math.floor(i / 3)], lit = i === 4;
+    const c = lit ? PAPER : GREY, p = outline(x, y, lit ? w * 1.25 : w, lit ? h * 1.25 : h, r), L = len(p);
+    if (!lit) { line(g, p, c); inner(g, x, y, c); return; }
+    g.save(); g.translate(x, y); g.scale(1.25, 1.25); g.translate(-x, -y); g.lineWidth = 13;
+    const q = outline(x, y, w, h, r), Lq = len(q), piece = 36, gap = 20;
+    line(g, slice(q, piece / 2 + gap, Lq - piece / 2 - gap), PAPER); inner(g, x, y, PAPER);
+    g.translate(18, -18); line(g, [...slice(q, Lq - piece / 2, Lq), ...slice(q, 0, piece / 2)], AMBER);
+    g.restore();
+  });
+  frame(g, T('כל השאר סגור.', 'Everything else is closed.'), T('רק הצעד הבא פתוח.', 'Only the next step is open.'));
+}
+
+// ---------- 3 · the terminals: one of them needs you ----------
+function agents(g) {
+  pen(g, 22);
+  [['Nova', 760, 830], ['Orbit', 990, 600], ['Pulse', 1220, 720]].forEach(([name, y, end], i) => {
+    g.strokeStyle = PAPER; g.beginPath(); g.roundRect(160, y, 760, 160, 32); g.stroke();
+    line(g, [[222, y + 52], [254, y + 80], [222, y + 108]], PAPER);
+    line(g, [[302, y + 80], [i === 1 ? 560 : end - 120, y + 80]], PAPER);
+    g.font = FONT(500, 34); g.fillStyle = MUTED; g.textAlign = 'right'; g.textBaseline = 'alphabetic'; g.direction = 'ltr'; g.fillText(name, 885, y + 92);
+    if (i === 1) line(g, [[610, y + 80], [664, y + 80]], AMBER);
+  });
+  frame(g, T('אחד מהם מחכה לך.', 'One of them needs you.'), T('YDeck יודע איזה.', 'YDeck knows which.'));
+}
+
+// ---------- the next six: one thing YDeck does, each (drawn left to right, and mirrored for Hebrew) ----------
+const mirrored = (g, f) => { g.save(); if (!EN) { g.translate(W, 0); g.scale(-1, 1); } f(); g.restore(); };
+// a tick always reads as a tick: inside a mirrored drawing it is turned back around its own middle
+const tick = (g, pts, c) => { const cx = (pts[0][0] + pts[pts.length - 1][0]) / 2; g.save(); if (!EN) { g.translate(cx, 0); g.scale(-1, 1); g.translate(-cx, 0); } line(g, pts, c); g.restore(); };
+const box = (g, x, y, w, h, r, c, fill) => { g.strokeStyle = c; g.beginPath(); g.roundRect(x, y, w, h, r); if (fill) { g.fillStyle = NIGHT; g.fill(); } g.stroke(); };
+function hidden(g) {
+  { pen(g, 22);
+    box(g, 200, 760, 540, 380, 34, PAPER, true);
+    line(g, [[248, 800], [270, 820], [248, 840]], PAPER); line(g, [[300, 820], [420, 820]], PAPER); line(g, [[466, 820], [520, 820]], AMBER);
+    box(g, 290, 880, 540, 380, 34, GREY, true); line(g, [[340, 960], [560, 960]], GREY);
+    box(g, 380, 1000, 540, 380, 34, GREY, true); line(g, [[430, 1080], [700, 1080]], GREY); line(g, [[430, 1140], [620, 1140]], GREY);
+  }
+  frame(g, T('שאלה מחכה בחלון נסתר.', 'A question is waiting.'), T('YDeck מראה לך איפה.', 'YDeck shows you where.'));
+}
+function receipt(g) {
+  mirrored(g, () => { pen(g, 22);
+    box(g, 330, 720, 420, 580, 38, PAPER);
+    line(g, [[400, 820], [600, 820]], PAPER);
+    [[900, 680], [970, 620], [1040, 660], [1110, 560]].forEach(([y, e]) => line(g, [[400, y], [e, y]], PAPER));
+    line(g, [[400, 1200], [520, 1200]], AMBER);
+  });
+  frame(g, T('כל סשן משאיר קבלה.', 'Every session leaves a receipt.'), T('מה השתנה, שורה אחרי שורה.', 'What changed, line by line.'));
+}
+function commit(g) {
+  pen(g, 22);
+  line(g, [[540, 1420], [540, 940]], PAPER);
+  [1340, 1200, 1060].forEach(y => line(g, [[490, y], [590, y]], PAPER));
+  line(g, [[490, 870], [590, 870]], AMBER);
+  frame(g, T('קומיט שלא נדחף.', 'A commit you never pushed.'), T('לא יישאר ככה.', 'Not for long.'));
+}
+function day(g) {
+  mirrored(g, () => { pen(g, 22);
+    [800, 960, 1120, 1280].forEach((y, i) => {
+      if (i < 3) { tick(g, [[252, y + 2], [276, y + 26], [316, y - 26]], PAPER); line(g, [[380, y], [[800, 720, 760][i], y]], PAPER); }
+      else { box(g, 244, y - 40, 80, 80, 20, PAPER); line(g, [[380, y], [560, y]], AMBER); }
+    });
+  });
+  frame(g, T('סוגרים את היום.', 'Close the day.'), T('בלחיצה אחת.', 'In one click.'));
+}
+function pocket(g) {
+  mirrored(g, () => { pen(g, 22);
+    box(g, 500, 900, 400, 260, 30, GREY); line(g, [[450, 1220], [950, 1220]], GREY);
+    box(g, 180, 860, 210, 360, 44, PAPER); line(g, [[255, 1150], [315, 1150]], AMBER);
+  });
+  frame(g, T('רחוק מהמחשב.', 'Away from your desk.'), T('הצעד הבא בכיס.', 'The next step comes along.'));
+}
+function memory(g) {
+  mirrored(g, () => { pen(g, 22);
+    box(g, 175, 1000, 170, 170, 34, PAPER); tick(g, [[215, 1088], [248, 1120], [306, 1052]], PAPER);
+    box(g, 470, 975, 140, 220, 30, PAPER); [1040, 1085, 1130].forEach((y, i) => line(g, [[505, y], [[575, 575, 545][i], y]], PAPER));
+    line(g, [[735, 1085], [845, 1085]], PAPER); line(g, [[878, 1035], [928, 1085], [878, 1135]], AMBER);
+  });
+  frame(g, T('מחר לא מתחילים מאפס.', 'No more starting from zero.'), T('YDeck זוכר איפה עצרת.', 'YDeck remembers.'));
+}
+
+const jobs = { opening, open, agents, hidden, receipt, commit, day, pocket, memory };
+window.ready = Promise.all(['500 40px Plex', '400 40px Plex', '500 40px "IBM Plex Sans Hebrew"', '400 40px "IBM Plex Sans Hebrew"']
+  .map(f => document.fonts.load(f))).catch(() => {}).then(() => {
+  for (const [id, f] of Object.entries(jobs)) { const g = document.getElementById(id).getContext('2d'); g.fillStyle = NIGHT; g.fillRect(0, 0, W, H); f(g); }
+  return true;
+});
+})();
+</script>

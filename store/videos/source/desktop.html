@@ -1,0 +1,396 @@
+<!doctype html>
+<!--
+  "YDeck for Windows": the launch film for developers. 1920x1080, frame-exact (window.render(t)); render.cjs adds the
+  landscape sting. A Windows desktop on the left, the headline on the right.
+   0.2  "אתה מפתח. / יש לך תיקיות של קוד."       an Explorer window fills with project folders
+   4.4  "ולכל פרויקט / עשרה חלונות פתוחים."       consoles, editors and terminals pile up, each in another account
+   8.6  "תכירו את YDeck / למחשב."                 the windows fly away; an empty glass widget lands on the desktop
+  12.6  "גוררים תיקייה, / והכול מתמלא לבד."        nova-web is dragged in: logo, git, links, tools, commands
+  17.4  "הקוד שלו, / בלחיצה אחת."                  VS Code opens on the folder; Claude Code in a terminal
+  21.8  "מה מצב הקוד? / רשום על הווידג׳ט."          the git line: 3 changes → commit → clean
+  25.4  "Ctrl+Alt+Space, / מכל מקום."              the search: "nova fire" → Firebase, in dana@nova.dev's Chrome profile
+  30.6  "וכל תיקייה / מקבלת את הלוגו."             Explorer: the project folders turn into their logos
+  34.2  "כל הפרויקט. / במקום אחד."                 the widget alone; "עכשיו גם ל־Windows"
+-->
+<meta charset="utf-8">
+<script src="desktop/marks.js"></script>
+<style>
+  @font-face { font-family: Plex; src: url("../../../app/src/main/res/font/plex_sans_hebrew_regular.ttf"); font-weight: 400; }
+  @font-face { font-family: Plex; src: url("../../../app/src/main/res/font/plex_sans_hebrew_medium.ttf"); font-weight: 500; }
+  @font-face { font-family: Plex; src: url("../../../app/src/main/res/font/plex_sans_hebrew_semibold.ttf"); font-weight: 600; }
+  @font-face { font-family: Plex; src: url("../../../app/src/main/res/font/plex_sans_hebrew_bold.ttf"); font-weight: 700; }
+  @font-face { font-family: Noto; src: url("../../../app/src/main/res/font/noto_sans_hebrew.ttf"); font-weight: 100 900; }
+  @font-face { font-family: Mono; src: url("../../../app/src/main/res/font/plex_mono_regular.ttf"); font-weight: 400; }
+  @font-face { font-family: Mono; src: url("../../../app/src/main/res/font/plex_mono_medium.ttf"); font-weight: 500; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; background: #0A0A0B; -webkit-font-smoothing: antialiased; font-family: Plex, sans-serif; }
+  .abs { position: absolute; }
+  #glow { position: absolute; inset: 0; background: radial-gradient(900px 700px at 30% 55%, rgba(61,53,224,.28), transparent 70%), radial-gradient(600px 500px at 85% 30%, rgba(94,242,194,.06), transparent 70%); }
+  .head { position: absolute; top: 390px; right: 96px; width: 680px; direction: rtl; font: 200 74px/1.14 Noto, sans-serif; letter-spacing: -0.02em; color: #F4F4F5; }
+  .mask { overflow: hidden; padding-bottom: 12px; }
+  .l2 { color: #5EF2C2; font-weight: 300; }
+  .kicker { position: absolute; top: 310px; right: 98px; direction: rtl; font: 500 22px Plex; color: #8A8A90; letter-spacing: .02em; }
+
+  #screen { position: absolute; left: 80px; top: 190px; width: 1060px; height: 700px; border-radius: 22px; overflow: hidden;
+    background: linear-gradient(135deg, #C9C4FF 0%, #E4E1F7 45%, #FFD9C9 100%); box-shadow: 0 40px 120px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.08); }
+  #taskbar { position: absolute; left: 0; right: 0; bottom: 0; height: 52px; background: rgba(243,243,247,.82); border-top: 1px solid rgba(0,0,0,.06);
+    display: flex; justify-content: center; align-items: center; gap: 14px; }
+  .tb { width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center; }
+  .tb img { width: 26px; height: 26px; }
+  .win { position: absolute; border-radius: 12px; overflow: hidden; background: #fff; box-shadow: 0 18px 50px rgba(20,16,60,.28), 0 0 0 1px rgba(0,0,0,.08); }
+  .bar { height: 38px; display: flex; align-items: center; padding: 0 14px; gap: 10px; font: 500 14px Plex; color: #3C3C43; background: #F3F3F5; border-bottom: 1px solid #E7E7E4; direction: ltr; }
+  .ctl { margin-left: auto; display: flex; gap: 18px; color: #6E6E73; font: 400 14px Plex; }
+
+  /* Explorer */
+  #explorer .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 18px 10px; padding: 26px 30px; direction: ltr; }
+  .fold { display: flex; flex-direction: column; align-items: center; gap: 6px; font: 400 14px Plex; color: #1D1D1F; position: relative; }
+  .fold .ic { width: 84px; height: 84px; position: relative; }
+  .fold .ic img, .fold .ic .logo { position: absolute; inset: 0; }
+  .fold .ic img { width: 84px; height: 84px; }
+  .fold .ic .logo { inset: 8px; border-radius: 20px; display: grid; place-items: center; color: #fff; font: 700 34px Plex; }
+  .tip { position: absolute; padding: 8px 12px; border-radius: 8px; background: #fff; border: 1px solid #D9D9DE; box-shadow: 0 6px 18px rgba(0,0,0,.12); font: 400 14px Plex; color: #1D1D1F; white-space: nowrap; direction: rtl; }
+
+  /* the clutter */
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 4px; border-radius: 99px; background: #fff; border: 1px solid #E2E2E6; font: 500 12px Plex; color: #3C3C43; }
+  .av { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; color: #fff; font: 600 11px Plex; }
+  .page { padding: 18px 20px; direction: ltr; }
+  .ln { height: 12px; border-radius: 6px; background: #ECECF0; margin: 10px 0; }
+
+  /* the widget */
+  #widget { position: absolute; width: 490px; height: 300px; border-radius: 30px; background: rgba(255,255,255,.80); box-shadow: 0 0 0 1px rgba(0,0,0,.07); direction: ltr; }
+  #widget .logo { position: absolute; right: 22px; top: 22px; width: 50px; height: 50px; border-radius: 15px; background: #0B0B0C; color: #fff; display: grid; place-items: center; font: 700 24px Plex; }
+  #widget .name { position: absolute; right: 86px; top: 22px; font: 500 21px Plex; color: #1D1D1F; direction: rtl; }
+  #widget .sub { position: absolute; right: 86px; top: 52px; font: 400 14px Plex; color: #55555B; direction: rtl; display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+  #widget .dot { width: 8px; height: 8px; border-radius: 4px; }
+  .tool { position: absolute; top: 26px; width: 42px; height: 42px; border-radius: 11px; display: grid; place-items: center; }
+  .tool img, .tool svg { width: 26px; height: 26px; }
+  .pdots { position: absolute; left: 24px; top: 43px; display: flex; gap: 5px; align-items: center; }
+  .pdots i { display: block; height: 6px; width: 6px; border-radius: 3px; background: rgba(29,29,31,.22); }
+  .pdots i.on { width: 18px; background: #1D1D1F; }
+  .mark { position: absolute; width: 110px; height: 90px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; border-radius: 16px; font: 500 14px Plex; color: #3C3C43; }
+  .mark svg { width: 34px; height: 34px; }
+  #drop { position: absolute; left: 18px; right: 18px; top: 96px; bottom: 18px; border-radius: 20px; border: 2px dashed rgba(61,53,224,.35); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; font: 500 17px Plex; color: #3D35E0; direction: rtl; }
+  #found { position: absolute; padding: 12px 16px; border-radius: 14px; background: rgba(255,255,255,.92); box-shadow: 0 10px 30px rgba(20,16,60,.16); font: 400 14px Plex; color: #3C3C43; direction: rtl; width: 490px; }
+  #found b { color: #3D35E0; font-weight: 600; }
+  .cmd { display: inline-block; margin: 8px 0 0 8px; padding: 4px 10px; border-radius: 8px; background: #F1F1EF; font: 500 13px Mono; color: #1D1D1F; direction: ltr; }
+
+  /* tools' windows */
+  #vscode { background: #1F1F1F; }
+  #vscode .bar { background: #181818; color: #CCCCCC; border-bottom: 1px solid #2B2B2B; }
+  .tree { position: absolute; left: 0; top: 38px; bottom: 0; width: 190px; background: #181818; padding: 12px 14px; font: 400 13px Plex; color: #CCCCCC; direction: ltr; line-height: 26px; }
+  .code { position: absolute; left: 190px; right: 0; top: 38px; bottom: 0; padding: 16px 20px; font: 400 14px/24px Mono; color: #D4D4D4; direction: ltr; white-space: pre; }
+  #term { background: #0C0C0C; }
+  #term .bar { background: #1C1C1C; color: #E6E6E6; border-bottom: 1px solid #2A2A2A; }
+  #term .out { padding: 16px 20px; font: 400 15px/26px Mono; color: #E6E6E6; direction: ltr; white-space: pre; }
+  .claudebox { margin-top: 6px; border: 1px solid #D97757; border-radius: 10px; padding: 12px 16px; color: #E6E6E6; }
+
+  /* search */
+  #palette { position: absolute; width: 640px; border-radius: 22px; background: #fff; box-shadow: 0 30px 80px rgba(20,16,60,.35), 0 0 0 1px rgba(0,0,0,.08); overflow: hidden; direction: rtl; }
+  #pq { height: 70px; display: flex; align-items: center; padding: 0 24px; font: 400 26px Plex; color: #0B0B0C; border-bottom: 1px solid #E7E7E4; gap: 14px; }
+  #pq .ph { color: #8A8A90; }
+  #pq .caret { width: 2px; height: 30px; background: #3D35E0; }
+  #pq .hk { margin-right: auto; font: 400 13px Mono; color: #8A8A90; direction: ltr; }
+  .row { height: 62px; margin: 0 8px; padding: 0 14px; border-radius: 12px; display: flex; align-items: center; gap: 14px; }
+  .row.sel { background: #ECEBFD; }
+  .row .rm { width: 38px; height: 38px; border-radius: 10px; background: #F1F1EF; display: grid; place-items: center; }
+  .row .rm svg { width: 21px; height: 21px; }
+  .row .t { font: 500 16px Plex; color: #0B0B0C; }
+  .row .h { font: 400 12px Mono; color: #5C5C61; direction: ltr; text-align: right; }
+  .row .p { margin-right: auto; display: flex; align-items: center; gap: 8px; font: 400 14px Plex; color: #5C5C61; }
+  .mini { width: 24px; height: 24px; border-radius: 7px; display: grid; place-items: center; color: #fff; font: 700 12px Plex; }
+  .key { position: absolute; height: 74px; border-radius: 14px; background: linear-gradient(#2A2A2E, #1A1A1D); box-shadow: 0 6px 0 #0A0A0B, 0 14px 30px rgba(0,0,0,.35); color: #F4F4F5; font: 500 24px Plex; display: grid; place-items: center; }
+
+  #chrome .tabs { height: 42px; background: #DEE1E6; display: flex; align-items: flex-end; padding: 0 10px; gap: 4px; direction: ltr; }
+  #chrome .tab { height: 34px; border-radius: 10px 10px 0 0; background: #fff; padding: 0 14px; display: flex; align-items: center; gap: 8px; font: 400 13px Plex; color: #1D1D1F; }
+  #chrome .omni { height: 46px; display: flex; align-items: center; gap: 12px; padding: 0 14px; border-bottom: 1px solid #E7E7E4; direction: ltr; }
+  #chrome .url { flex: 1; height: 32px; border-radius: 16px; background: #F1F3F4; display: flex; align-items: center; padding: 0 16px; font: 400 14px Plex; color: #3C3C43; }
+  #chrome .prof { display: flex; align-items: center; gap: 8px; padding: 4px 12px 4px 4px; border-radius: 99px; background: #E8F0FE; font: 500 13px Plex; color: #1A56C4; }
+
+  #cursor { position: absolute; width: 26px; height: 34px; left: 0; top: 0; filter: drop-shadow(0 2px 3px rgba(0,0,0,.35)); }
+  #ring { position: absolute; width: 44px; height: 44px; border-radius: 50%; border: 3px solid #3D35E0; }
+  #end { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  #tag { position: absolute; left: 80px; top: 912px; width: 1060px; text-align: center; direction: rtl; font: 500 22px Plex; color: #A1A1A8; }
+</style>
+<div id="glow"></div>
+<div class="kicker" id="kicker">YDeck · עכשיו גם ל־Windows</div>
+<div class="head" id="head"><div class="mask"><div id="l1"></div></div><div class="mask"><div class="l2" id="l2"></div></div></div>
+<div id="screen">
+  <div id="explorer" class="win abs" style="left:150px;top:70px;width:780px;height:500px">
+    <div class="bar"><img src="desktop/tool-explorer.png" style="width:18px;height:18px"> code<span class="ctl"><span>—</span><span>☐</span><span>✕</span></span></div>
+    <div class="grid" id="grid"></div>
+  </div>
+  <div id="chaos"></div>
+  <div id="widget">
+    <div id="drop"><svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#3D35E0" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 10v6M9 13l3 3 3-3"/></svg>גוררים לכאן תיקיית קוד</div>
+    <div class="logo" id="wlogo">N</div>
+    <div class="name" id="wname">Nova</div>
+    <div class="sub" id="wsub"><span class="dot" id="wdot"></span><span id="wgit"></span></div>
+    <div class="pdots" id="pdots"><i></i><i></i><i class="on"></i></div>
+    <div id="tools"></div>
+    <div id="marks"></div>
+  </div>
+  <div id="found"><b>מהתיקייה:</b> <bdi>GitHub, Firebase, Vercel, Play, Package</bdi> ולוגו<br><span class="cmd">pnpm run dev</span><span class="cmd">pnpm run build</span><span class="cmd">pnpm run deploy</span></div>
+  <div id="vscode" class="win abs"><div class="bar"><img src="desktop/tool-vscode.png" style="width:18px;height:18px"> nova-web — Visual Studio Code<span class="ctl"><span>—</span><span>☐</span><span>✕</span></span></div>
+    <div class="tree">▾ NOVA-WEB<br>&nbsp;&nbsp;▸ app<br>&nbsp;&nbsp;▸ components<br>&nbsp;&nbsp;▸ public<br>&nbsp;&nbsp;&nbsp;&nbsp;.firebaserc<br>&nbsp;&nbsp;&nbsp;&nbsp;next.config.ts<br>&nbsp;&nbsp;&nbsp;&nbsp;package.json</div>
+    <div class="code"><span style="color:#C586C0">export default</span> <span style="color:#569CD6">function</span> <span style="color:#DCDCAA">Home</span>() {
+  <span style="color:#C586C0">return</span> (
+    &lt;<span style="color:#4EC9B0">main</span> <span style="color:#9CDCFE">className</span>=<span style="color:#CE9178">"hero"</span>&gt;
+      &lt;<span style="color:#4EC9B0">h1</span>&gt;Nova&lt;/<span style="color:#4EC9B0">h1</span>&gt;
+      &lt;<span style="color:#4EC9B0">Waitlist</span> /&gt;
+    &lt;/<span style="color:#4EC9B0">main</span>&gt;
+  );
+}</div></div>
+  <div id="term" class="win abs"><div class="bar"><span style="color:#D97757">✻</span> Claude Code · Nova<span class="ctl"><span>—</span><span>☐</span><span>✕</span></span></div>
+    <div class="out">C:\code\nova-web&gt; claude
+<div class="claudebox"><span style="color:#D97757">✻</span> Welcome to <b>Claude Code</b>!
+
+  cwd: C:\code\nova-web</div>
+<span style="color:#8A8A90">&gt;</span> <span id="ask"></span></div></div>
+  <div id="keys"><div class="key" id="k1" style="width:120px">Ctrl</div><div class="key" id="k2" style="width:110px">Alt</div><div class="key" id="k3" style="width:300px">Space</div></div>
+  <div id="palette"><div id="pq"><span id="ptext"></span><span class="caret" id="caret"></span><span class="hk">Ctrl+Alt+Space</span></div><div id="rows" style="padding:6px 0"></div></div>
+  <div id="chrome" class="win abs">
+    <div class="tabs"><div class="tab"><svg width="16" height="16" viewBox="0 0 24 24" id="tabmark"></svg>nova-web – Firebase console</div></div>
+    <div class="omni"><span style="color:#5F6368">←&nbsp;&nbsp;→&nbsp;&nbsp;⟳</span><div class="url">console.firebase.google.com/project/nova-web/overview</div><div class="prof"><span class="av" style="background:#0B0B0C">N</span>Nova · dana@nova.dev</div></div>
+    <div style="display:flex;height:100%;direction:ltr"><div style="width:64px;background:#1A2B3C"></div><div class="page" style="flex:1">
+      <div style="font:600 24px Plex;color:#1D1D1F">nova-web</div><div style="font:400 14px Plex;color:#5C5C61;margin-top:4px">Spark plan · dana@nova.dev</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:20px">
+        <div style="height:120px;border-radius:12px;background:#FFF4E5"></div><div style="height:120px;border-radius:12px;background:#E8F0FE"></div><div style="height:120px;border-radius:12px;background:#E6F4EA"></div>
+      </div><div class="ln" style="width:70%;margin-top:22px"></div><div class="ln" style="width:52%"></div></div></div>
+  </div>
+  <div id="taskbar">
+    <div class="tb"><svg width="22" height="22" viewBox="0 0 22 22"><rect x="0" y="0" width="10" height="10" fill="#0078D4"/><rect x="12" y="0" width="10" height="10" fill="#0078D4"/><rect x="0" y="12" width="10" height="10" fill="#0078D4"/><rect x="12" y="12" width="10" height="10" fill="#0078D4"/></svg></div>
+    <div class="tb"><img src="desktop/tool-explorer.png"></div>
+    <div class="tb"><svg width="26" height="26" viewBox="0 0 48 48"><circle cx="24" cy="24" r="22" fill="#DB4437"/><path d="M24 2a22 22 0 0 1 19 11H24z" fill="#DB4437"/><path d="M43 13A22 22 0 0 1 24 46l9.5-16.5z" fill="#F4B400"/><path d="M5 13l9.5 16.5L24 46A22 22 0 0 1 5 13z" fill="#0F9D58"/><circle cx="24" cy="24" r="9" fill="#fff"/><circle cx="24" cy="24" r="7" fill="#4285F4"/></svg></div>
+    <div class="tb"><img src="desktop/tool-vscode.png"></div>
+    <div class="tb"><img src="../../../desktop/icons/ydeck.png" onerror="this.style.display='none'"></div>
+  </div>
+  <div id="ring"></div>
+  <svg id="cursor" viewBox="0 0 26 34"><path d="M2 2 L2 27 L8.5 21 L13 31.5 L17 29.8 L12.6 19.6 L21.5 19.6 Z" fill="#fff" stroke="#111" stroke-width="1.6" stroke-linejoin="round"/></svg>
+</div>
+<div id="tag"></div>
+<canvas id="grain" width="960" height="540" style="position:absolute;left:0;top:0;width:1920px;height:1080px;opacity:.04;mix-blend-mode:overlay"></canvas>
+<script>
+const $ = id => document.getElementById(id);
+const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const seg = (t, a, d) => clamp((t - a) / d);
+const p3 = p => 1 - Math.pow(1 - p, 3);
+const p3in = p => p * p * p;
+const io = p => p < .5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+const backOut = p => { const s = 1.5; p -= 1; return p * p * ((s + 1) * p + s) + 1; };
+const lerp = (a, b, k) => a + (b - a) * k;
+const css = (el, o) => { for (const k in o) el.style[k] = o[k]; };
+/** visible between a and b, fading in over fi and out over fo */
+const vis = (t, a, b, fi = .35, fo = .3) => Math.min(p3(seg(t, a, fi)), 1 - p3in(seg(t, b, fo)));
+
+const BRAND = { github: '#181717', firebase: '#DD2C00', vercel: '#000000', googleplay: '#414141', supabase: '#3FCF8E', sentry: '#362D59', googleanalytics: '#E37400', claude: '#D97757', cloudflare: '#F38020', railway: '#0B0D0E' };
+const svg = (name, color) => `<svg viewBox="0 0 24 24"><path fill="${color || BRAND[name]}" d="${MARKS[name].join(' ')}"/></svg>`;
+const DOTS = '<svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="2" fill="#3C3C43"/><circle cx="12" cy="12" r="2" fill="#3C3C43"/><circle cx="19" cy="12" r="2" fill="#3C3C43"/></svg>';
+
+// ---- headlines ----
+const LINES = [
+  [0.2, 4.15, 'אתה מפתח.', 'יש לך תיקיות של קוד.'],
+  [4.4, 8.35, 'ולכל פרויקט', 'עשרה חלונות פתוחים.'],
+  [8.6, 12.35, 'תכירו את YDeck', 'למחשב.'],
+  [12.6, 17.15, 'גוררים תיקייה,', 'והכול מתמלא לבד.'],
+  [17.4, 21.55, 'הקוד שלו,', 'בלחיצה אחת.'],
+  [21.8, 25.15, 'מה מצב הקוד?', 'רשום על הווידג׳ט.'],
+  [25.4, 30.35, 'Ctrl+Alt+Space,', 'וכל קישור נפתח.'],
+  [30.6, 33.95, 'וכל תיקייה', 'מקבלת את הלוגו.'],
+  [34.2, 37.6, 'כל הפרויקט.', 'במקום אחד.'],
+];
+function headline(t) {
+  const cur = LINES.find(([a, b]) => t >= a - 0.01 && t < b + 0.3);
+  if (!cur) { $('l1').textContent = $('l2').textContent = ''; return; }
+  const [a, b, one, two] = cur;
+  $('l1').textContent = one; $('l2').textContent = two;
+  $('l1').style.direction = $('l2').style.direction = 'rtl';
+  const inn = at => (1 - p3(seg(t, at, 0.45))) * 110, out = -p3in(seg(t, b, 0.28)) * 110;
+  $('l1').style.transform = `translateY(${t < b ? inn(a) : out}px)`;
+  $('l2').style.transform = `translateY(${t < b ? inn(a + 0.14) : out}px)`;
+}
+
+// ---- Explorer folders ----
+const FOLDERS = [['nova-web', '#0B0B0C', 'N'], ['orbit-app', '#0EA5E9', 'O'], ['pulse-api', '#FF5A36', 'P'], ['atlas', '#7C3AED', 'A'], ['kite-landing', '#16A34A', 'K'],
+  ['ledger', '#1A6FDB', 'L'], ['mira-shop', '#DB2777', 'M'], ['orbit-admin', '#0EA5E9', 'O'], ['scripts', null], ['sandbox', null]];
+$('grid').innerHTML = FOLDERS.map(([n, c, m], i) => `<div class="fold" id="f${i}"><div class="ic"><img src="desktop/tool-folder.png">${c ? `<div class="logo" style="background:${c};${c === '#0B0B0C' ? 'box-shadow:0 0 0 1px rgba(255,255,255,.15) inset' : ''}">${m}</div>` : ''}</div><span>${n}</span></div>`).join('')
+  + '<div class="tip" id="ftip">YDeck · Nova · dana@nova.dev</div>';
+
+// ---- the clutter: consoles, editors, terminals, each signed in somewhere else ----
+const CHAOS = [
+  ['firebase', 'Firebase console', 'dana@nova.dev', '#E37400', 60, 40, -3],
+  ['vercel', 'Vercel — orbit', 'team-orbit', '#000', 380, 70, 2.5],
+  ['github', 'GitHub · nova/web', 'dana-dev', '#181717', 120, 230, 1.5],
+  ['googleplay', 'Play Console', 'pulse@studio.io', '#0F9D58', 520, 250, -2],
+  ['supabase', 'Supabase — atlas', 'atlas-admin', '#3FCF8E', 250, 380, -1],
+  ['term', 'Terminal', 'C:\\code\\pulse-api', '#0C0C0C', 640, 40, 3.5],
+  ['vscode', 'kite-landing — VS Code', '', '#1F1F1F', 30, 330, 2],
+  ['sentry', 'Sentry — ledger', 'ops@ledger.app', '#362D59', 600, 400, -3.5],
+];
+$('chaos').innerHTML = CHAOS.map(([k, title, who, col, x, y, r], i) => {
+  const dark = k === 'term' || k === 'vscode';
+  const head = k === 'vscode' ? '<img src="desktop/tool-vscode.png" style="width:16px;height:16px">' : k === 'term' ? '<span style="font:500 13px Mono;color:#ccc">&gt;_</span>' : `<span style="width:16px;height:16px;display:inline-block">${svg(k)}</span>`;
+  const body = dark ? `<div class="page" style="font:400 13px/22px Mono;color:#9CDCFE">${k === 'term' ? 'PS C:\\code\\pulse-api&gt; npm run dev<br><span style="color:#6A9955">ready on :3000</span>' : '<span style="color:#C586C0">import</span> { Hero } <span style="color:#C586C0">from</span> <span style="color:#CE9178">"./hero"</span>'}</div>`
+    : `<div class="page"><div class="chip"><span class="av" style="background:${col}">${who[0].toUpperCase()}</span>${who}</div><div class="ln" style="width:80%;margin-top:16px"></div><div class="ln" style="width:62%"></div><div class="ln" style="width:70%"></div></div>`;
+  return `<div class="win" id="c${i}" style="width:380px;height:220px;${dark ? 'background:' + col : ''}"><div class="bar" style="${dark ? 'background:#181818;color:#ccc;border-color:#2b2b2b' : ''}">${head}${title}<span class="ctl"><span>✕</span></span></div>${body}</div>`;
+}).join('');
+
+// ---- the widget ----
+const W = { x: 300, y: 150 };   // on the screen (the widget is 490 x 300); scene 3 moves it right, beside Explorer
+const wx = t => lerp(300, 540, io(seg(t, 12.25, .5)) * (1 - io(seg(t, 16.85, .5))));
+const SLOTS = [['github', 'GitHub'], ['firebase', 'Firebase'], ['vercel', 'Vercel'], ['googleplay', 'Play'], ['supabase', 'Supabase'], ['sentry', 'Sentry'], ['googleanalytics', 'Analytics'], ['more', 'עוד']];
+const colW = (490 - 36) / 4;
+const slotPos = i => ({ x: 490 - 18 - (i % 4 + 0.5) * colW, y: Math.floor(i / 4) === 0 ? 150 : 245 });
+$('marks').innerHTML = SLOTS.map(([k, label], i) => { const p = slotPos(i); return `<div class="mark" id="m${i}" style="left:${p.x - 55}px;top:${p.y - 45}px">${k === 'more' ? DOTS : svg(k)}<span>${label}</span></div>`; }).join('');
+const TOOLS = [['claude', 24 + 60], ['vscode', 24 + 60 + 46], ['folder', 24 + 60 + 92]];   // left to right after the page dots
+$('tools').innerHTML = TOOLS.map(([k, x], i) => `<div class="tool" id="t${i}" style="left:${x}px">${k === 'claude' ? svg('claude') : `<img src="desktop/tool-${k}.png">`}</div>`).join('');
+const toolCenter = i => ({ x: W.x + TOOLS[i][1] + 21, y: W.y + 26 + 21 });
+
+// ---- search results ----
+const PROJ = { Nova: ['#0B0B0C', 'N'], Orbit: ['#0EA5E9', 'O'], Pulse: ['#FF5A36', 'P'] };
+const ALL = [
+  ['Nova', 'firebase', 'Firebase', 'console.firebase.google.com/project/nova-web'],
+  ['Orbit', 'vercel', 'Vercel', 'vercel.com/orbit/web'],
+  ['Pulse', 'googleplay', 'Play Console', 'play.google.com/console'],
+  ['Nova', 'github', 'GitHub', 'github.com/nova/web'],
+  ['Nova', 'vercel', 'Vercel', 'vercel.com/nova/web'],
+  ['Orbit', 'firebase', 'Firebase', 'console.firebase.google.com/project/orbit'],
+  ['Nova', 'claude', 'Claude Code', 'C:\\code\\nova-web'],
+];
+function results(q) {
+  const w = q.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!w.length) return ALL.slice(0, 3);
+  return ALL.filter(([p, , title]) => w.every(x => p.toLowerCase().includes(x) || title.toLowerCase().includes(x))).slice(0, 4);
+}
+let lastRows = '';
+function drawRows(q) {
+  const html = results(q).map(([p, k, title, hint], i) => `<div class="row ${i === 0 ? 'sel' : ''}"><div class="rm">${svg(k)}</div><div><div class="t">${title}</div><div class="h">${hint}</div></div><div class="p">${p}<span class="mini" style="background:${PROJ[p][0]}">${PROJ[p][1]}</span></div></div>`).join('');
+  if (html !== lastRows) { $('rows').innerHTML = html; lastRows = html; }
+}
+$('tabmark').innerHTML = `<path fill="${BRAND.firebase}" d="${MARKS.firebase.join(' ')}"/>`;
+
+// ---- the cursor's path: [time, x, y] on the screen; clicks ----
+const PATH = [
+  [12.6, 160, 560], [12.95, 92, 128],                  // to the nova-web folder in Explorer
+  [13.25, 92, 128], [14.15, 760, 300],                // drag it onto the widget
+  [14.5, 800, 330], [17.6, 640, 420],
+  [18.1, toolCenter(1).x, toolCenter(1).y],           // VS Code
+  [19.3, toolCenter(1).x, toolCenter(1).y], [19.75, toolCenter(0).x, toolCenter(0).y],   // Claude Code
+  [21.4, toolCenter(0).x + 10, toolCenter(0).y + 8], [22.2, 820, 520],
+  [30.6, 820, 520], [31.0, 260, 330], [32.1, 230, 205], [33.9, 230, 205], [34.3, 1000, 640],
+];
+const CLICKS = [13.2, 18.15, 19.8, 32.15];
+function cursorAt(t) {
+  if (t <= PATH[0][0]) return PATH[0];
+  for (let i = 1; i < PATH.length; i++) if (t <= PATH[i][0]) {
+    const [a, ax, ay] = PATH[i - 1], [b, bx, by] = PATH[i]; const k = io(seg(t, a, b - a));
+    return [t, lerp(ax, bx, k), lerp(ay, by, k)];
+  }
+  return PATH[PATH.length - 1];
+}
+
+// ---- grain ----
+const g = $('grain').getContext('2d'); const gimg = g.createImageData(960, 540);
+let gs = 7; const grnd = () => ((gs = (gs * 1664525 + 1013904223) >>> 0) / 4294967296);
+function grain() { for (let i = 0; i < gimg.data.length; i += 4) { const v = grnd() * 255; gimg.data[i] = gimg.data[i + 1] = gimg.data[i + 2] = v; gimg.data[i + 3] = 255; } g.putImageData(gimg, 0, 0); }
+
+window.DURATION = 37.6;
+window.render = (t, frame = 0) => {
+  if (frame % 2 === 0) grain();
+  headline(t);
+  css($('kicker'), { opacity: vis(t, 0.1, 37.2, .6, .4) });
+
+  // 0 · Explorer fills with folders (also scene 7, where they become logos)
+  const ex = Math.max(vis(t, 0.15, 4.6, .5, .45), vis(t, 30.5, 33.95, .45, .4), vis(t, 12.3, 14.5, .4, .4));
+  const small = t > 11 && t < 20;   // scene 3: a smaller Explorer at the left, the folder is dragged out of it
+  css($('explorer'), { opacity: ex, left: small ? '30px' : '150px', top: small ? '60px' : '70px', transformOrigin: 'top left',
+    transform: small ? `scale(.62) translateY(${(1 - p3(seg(t, 12.3, .5))) * 30}px)` : `translateY(${(1 - p3(seg(t, 0.15, .6))) * 30}px) scale(${t > 4 && t < 9 ? 1 - .06 * p3(seg(t, 4.3, .5)) : 1})` });
+  FOLDERS.forEach((f, i) => {
+    const k = t < 20 ? p3(seg(t, 0.55 + i * 0.13, .4)) : 1;
+    const el = $('f' + i);
+    css(el, { opacity: k, transform: `translateY(${(1 - k) * 18}px)` });
+    const logo = el.querySelector('.logo');
+    if (logo) { const order = [0, 1, 2, 3, 4, 5, 6, 7][i]; const lk = t > 30 ? backOut(seg(t, 31.0 + order * 0.16, .45)) : 0; css(logo, { opacity: clamp(lk * 3), transform: `scale(${lk})` }); css(el.querySelector('img'), { opacity: 1 - clamp(lk * 2) }); }
+  });
+  // the hover on nova-web, as in scene 3 (dragging it) and 7 (its tooltip)
+  css($('ftip'), { left: '105px', top: '128px', opacity: vis(t, 32.3, 33.9, .3, .3) });
+  css($('f0'), { opacity: t > 13.2 && t < 30 ? 0.35 : $('f0').style.opacity });
+
+  // 1 · the clutter piles up, then flies into the widget
+  CHAOS.forEach((c, i) => {
+    const [, , , , x, y, r] = c, at = 4.5 + i * 0.36;
+    const k = backOut(seg(t, at, .5)), gone = io(seg(t, 8.7 + i * 0.04, .55));
+    css($('c' + i), { left: lerp(x, W.x + 160, gone) + 'px', top: lerp(y, W.y + 80, gone) + 'px', opacity: Math.min(clamp(seg(t, at, .2)), 1 - gone),
+      transform: `rotate(${r * (1 - gone)}deg) scale(${(0.82 + 0.18 * k) * (1 - 0.8 * gone)})` });
+  });
+
+  // 2 · the widget lands, empty
+  const land = backOut(seg(t, 9.35, .7));
+  const leave = t > 34.2 ? 0 : 0;
+  css($('widget'), { left: wx(t) + 'px', top: W.y + 'px', opacity: clamp(seg(t, 9.35, .25)) * (1 - p3in(seg(t, 37.0, .5))) * (1 - vis(t, 30.4, 34.1, .3, .35)),
+    transform: `translateY(${(1 - land) * 60}px) scale(${(0.9 + 0.1 * land) * (1 + 0.04 * io(seg(t, 34.3, 1.2)))})`,
+    boxShadow: `0 0 0 1px rgba(0,0,0,.07), 0 0 0 ${t > 13.6 && t < 14.4 ? 6 * Math.sin(Math.PI * seg(t, 13.6, .8)) : 0}px rgba(61,53,224,.35)` });
+  const filled = seg(t, 14.2, .3);
+  css($('drop'), { opacity: 1 - filled });
+  const lg = backOut(seg(t, 14.25, .45));
+  css($('wlogo'), { transform: `scale(${lg})`, opacity: clamp(lg * 2) });
+  const nm = 'Nova'.slice(0, Math.round(4 * seg(t, 14.35, .3)));
+  $('wname').textContent = nm || '';
+  // git: 3 changes, then the commit at 23.6 makes it clean
+  const clean = t > 23.55;
+  $('wgit').innerHTML = clean ? '<bdi>main</bdi> · <bdi>נקי</bdi>' : '<bdi>main</bdi> · <bdi>3 שינויים</bdi> · <bdi>↑1</bdi>';
+  css($('wdot'), { background: clean ? '#34C77B' : '#F5A524', transform: `scale(${1 + (t > 23.55 && t < 24.1 ? .8 * Math.sin(Math.PI * seg(t, 23.55, .55)) : 0)})` });
+  const zoomGit = io(seg(t, 22.0, .5)) * (1 - io(seg(t, 24.9, .45)));
+  css($('wsub'), { opacity: clamp(seg(t, 14.6, .3)), transform: `scale(${1 + .45 * zoomGit})`, transformOrigin: 'right center',
+    background: zoomGit > .01 ? `rgba(255,255,255,${.9 * zoomGit})` : 'transparent', padding: `${4 * zoomGit}px ${10 * zoomGit}px`, borderRadius: '10px', boxShadow: `0 6px 18px rgba(20,16,60,${.18 * zoomGit})` });
+  css($('pdots'), { opacity: clamp(seg(t, 14.6, .3)) });
+  SLOTS.forEach((s, i) => { const k = backOut(seg(t, 14.55 + i * 0.13, .4)); css($('m' + i), { opacity: clamp(k * 2), transform: `scale(${k})`,
+    background: (i === 1 && t > 27.95 && t < 28.6) ? 'rgba(0,0,0,.05)' : 'transparent' }); });
+  TOOLS.forEach((tl, i) => { const k = backOut(seg(t, 15.75 + (2 - i) * 0.14, .4));
+    const hover = (i === 1 && t > 17.95 && t < 19.4) || (i === 0 && t > 19.65 && t < 21.4);
+    css($('t' + i), { opacity: clamp(k * 2), transform: `scale(${k * (hover ? 1.08 : 1)})`, background: hover ? 'rgba(0,0,0,.07)' : 'transparent' }); });
+  css($('found'), { left: wx(t) + 'px', top: W.y + 318 + 'px', opacity: vis(t, 16.0, 17.6, .35, .35), transform: `translateY(${(1 - p3(seg(t, 16.0, .4))) * 14}px)` });
+
+  // the folder being dragged: a copy of the folder icon follows the cursor
+  // 4 · VS Code and Claude Code open from the widget's tools
+  const vs = io(seg(t, 18.2, .45)), vsOut = p3in(seg(t, 21.4, .35));
+  const vsFrom = toolCenter(1);
+  css($('vscode'), { left: lerp(vsFrom.x, 60, vs) + 'px', top: lerp(vsFrom.y, 50, vs) + 'px', width: lerp(40, 700, vs) + 'px', height: lerp(30, 430, vs) + 'px', opacity: clamp(vs * 3) * (1 - vsOut) });
+  const cl = io(seg(t, 19.85, .45)), clOut = p3in(seg(t, 21.4, .35));
+  const clFrom = toolCenter(0);
+  css($('term'), { left: lerp(clFrom.x, 330, cl) + 'px', top: lerp(clFrom.y, 210, cl) + 'px', width: lerp(40, 660, cl) + 'px', height: lerp(30, 330, cl) + 'px', opacity: clamp(cl * 3) * (1 - clOut) });
+  const ask = 'add a waitlist to the hero';
+  $('ask').textContent = ask.slice(0, Math.round(ask.length * seg(t, 20.45, .8)));
+
+  // 6 · the hotkey and the search
+  [['k1', 0], ['k2', 1], ['k3', 2]].forEach(([id, i]) => {
+    const x0 = [215, 350, 475][i];
+    const down = t > 25.65 + i * 0.15 && t < 26.35;
+    css($(id), { left: x0 + 'px', top: (290 + (down ? 5 : 0)) + 'px', opacity: vis(t, 25.45 + i * 0.08, 26.35, .25, .25),
+      boxShadow: down ? '0 1px 0 #0A0A0B, 0 6px 16px rgba(0,0,0,.3)' : '', background: down ? 'linear-gradient(#3D35E0, #2E27B8)' : '' });
+  });
+  const pal = backOut(seg(t, 26.4, .45));
+  css($('palette'), { left: '220px', top: '70px', opacity: clamp(seg(t, 26.4, .2)) * (1 - p3in(seg(t, 28.05, .25))), transform: `scale(${0.94 + 0.06 * pal})` });
+  const typed = 'nova fire'.slice(0, Math.floor(seg(t, 26.75, .85) * 9.999));
+  $('ptext').innerHTML = typed ? `<span style="direction:ltr">${typed}</span>` : '<span class="ph">פרויקט ומה לפתוח</span>';
+  css($('caret'), { opacity: Math.floor(t * 2.4) % 2 === 0 || (t > 26.7 && t < 27.7) ? 1 : 0 });
+  drawRows(typed);
+  const ch = io(seg(t, 28.15, .5)), chOut = p3in(seg(t, 30.25, .35));
+  css($('chrome'), { left: lerp(400, 110, ch) + 'px', top: lerp(200, 45, ch) + 'px', width: lerp(300, 860, ch) + 'px', height: lerp(160, 540, ch) + 'px', opacity: clamp(ch * 2.5) * (1 - chOut) });
+
+  // the cursor (hidden while the keyboard does the work)
+  const [, cx, cy] = cursorAt(t);
+  const showCursor = vis(t, 12.6, 22.4, .3, .3) + vis(t, 30.7, 34.6, .3, .3);
+  css($('cursor'), { transform: `translate(${cx}px, ${cy}px)`, opacity: clamp(showCursor) });
+  const click = CLICKS.find(c => t >= c && t < c + .45);
+  css($('ring'), { left: cx - 22 + 'px', top: cy - 22 + 'px', opacity: click ? 1 - seg(t, click, .45) : 0, transform: `scale(${click ? .4 + .8 * p3(seg(t, click, .45)) : 0})` });
+  // the dragged folder rides under the cursor
+  const dragging = t > 13.2 && t < 14.25;
+  let dr = $('dragf'); if (!dr) { dr = document.createElement('img'); dr.id = 'dragf'; dr.src = 'desktop/tool-folder.png'; dr.className = 'abs'; dr.style.width = '72px'; $('screen').insertBefore(dr, $('ring')); }
+  css(dr, { left: cx - 30 + 'px', top: cy - 20 + 'px', opacity: dragging ? .92 * (1 - seg(t, 14.05, .2)) : 0, transform: `rotate(-6deg) scale(${1 - .4 * seg(t, 13.95, .3)})` });
+
+  // 8 · the end: everything but the widget goes; the line under the screen
+  css($('tag'), { opacity: vis(t, 34.6, 37.3, .5, .3) });
+  $('tag').textContent = 'YDeck ל־Windows · ווידג׳טים על שולחן העבודה, תיקיות, git וחיפוש';
+};
+window.ready = document.fonts.ready.then(() => new Promise(r => { const imgs = [...document.images]; Promise.all(imgs.map(i => i.complete ? 0 : new Promise(z => { i.onload = i.onerror = z; }))).then(r); }));
+</script>

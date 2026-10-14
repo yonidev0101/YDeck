@@ -1,0 +1,165 @@
+<!doctype html>
+<!--
+  "Close the day", the first film in the brand's line (store/ads/language): 18.2 s, 1080×1920, then the logo sting.
+  window.render(t) draws the frame at t seconds; render.cjs films it (`node render.cjs close`).
+  One thick round stroke; white is done, the one amber piece (set apart by a space) is what is still open, grey is closed,
+  indigo only a drop (the one waiting agent's line while it is written). The amber piece is the film's one character:
+  it is the waiting cursor, then the open project's mark in YDeck, then the next step, then the sting's dot.
+    0.0  "שלושה פרויקטים. שלושה סוכנים."  three named terminals; the agents type
+    3.5  "אחד מהם מחכה לך."              Orbit stops: its amber cursor appears; the camera leans in
+    6.6  "YDeck מראה לך איפה."           the terminals become YDeck's rows, in words; the amber piece moves to its place
+   10.2  "ובסוף היום, הכל נסגר."          Nova and Pulse close (✓); Orbit keeps its next step, in amber
+   14.2  "ומחר מתחילים מכאן."            what closed goes grey and away; the amber piece gathers into the sting's dot
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face { font-family: Plex; src: url("../../../app/src/main/res/font/plex_sans_hebrew_medium.ttf"); font-weight: 500; }
+  @font-face { font-family: Plex; src: url("../../../app/src/main/res/font/plex_sans_hebrew_regular.ttf"); font-weight: 400; }
+  html, body { margin: 0; background: #0B0B0D; overflow: hidden; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c" width="1080" height="1920"></canvas>
+<script>
+const W = 1080, H = 1920, D = Math.PI / 180;
+const g = document.getElementById('c').getContext('2d');
+const NIGHT = [11, 11, 13], PAPER = [244, 244, 245], MUTED = [139, 139, 147], AMBER = [245, 165, 36], THINK = [110, 102, 248], GREY = [58, 58, 66];
+const S = 22; // the one stroke
+const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const seg = (t, a, b) => clamp((t - a) / (b - a));
+const ease = x => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+const out3 = x => 1 - Math.pow(1 - x, 3);
+const lerp = (a, b, k) => a + (b - a) * k;
+const mix = (a, b, k) => a.map((v, i) => Math.round(v + (b[i] - v) * k));
+const rgb = c => `rgb(${c[0]},${c[1]},${c[2]})`;
+
+// ---------- the pen ----------
+const arcPts = (cx, cy, r, a0, a1, n = 10) => Array.from({ length: n + 1 }, (_, i) => { const a = (a0 + (a1 - a0) * i / n) * D; return [cx + r * Math.cos(a), cy + r * Math.sin(a)]; });
+const rr = (x, y, w, h, r) => [[x + r, y], ...arcPts(x + w - r, y + r, r, 270, 360), ...arcPts(x + w - r, y + h - r, r, 0, 90),
+  ...arcPts(x + r, y + h - r, r, 90, 180), ...arcPts(x + r, y + r, r, 180, 270)];
+function len(p) { let L = 0; for (let i = 1; i < p.length; i++) L += Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]); return L; }
+function slice(p, a, b) {
+  const o = []; let acc = 0;
+  for (let i = 1; i < p.length; i++) {
+    const d = Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]), s0 = acc, s1 = acc + d; acc = s1;
+    if (s1 < a || s0 > b) continue;
+    const at = s => { const k = d ? (s - s0) / d : 0; return [p[i - 1][0] + (p[i][0] - p[i - 1][0]) * k, p[i - 1][1] + (p[i][1] - p[i - 1][1]) * k]; };
+    if (!o.length) o.push(at(Math.max(a, s0)));
+    o.push(at(Math.min(b, s1)));
+  }
+  return o;
+}
+function line(p, color, k1 = 1, alpha = 1, w = S) {
+  if (k1 <= 0.001 || alpha <= 0.002) return;
+  const q = k1 >= 1 ? p : slice(p, 0, len(p) * k1);
+  if (q.length < 2) return;
+  g.globalAlpha = alpha; g.strokeStyle = rgb(color); g.lineWidth = w; g.lineCap = 'round'; g.lineJoin = 'round';
+  g.beginPath(); g.moveTo(...q[0]); q.slice(1).forEach(v => g.lineTo(...v)); g.stroke(); g.globalAlpha = 1;
+}
+function text(s, x, y, size, color, alpha = 1, weight = 400, align = 'right', dir = 'rtl') {
+  if (alpha <= 0.002) return;
+  g.globalAlpha = alpha; g.font = `${weight} ${size}px Plex`; g.fillStyle = rgb(color);
+  g.textAlign = align; g.textBaseline = 'alphabetic'; g.direction = dir; g.fillText(s, x, y); g.globalAlpha = 1;
+}
+
+// ---------- the headlines (the full stop is the amber dot) ----------
+const HEADS = [[0.3, 3.4, 'שלושה פרויקטים. שלושה סוכנים.'], [3.6, 6.5, 'אחד מהם מחכה לך.'], [6.8, 10.0, 'YDeck מראה לך איפה.'],
+  [10.2, 14.0, 'ובסוף היום, הכל נסגר.'], [14.2, 16.5, 'ומחר מתחילים מכאן.']];
+function headline(t) {
+  for (const [a, b, s] of HEADS) {
+    const inn = out3(seg(t, a, a + .6)), gone = seg(t, b - .35, b), alpha = inn * (1 - gone);
+    if (alpha <= 0) continue;
+    const y = 470 + (1 - inn) * 34 - gone * 20;
+    let size = 88; g.direction = 'rtl'; g.font = `500 ${size}px Plex`;
+    while (g.measureText(s).width > 880) { size -= 2; g.font = `500 ${size}px Plex`; }
+    const body = s.replace(/\.$/, ''), tw = g.measureText(body).width, gap = 28;
+    text(body, W / 2 + gap / 2, y, size, PAPER, alpha, 500, 'center');
+    g.globalAlpha = alpha; g.fillStyle = rgb(AMBER); g.beginPath(); g.arc(W / 2 + gap / 2 - tw / 2 - gap + 9, y - 10, size / 8, 0, Math.PI * 2); g.fill(); g.globalAlpha = 1;
+  }
+}
+
+// ---------- the three projects ----------
+const P = [
+  { name: 'Nova', y: 760, end: 690, period: 1.6, work: 'כותב את מסך ההתחברות', done: '2 קומיטים נדחפו', close: 10.8 },
+  { name: 'Orbit', y: 960, end: 600, work: 'מחכה לאישור שלך', done: 'הצעד הבא: לאשר את העריכה', close: 12.2 },
+  { name: 'Pulse', y: 1160, end: 700, period: 1.3, work: 'מריץ בדיקות', done: 'השרת נעצר', close: 11.5 },
+];
+function loop(t, start, period, stopAt) {
+  // the agent writes line after line until stopAt; the line in progress then finishes and stays
+  if (t < start) return { k: 0, a: 1 };
+  const n = Math.floor((Math.min(t, stopAt) - start) / period), u = (t - start - n * period) / period;
+  return t >= stopAt ? { k: clamp(u / .6), a: 1 } : { k: clamp(u / .6), a: 1 - seg(u, .85, 1) };
+}
+function projects(t) {
+  const row = ease(seg(t, 6.6, 7.5));            // terminal → YDeck row
+  const greyK = ease(seg(t, 13.6, 14.3)), away = 1 - ease(seg(t, 16.0, 16.6));
+  P.forEach((p, i) => {
+    const y = p.y, draw = ease(seg(t, .2 + i * .15, 1.1 + i * .15)), open = i === 1;
+    const frame = open ? PAPER : mix(PAPER, GREY, greyK);
+    line(rr(160, y, 760, 150, 30), frame, draw, away);
+    // the terminal's prompt and the line the agent is writing (only the one that will need you writes in indigo)
+    const term = 1 - seg(t, 6.6, 7.0);
+    line([[222, y + 48], [252, y + 75], [222, y + 102]], PAPER, ease(seg(t, .6 + i * .15, 1.0 + i * .15)), term);
+    const tl = [[300, y + 75], [p.end, y + 75]];
+    if (open) { const k = ease(seg(t, 1.3, 2.3)); line(tl, k < 1 ? THINK : PAPER, k, term); }
+    else { const L = loop(t, 1.2 + i * .1, p.period, 4.8); line(tl, PAPER, ease(L.k), L.a * term); }
+    // the project's name: small above the terminal, then the row's title
+    const nameIn = seg(t, .5 + i * .15, 1.1 + i * .15);
+    text(p.name, lerp(880, 870, row), lerp(y + 87, y + 66, row), lerp(34, 50, row), mix(MUTED, mix(PAPER, GREY, open ? 0 : greyK), row), nameIn * away, 500, 'right', 'ltr');
+    // what is happening, in words; it changes when the project closes
+    const st = seg(t, 7.1, 7.7), swap = seg(t, p.close, p.close + .4);
+    const sc = open ? MUTED : mix(MUTED, GREY, greyK);
+    text(p.work, 870, y + 118, 34, open ? AMBER : sc, st * (1 - swap) * away);
+    text(p.done, 870, y + 118, 34, open ? PAPER : sc, st * swap * away);
+    // a closed project gets its tick
+    if (!open) line([[204, y + 78], [222, y + 96], [252, y + 56]], frame, ease(seg(t, p.close + .2, p.close + .55)), away);
+  });
+}
+
+// ---------- YDeck, named the moment the rows appear ----------
+function brand(t) {
+  const a = out3(seg(t, 7.0, 7.6)) * (1 - seg(t, 16.0, 16.5));
+  if (a <= 0) return;
+  const cx = 540, y = 690, r = 22;
+  g.globalAlpha = a; g.lineCap = 'round'; g.strokeStyle = rgb(PAPER); g.lineWidth = r * 11 / 36;
+  g.beginPath(); g.arc(cx - 78, y - 15, r, -10 * D, 290 * D); g.stroke();
+  g.fillStyle = rgb(AMBER); g.beginPath(); g.arc(cx - 78 + r * Math.cos(-40 * D), y - 15 + r * Math.sin(-40 * D), r * 7.5 / 36, 0, Math.PI * 2); g.fill();
+  g.globalAlpha = 1;
+  text('YDeck', cx - 40, y, 40, PAPER, a, 500, 'left', 'ltr');
+}
+
+// ---------- the amber piece: the film's one character ----------
+function amber(t) {
+  if (t < 3.5) return;
+  const y = 960 + 75;
+  const appear = out3(seg(t, 3.5, 3.8));
+  const blink = t > 4.1 && t < 6.6 && ((t - 4.1) % .9) > .55 ? .25 : 1;
+  const move = ease(seg(t, 6.8, 7.5));            // from the end of the text to the row's mark
+  const x0 = lerp(650, 200, move), x1 = x0 + 54 * appear;
+  // the next step: it stays; then it gathers into a dot and goes to where the sting's dot will land
+  const k = ease(seg(t, 16.6, 17.4)), m = ease(seg(t, 17.1, 17.8));
+  const mid = (x0 + x1) / 2, half = (x1 - x0) / 2 * (1 - k);
+  const cx = lerp(mid, 627, m), cy = lerp(y, 733, m);
+  const alpha = (t < 6.6 ? blink : 1) * (1 - seg(t, 17.8, 18.2));
+  if (half > 1) line([[cx - half, cy], [cx + half, cy]], AMBER, 1, alpha);
+  else { g.globalAlpha = alpha; g.fillStyle = rgb(AMBER); g.beginPath(); g.arc(cx, cy, S / 2, 0, Math.PI * 2); g.fill(); g.globalAlpha = 1; }
+}
+
+window.DURATION = 18.2;
+window.render = t => {
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.fillStyle = rgb(NIGHT); g.fillRect(0, 0, W, H);
+  headline(t);
+  // the camera leans in on the one that waits, then steps back (the amber piece stays in the zoomed world)
+  const z = 1 + .14 * (ease(seg(t, 3.6, 4.5)) - ease(seg(t, 5.9, 6.7)));
+  g.setTransform(z, 0, 0, z, 540 - 540 * z, 1035 - 1035 * z);
+  projects(t); brand(t); amber(t);
+  g.setTransform(1, 0, 0, 1, 0, 0);
+};
+window.ready = Promise.all([document.fonts.load('500 40px Plex'), document.fonts.load('400 40px Plex')]).then(() => { window.render(0); return true; });
+</script>
+</body>
+</html>

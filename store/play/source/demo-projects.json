@@ -1,0 +1,41 @@
+{
+  "version": 2,
+  "projects": [
+    { "id": "nova", "name": "Nova", "mono": "N", "kind": "אפליקציה + אתר", "brand": { "color": "#0B0B0C" }, "google": "dana@nova.dev",
+      "vercel": { "browser": "com.android.chrome", "label": "Chrome" },
+      "actions": [
+        { "service": "firebase", "url": "https://console.firebase.google.com/project/nova-app" },
+        { "service": "play", "url": "https://play.google.com/console" },
+        { "service": "vercel", "url": "https://vercel.com/nova/web" },
+        { "service": "github", "url": "https://github.com/nova/app" },
+        { "service": "sentry", "url": "https://sentry.io/organizations/nova" },
+        { "service": "analytics", "url": "https://analytics.google.com" },
+        { "service": "drive", "url": "https://drive.google.com" }
+      ],
+      "copy": [{ "label": "Package", "value": "dev.nova.app" }, { "label": "Firebase project", "value": "nova-app-4f21" }, { "label": "Repo", "value": "github.com/nova/app" }] },
+    { "id": "orbit", "name": "Orbit", "mono": "O", "kind": "SaaS", "brand": { "color": "#0EA5E9" }, "google": "hello@orbit.app",
+      "vercel": { "browser": "com.android.chrome", "label": "Chrome" },
+      "actions": [
+        { "service": "vercel", "url": "https://vercel.com/orbit/web" },
+        { "service": "github", "url": "https://github.com/orbit/web" },
+        { "service": "supabase", "url": "https://supabase.com/dashboard/project/orbit" },
+        { "service": "stripe", "url": "https://dashboard.stripe.com" },
+        { "service": "gmail", "url": "https://mail.google.com" },
+        { "service": "resend", "url": "https://resend.com/emails" },
+        { "service": "sentry", "url": "https://sentry.io/organizations/orbit" }
+      ],
+      "copy": [{ "label": "Supabase ref", "value": "orbit-prod" }] },
+    { "id": "pulse", "name": "Pulse", "mono": "P", "kind": "אפליקציית Android", "brand": { "color": "#FF5A36" }, "google": "dana@pulse.io",
+      "vercel": { "browser": "com.android.chrome", "label": "Chrome" },
+      "actions": [
+        { "service": "play", "url": "https://play.google.com/console" },
+        { "service": "firebase", "url": "https://console.firebase.google.com/project/pulse" },
+        { "service": "revenuecat", "url": "https://app.revenuecat.com" },
+        { "service": "mixpanel", "url": "https://mixpanel.com" },
+        { "service": "github", "url": "https://github.com/pulse/android" },
+        { "service": "gmail", "url": "https://mail.google.com" },
+        { "service": "drive", "url": "https://drive.google.com" }
+      ],
+      "copy": [{ "label": "Package", "value": "io.pulse.app" }] }
+  ]
+}

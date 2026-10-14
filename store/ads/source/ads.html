@@ -1,0 +1,398 @@
+<!doctype html>
+<!--
+  YDeck ads and teasers, 1080x1350 (feed: LinkedIn, Instagram, X). ?v=<id>. Brand book: store/brand/README.md.
+  Pain on night (clutter always grey, the emphasized line mint), the brand moment on indigo, features on paper (indigo).
+  Teasers carry no name and no mark. Illustrations are plain SVG drawn from the brand's shapes.
+-->
+<meta charset="utf-8">
+<script src="../../play/source/icons.js"></script>
+<style>
+  @font-face { font-family: Plex; src: url("../../../app/src/main/res/font/plex_sans_hebrew_regular.ttf"); font-weight: 400; }
+  @font-face { font-family: Plex; src: url("../../../app/src/main/res/font/plex_sans_hebrew_medium.ttf"); font-weight: 500; }
+  @font-face { font-family: Plex; src: url("../../../app/src/main/res/font/plex_sans_hebrew_semibold.ttf"); font-weight: 600; }
+  @font-face { font-family: Noto; src: url("../../../app/src/main/res/font/noto_sans_hebrew.ttf"); font-weight: 100 900; }
+  @font-face { font-family: Mono; src: url("../../../app/src/main/res/font/plex_mono_medium.ttf"); font-weight: 500; }
+  @font-face { font-family: MonoR; src: url("../../../app/src/main/res/font/plex_mono_regular.ttf"); font-weight: 400; }
+  :root {
+    --night: #0A0A0B; --raised: #1C1C1F; --line: #26262A; --line-2: #3A3A3F; --on: #F4F4F5; --ink-3: #8A8A90;
+    --mint: #5EF2C2; --indigo: #3D35E0; --paper: #F6F6F4; --ink: #0B0B0C; --ink-2: #5C5C61; --p-line: #E7E7E4; --p-raised: #FFFFFF;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1080px; height: 1350px; overflow: hidden; -webkit-font-smoothing: antialiased; }
+  body { position: relative; background: var(--bg); color: var(--fg); direction: rtl; }
+  body.night { --bg: var(--night); --fg: var(--on); --em: var(--mint); --sig: var(--ink-3); }
+  body.indigo { --bg: var(--indigo); --fg: var(--on); --em: var(--mint); --sig: rgba(244,244,245,.7); }
+  body.paper { --bg: var(--paper); --fg: var(--ink); --em: var(--indigo); --sig: var(--ink-2); }
+  #grain { position: absolute; inset: 0; width: 1080px; height: 1350px; opacity: .045; mix-blend-mode: overlay; pointer-events: none; }
+  .head { position: absolute; top: 112px; right: 96px; left: 96px; font: 200 96px/1.1 Noto, sans-serif; letter-spacing: -0.02em; }
+  .head b { display: block; font-weight: 300; color: var(--em); }
+  .art { position: absolute; left: 0; right: 0; }
+  .art svg { display: block; margin: 0 auto; overflow: visible; }
+  .foot { position: absolute; bottom: 84px; right: 96px; left: 96px; display: flex; align-items: center; justify-content: space-between;
+    font: 500 26px/1 Plex, sans-serif; color: var(--sig); }
+  .sig { display: flex; align-items: center; gap: 14px; direction: ltr; font: 600 34px/1 Plex, sans-serif; letter-spacing: -0.03em; }
+  .sig svg { width: 46px; height: auto; }
+  /* status: WhatsApp draws its bars over the top ~200px and the reply box over the bottom ~200px */
+  html.status, html.status body { height: 1920px; }
+  html.status #grain { height: 1920px; }
+  html.status .head { top: 250px; }
+  html.status .foot { bottom: 210px; }
+  .split { position: absolute; left: 0; right: 0; bottom: 0; background: var(--indigo); }
+  .half { position: absolute; right: 96px; left: 96px; font: 200 96px/1.1 Noto, sans-serif; letter-spacing: -0.02em; }
+  .half.em { color: var(--mint); font-weight: 300; }
+  /* the real widget (DeckWidget.kt), as on the feature graphic */
+  .widget { --k: 1.5; position: absolute; left: 50%; transform: translateX(-50%); width: calc(316px * var(--k)); background: #fff; border-radius: calc(28px * var(--k));
+    padding: calc(16px * var(--k)) calc(14px * var(--k)) calc(12px * var(--k)); color: #1D1D1F; font-family: Plex, sans-serif; direction: rtl;
+    box-shadow: 0 30px 70px rgba(10, 8, 60, .35); }
+  .w-hdr { display: flex; align-items: center; height: calc(38px * var(--k)); gap: calc(10px * var(--k)); }
+  .w-logo { width: calc(34px * var(--k)); height: calc(34px * var(--k)); border-radius: calc(10px * var(--k)); background: #0B0B0C; color: #fff; display: grid; place-items: center; font: 600 calc(17px * var(--k))/1 Plex, sans-serif; }
+  .w-id { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+  .w-name { font-size: calc(16px * var(--k)); font-weight: 500; line-height: 1.2; }
+  .w-acct { display: flex; align-items: center; gap: calc(5px * var(--k)); font-size: calc(12px * var(--k)); color: #6E6E73; }
+  .w-dot { width: calc(6px * var(--k)); height: calc(6px * var(--k)); border-radius: 50%; background: #30A14E; }
+  .w-count { font-size: calc(12px * var(--k)); color: #6E6E73; }
+  .w-nav svg { width: calc(16px * var(--k)); height: calc(16px * var(--k)); margin: 0 calc(7px * var(--k)); color: #6E6E73; }
+  .w-grid { display: grid; grid-template-columns: repeat(4, 1fr); row-gap: calc(10px * var(--k)); margin-top: calc(12px * var(--k)); }
+  .w-slot { display: flex; flex-direction: column; align-items: center; gap: calc(6px * var(--k)); }
+  .w-sq { width: calc(54px * var(--k)); height: calc(54px * var(--k)); border-radius: calc(54px * .29 * var(--k)); background: #F2F2F7; display: grid; place-items: center; }
+  .w-sq svg { width: calc(26px * var(--k)); height: calc(26px * var(--k)); }
+  .w-sq.p { background: #0B0B0C; }
+  .w-lbl { font-size: calc(11px * var(--k)); font-weight: 500; color: #3C3C43; line-height: 1; }
+  .pill { position: absolute; left: 50%; transform: translateX(-50%); padding: 26px 56px; border-radius: 999px; background: #fff; color: var(--indigo);
+    font: 600 34px/1 Plex, sans-serif; white-space: nowrap; }
+  .soon { font: 500 24px/1 Mono, monospace; letter-spacing: .14em; color: var(--ink-3); direction: ltr; }
+</style>
+<body>
+<div class="head" id="head"></div>
+<div class="art" id="art"></div>
+<div class="foot" id="foot"></div>
+<canvas id="grain" width="540" height="675"></canvas>
+<script>
+const q = new URLSearchParams(location.search);
+const v = q.get('v') || 'tabs';
+const STATUS = q.get('fmt') === 'status';
+if (STATUS) { document.documentElement.classList.add('status'); document.getElementById('grain').height = 960; }
+const H = STATUS ? 1920 : 1350;
+const $ = id => document.getElementById(id);
+
+// ---- shared pieces ----
+const Y = ['M296.4,364.4L113.1,181.3Q95.4,163.6 113.1,145.9L144.9,114.1Q162.6,96.4 180.3,114.1L363.6,297.4Z',
+  'M262,513L262,330C262,310 276,295.8 290,281.8L457.7,114.1Q475.4,96.4 493.1,114.1L524.9,145.9Q542.6,163.6 524.9,181.3L376,330.2L376,513Q376,545 344,545L294,545Q262,545 262,513Z',
+  'M262,455L376,341L376,513Q376,545 344,545L294,545Q262,545 262,513Z'];
+const TILES = [[68, 312], [150, 312], [68, 394], [150, 394], [422, 312], [504, 312], [422, 394], [504, 394]];
+const mark = (fg, hi) => `<svg viewBox="48 76 542 489">${TILES.map(([x, y], i) => `<rect x="${x}" y="${y}" width="66" height="66" rx="16" fill="${i === 5 && hi ? hi : fg}"/>`).join('')}${Y.map(d => `<path d="${d}" fill="${fg}"/>`).join('')}</svg>`;
+const icon = (name, color, size, x, y) => {
+  const i = ICONS[name], s = size / +i.vb[0];
+  return `<g transform="translate(${x} ${y}) scale(${s})">${i.paths.map(p => `<path d="${p.d}" fill="${color}"/>`).join('')}</g>`;
+};
+const signature = (fg, hi) => `<div class="sig">${mark(fg, hi)}<span>YDeck</span></div>`;
+const soon = (txt = 'SOON') => `<span></span><span class="soon">${txt}</span>`;
+const T = (x, y, s, attrs = '') => `<text x="${x}" y="${y}" ${attrs}>${s}</text>`;
+const svgIcon = (name, color) => { const i = ICONS[name];
+  return `<svg viewBox="0 0 ${i.vb[0]} ${i.vb[1]}">${i.paths.map(p => p.stroke
+    ? `<path d="${p.d}" fill="none" stroke="currentColor" stroke-width="${p.sw}" stroke-linecap="round" stroke-linejoin="round"/>`
+    : `<path d="${p.d}" fill="${color}"/>`).join('')}</svg>`; };
+// the demo project "Nova" in the real widget
+const widget = (top, k = 1.5) => `<div class="widget" style="top:${top}px;--k:${k}">
+  <div class="w-hdr"><div class="w-logo">N</div><div class="w-id"><div class="w-name">Nova</div><div class="w-acct"><span class="w-dot"></span><span>dana</span></div></div>
+  <span class="w-count">1/4</span><span class="w-nav">${svgIcon('ic_chev_right') + svgIcon('ic_chev_left')}</span></div>
+  <div class="w-grid">${[['si_googleplay', 'Play', '#fff', 1], ['si_firebase', 'Firebase', '#DD2C00'], ['si_github', 'GitHub', '#181717'], ['si_vercel', 'Vercel', '#000'],
+    ['si_googleanalytics', 'Analytics', '#E37400'], ['si_supabase', 'Supabase', '#3FCF8E'], ['si_sentry', 'Sentry', '#362D59'], ['ic_s_dots', 'עוד', '#3C3C43']]
+    .map(([n, l, c, p]) => `<div class="w-slot"><div class="w-sq${p ? ' p' : ''}">${svgIcon(n, c)}</div><div class="w-lbl">${l}</div></div>`).join('')}</div></div>`;
+const MONO = 'font-family="MonoR" style="direction:ltr"';
+
+
+const SCENES = {
+  // 1 · TEASER: the tab strip that never ends (night, no name)
+  tabs() {
+    document.body.className = 'night';
+    $('head').innerHTML = 'יש לך עוד<b>טאב פתוח.</b>';
+    const titles = ['Firebase', 'Firebase', 'Vercel', 'Play Console', 'Gmail', 'GitHub', 'Sentry', 'Analytics', 'Supabase', 'Firebase'];
+    let x = 888, tabs = '';
+    // widths shrink as the strip fills: titled tabs, then favicon-only, then slivers
+    const widths = [196, ...Array(22).fill(29)];
+    widths.forEach((w, i) => {
+      x -= w;
+      if (x < 0) return;
+      const active = i === 0;
+      tabs += `<g>
+        <path d="M${x + 4},96 L${x + 4},60 Q${x + 4},44 ${x + 20},44 L${x + w - 16},44 Q${x + w - 4},44 ${x + w - 4},60 L${x + w - 4},96"
+          fill="${active ? '#1C1C1F' : 'none'}" stroke="${active ? '#3A3A3F' : 'none'}" stroke-width="2"/>
+        <circle cx="${w > 100 ? x + w - 30 : x + w / 2}" cy="70" r="${w > 100 ? 9 : 7}" fill="${w > 100 ? '#5C5C61' : '#3A3A3F'}"/>
+        ${w > 100 ? T(x + w - 50, 78, titles[i % titles.length], `font-family="Plex" font-size="22" fill="#8A8A90" text-anchor="start" direction="rtl"`) : ''}
+        ${!active && i < widths.length - 1 ? `<line x1="${x}" y1="56" x2="${x}" y2="84" stroke="#26262A" stroke-width="2"/>` : ''}
+      </g>`;
+    });
+    $('art').style.top = '520px';
+    $('art').innerHTML = `<svg width="888" height="520" viewBox="0 0 888 520">
+      <rect x="1" y="1" width="886" height="518" rx="28" fill="none" stroke="#26262A" stroke-width="2"/>
+      ${tabs}
+      <line x1="0" y1="96" x2="888" y2="96" stroke="#26262A" stroke-width="2"/>
+      <rect x="36" y="124" width="816" height="56" rx="28" fill="#1C1C1F"/>
+      ${T(72, 160, 'console.firebase.google.com/u/2/…', 'font-family="MonoR" font-size="22" fill="#8A8A90" style="direction:ltr"')}
+      <rect x="560" y="236" width="256" height="20" rx="10" fill="#1C1C1F"/>
+      <rect x="400" y="276" width="416" height="20" rx="10" fill="#1C1C1F"/>
+      <rect x="480" y="316" width="336" height="20" rx="10" fill="#1C1C1F"/>
+      <rect x="72" y="236" width="268" height="200" rx="20" fill="none" stroke="#26262A" stroke-width="2"/>
+      <path d="M28,70 h20 M38,60 v20" stroke="#5C5C61" stroke-width="3" stroke-linecap="round"/>
+    </svg>`;
+    $('foot').innerHTML = soon();
+  },
+
+  // 2 · TEASER: one mint tile; the rest of the mark is only a ghost (night, no name)
+  tile() {
+    document.body.className = 'night';
+    $('head').innerHTML = 'לחיצה אחת.<b>בחשבון הנכון.</b>';
+    const k = 1.25, ox = 540 - 319 * k, oy = 540;
+    const ghost = TILES.map(([x, y], i) => i === 5
+      ? `<rect x="${x}" y="${y}" width="66" height="66" rx="16" fill="#5EF2C2"/>`
+      : `<rect x="${x + 1.5}" y="${y + 1.5}" width="63" height="63" rx="15" fill="none" stroke="#26262A" stroke-width="3" stroke-dasharray="7 7"/>`).join('');
+    $('art').style.top = '430px';
+    $('art').innerHTML = `<svg width="1080" height="700" viewBox="0 0 1080 700">
+      <g transform="translate(${ox} ${-140}) scale(${k})">${ghost}
+        ${Y.slice(0, 2).map(d => `<path d="${d}" fill="none" stroke="#1C1C1F" stroke-width="3"/>`).join('')}</g>
+      <circle cx="${ox + 537 * k}" cy="${-140 + 345 * k}" r="${70 * k}" fill="none" stroke="#5EF2C2" stroke-opacity=".25" stroke-width="2"/>
+      <circle cx="${ox + 537 * k}" cy="${-140 + 345 * k}" r="${104 * k}" fill="none" stroke="#5EF2C2" stroke-opacity=".1" stroke-width="2"/>
+    </svg>`;
+    $('foot').innerHTML = soon();
+  },
+
+  // 3 · PAIN: the Google account chooser (night)
+  accounts() {
+    document.body.className = 'night';
+    $('head').innerHTML = 'איזה חשבון<b>זה היה?</b>';
+    const rows = [['D', 'Dana Cohen', 'dana.cohen@gmail.com', '#3A3A3F'], ['D', 'Dana · עבודה', 'dana@nova.dev', '#2C2C30'],
+      ['D', 'Dana', 'dana.c.dev@gmail.com', '#46464B'], ['N', 'Nova Studio', 'hello@novastudio.io', '#323236']];
+    $('art').style.top = '520px';
+    $('art').innerHTML = `<svg width="888" height="600" viewBox="0 0 888 600">
+      <rect x="0" y="0" width="888" height="600" rx="32" fill="#141416" stroke="#26262A" stroke-width="2"/>
+      ${T(820, 82, 'בחירת חשבון', 'font-family="Plex" font-weight="500" font-size="34" fill="#F4F4F5" direction="rtl"')}
+      ${T(820, 124, 'כדי להמשיך אל Firebase', 'font-family="Plex" font-size="24" fill="#8A8A90" direction="rtl"')}
+      ${rows.map(([l, n, e, c], i) => {
+        const y = 168 + i * 104;
+        return `<line x1="40" y1="${y}" x2="848" y2="${y}" stroke="#26262A" stroke-width="2"/>
+          <circle cx="796" cy="${y + 52}" r="30" fill="${c}"/>
+          ${T(796, y + 62, l, 'font-family="Plex" font-weight="500" font-size="28" fill="#8A8A90" text-anchor="middle"')}
+          ${T(740, y + 46, n, 'font-family="Plex" font-weight="500" font-size="27" fill="#C9C9CE" direction="rtl"')}
+          ${T(740, y + 82, e, 'font-family="MonoR" font-size="22" fill="#8A8A90" direction="rtl"')}`;
+      }).join('')}
+      <!-- the cursor, hesitating between two Danas -->
+      <g transform="translate(250 330) rotate(-8)">
+        <path d="M0,0 L0,58 L14,45 L24,68 L34,64 L24,41 L42,41 Z" fill="#F4F4F5" stroke="#0A0A0B" stroke-width="3" stroke-linejoin="round"/>
+      </g>
+      ${T(312, 320, '?', 'font-family="Plex" font-weight="500" font-size="52" fill="#5EF2C2"')}
+    </svg>`;
+    $('foot').innerHTML = `<span></span>${signature('#8A8A90')}`;
+  },
+
+  // 4 · PAIN: Firebase opened in the wrong account (night)
+  wrong() {
+    document.body.className = 'night';
+    $('head').innerHTML = 'Firebase נפתח<b>בחשבון הלא נכון.</b>';
+    $('art').style.top = '560px';
+    $('art').innerHTML = `<svg width="888" height="560" viewBox="0 0 888 560">
+      <rect x="1" y="1" width="886" height="558" rx="32" fill="#141416" stroke="#26262A" stroke-width="2"/>
+      <rect x="32" y="28" width="824" height="60" rx="30" fill="#1C1C1F"/>
+      <g transform="translate(64 44)"><rect x="4" y="12" width="20" height="16" rx="3" fill="#8A8A90"/><path d="M8,12 v-4 a6,6 0 0 1 12,0 v4" fill="none" stroke="#8A8A90" stroke-width="3"/></g>
+      ${T(104, 67, 'console.firebase.google.com/project/nova', 'font-family="MonoR" font-size="23" fill="#8A8A90" style="direction:ltr"')}
+      <circle cx="822" cy="58" r="20" fill="#3A3A3F"/>${T(822, 66, 'D', 'font-family="Plex" font-weight="500" font-size="20" fill="#C9C9CE" text-anchor="middle"')}
+      <!-- the empty state of a project you can't see -->
+      <circle cx="444" cy="236" r="64" fill="none" stroke="#3A3A3F" stroke-width="3"/>
+      <rect x="418" y="232" width="52" height="40" rx="8" fill="none" stroke="#8A8A90" stroke-width="4"/>
+      <path d="M428,232 v-12 a16,16 0 0 1 32,0 v12" fill="none" stroke="#8A8A90" stroke-width="4"/>
+      ${T(444, 360, 'אין לך גישה לפרויקט הזה', 'font-family="Plex" font-weight="500" font-size="32" fill="#C9C9CE" text-anchor="middle" direction="rtl"')}
+      ${T(444, 404, 'מחובר בתור dana.cohen@gmail.com', 'font-family="Plex" font-size="24" fill="#8A8A90" text-anchor="middle" direction="rtl"')}
+      <rect x="334" y="440" width="220" height="60" rx="30" fill="none" stroke="#3A3A3F" stroke-width="2"/>
+      ${T(444, 479, 'החלפת חשבון', 'font-family="Plex" font-weight="500" font-size="24" fill="#5EF2C2" text-anchor="middle" direction="rtl"')}
+    </svg>`;
+    $('foot').innerHTML = `<span></span>${signature('#8A8A90')}`;
+  },
+
+  // 5 · PAIN: Chrome's tab counter, 37 (night)
+  count() {
+    document.body.className = 'night';
+    $('head').innerHTML = 'אף אחד מהם<b>הוא לא הנכון.</b>';
+    $('art').style.top = '560px';
+    $('art').innerHTML = `<svg width="1080" height="560" viewBox="0 0 1080 560">
+      <rect x="350" y="40" width="380" height="380" rx="72" fill="none" stroke="#F4F4F5" stroke-width="22"/>
+      ${T(540, 300, '37', 'font-family="Plex" font-weight="600" font-size="200" fill="#F4F4F5" text-anchor="middle" letter-spacing="-8"')}
+      <!-- the strip of thumbnails behind it, all grey -->
+      ${[0, 1, 2, 3, 4, 5].map(i => `<rect x="${96 + i * 156}" y="476" width="128" height="20" rx="10" fill="${i === 5 ? '#26262A' : '#1C1C1F'}"/>`).join('')}
+    </svg>`;
+    $('foot').innerHTML = `<span></span>${signature('#8A8A90')}`;
+  },
+
+  // 6 · BRAND: from scattered tabs to the deck (indigo)
+  order() {
+    document.body.className = 'indigo';
+    $('head').innerHTML = 'כל הפרויקט.<b>במקום אחד.</b>';
+    const scatter = [[110, 40, -14, 150], [300, 6, 8, 120], [480, 50, -5, 160], [700, 10, 12, 130], [860, 70, -18, 100], [210, 120, 5, 110], [620, 110, -8, 120]];
+    const k = .9, ox = 540 - 319 * k;
+    $('art').style.top = '430px';
+    $('art').innerHTML = `<svg width="1080" height="700" viewBox="0 0 1080 700">
+      ${scatter.map(([x, y, r, w]) => `<g transform="translate(${x} ${y}) rotate(${r})"><rect x="0" y="0" width="${w}" height="44" rx="14" fill="none" stroke="#F4F4F5" stroke-opacity=".35" stroke-width="2.5"/><circle cx="24" cy="22" r="7" fill="#F4F4F5" fill-opacity=".35"/><rect x="42" y="18" width="${w - 64}" height="8" rx="4" fill="#F4F4F5" fill-opacity=".22"/></g>`).join('')}
+      <line x1="540" y1="196" x2="540" y2="236" stroke="#F4F4F5" stroke-opacity=".35" stroke-width="2.5" stroke-dasharray="2 10" stroke-linecap="round"/>
+      <g transform="translate(${ox} ${190}) scale(${k})">${mark('#FFFFFF', '#5EF2C2').replace(/<\/?svg[^>]*>/g, '')}</g>
+    </svg>`;
+    $('foot').innerHTML = `<span style="font: 400 26px/1.4 Plex, sans-serif;color:rgba(244,244,245,.72)">ווידג׳ט לכל פרויקט · Google Play</span>${signature('#F4F4F5', '#5EF2C2')}`;
+  },
+
+  // 7 · FEATURE: every link routed to its own account (paper)
+  route() {
+    document.body.className = 'paper';
+    $('head').innerHTML = 'כל קישור<b>בחשבון שלו.</b>';
+    const tile = (x, y, name, color) => `<rect x="${x}" y="${y}" width="120" height="120" rx="34" fill="#FFFFFF" stroke="#E7E7E4" stroke-width="2"/>${icon(name, color, 58, x + 31, y + 31)}`;
+    const chip = (x, y, w, top, sub) => `<rect x="${x}" y="${y}" width="${w}" height="112" rx="24" fill="#FFFFFF" stroke="#E7E7E4" stroke-width="2"/>
+      ${T(x + w - 32, y + 48, top, 'font-family="Plex" font-weight="500" font-size="26" fill="#0B0B0C" direction="rtl"')}
+      ${T(x + 32, y + 86, sub, 'font-family="MonoR" font-size="22" fill="#5C5C61" style="direction:ltr"')}`;
+    // the lines: tile (right) → rounded orthogonal route → account (left); indigo, like a map
+    const route = y => `<path d="M716,${y} H500" fill="none" stroke="#3D35E0" stroke-width="4" stroke-linecap="round" stroke-dasharray="0 14"/>
+      <path d="M520,${y - 12} L504,${y} L520,${y + 12}" fill="none" stroke="#3D35E0" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>`;
+    $('art').style.top = '520px';
+    $('art').innerHTML = `<svg width="1080" height="640" viewBox="0 0 1080 640">
+      ${route(110)}${route(300)}${route(490)}
+      ${tile(740, 50, 'si_firebase', '#DD2C00')}${tile(740, 240, 'si_vercel', '#000000')}${tile(740, 430, 'si_github', '#181717')}
+      ${chip(96, 54, 384, 'Chrome · חשבון העבודה', 'dana@nova.dev')}
+      ${chip(96, 244, 384, 'Chrome Beta · Vercel', 'team: nova-labs')}
+      ${chip(96, 434, 384, 'Chrome · ברירת מחדל', 'github.com/nova')}
+    </svg>`;
+    $('foot').innerHTML = `<span style="font: 400 26px/1.4 Plex, sans-serif"><span dir="ltr">Google · Vercel · GitHub</span> ועוד</span>${signature('#0B0B0C')}`;
+  },
+
+  // 8 · PAIN: the bookmarks bar ran out of room (night)
+  bookmarks() {
+    document.body.className = 'night';
+    $('head').innerHTML = 'הסימניות שלך<b>כבר לא נכנסות.</b>';
+    const bar = ['Nova', 'Nova (ישן)', 'Firebase', 'Firebase 2', 'Vercel', 'Play'];
+    let x = 872, items = '';
+    bar.forEach(l => {
+      const w = 44 + l.length * 12; x -= w + 14;
+      if (x < 90) return;
+      items += `<rect x="${x + w - 30}" y="30" width="22" height="18" rx="4" fill="none" stroke="#5C5C61" stroke-width="2.5"/>${T(x + w - 40, 47, l, 'font-family="Plex" font-size="21" fill="#8A8A90" direction="rtl"')}`;
+    });
+    const more = ['Play Console · Nova', 'Play Console · Pulse', 'Firebase (dana)', 'Firebase (עבודה)', 'GCP · חיובים', 'Vercel · nova-labs', 'Sentry · Pulse', 'Supabase · ישן'];
+    $('art').style.top = '520px';
+    $('art').innerHTML = `<svg width="888" height="640" viewBox="0 0 888 640">
+      <rect x="1" y="1" width="886" height="76" rx="22" fill="#141416" stroke="#26262A" stroke-width="2"/>
+      ${items}
+      <rect x="18" y="17" width="54" height="44" rx="12" fill="#26262A"/>${T(45, 50, '»', 'font-family="Plex" font-size="30" fill="#F4F4F5" text-anchor="middle"')}
+      <rect x="18" y="96" width="470" height="${more.length * 62 + 24}" rx="22" fill="#141416" stroke="#26262A" stroke-width="2"/>
+      ${more.map((l, i) => `<circle cx="450" cy="${140 + i * 62}" r="9" fill="#3A3A3F"/>${T(424, 148 + i * 62, l, 'font-family="Plex" font-size="23" fill="#8A8A90" direction="rtl"')}`).join('')}
+    </svg>`;
+    $('foot').innerHTML = `<span></span>${signature('#8A8A90')}`;
+  },
+
+  // 9 · PAIN: Google's account index in the URL (night)
+  u2() {
+    document.body.className = 'night';
+    $('head').innerHTML = 'מי זוכר<b>מה זה u/2?</b>';
+    const urls = [['mail.google.com/mail', '/u/0/', '#inbox'], ['console.firebase.google.com', '/u/1/', 'project/nova'], ['play.google.com/console', '/u/2/', 'developers'], ['analytics.google.com/analytics', '/u/3/', '']];
+    $('art').style.top = '560px';
+    $('art').innerHTML = `<svg width="888" height="520" viewBox="0 0 888 520">${urls.map(([a, u, b], i) => {
+      const y = i * 128, cw = 13.2, w1 = a.length * cw, w2 = u.length * cw;
+      return `<rect x="0" y="${y}" width="888" height="88" rx="44" fill="#141416" stroke="#26262A" stroke-width="2"/>
+        <text x="40" y="${y + 53}" font-size="22" fill="#8A8A90" ${MONO}><tspan>${a}</tspan><tspan fill="${i === 2 ? '#5EF2C2' : '#F4F4F5'}" font-family="Mono">${u}</tspan><tspan>${b}</tspan></text>
+        ${i === 2 ? `<rect x="${34 + w1}" y="${y + 20}" width="${w2 + 12}" height="48" rx="10" fill="none" stroke="#5EF2C2" stroke-width="2.5"/>` : ''}
+        <circle cx="836" cy="${y + 44}" r="24" fill="#26262A"/>${T(836, y + 53, '?', 'font-family="Plex" font-weight="500" font-size="24" fill="#8A8A90" text-anchor="middle"')}`;
+    }).join('')}</svg>`;
+    $('foot').innerHTML = `<span></span>${signature('#8A8A90')}`;
+  },
+
+  // 10 · PAIN: incognito, just for another account (night)
+  incognito() {
+    document.body.className = 'night';
+    $('head').innerHTML = 'גלישה בסתר.<b>רק בשביל עוד חשבון.</b>';
+    $('art').style.top = '540px';
+    $('art').innerHTML = `<svg width="1080" height="600" viewBox="0 0 1080 600">
+      <circle cx="540" cy="250" r="230" fill="#141416" stroke="#26262A" stroke-width="2"/>
+      <path d="M380,232 L422,128 Q430,108 452,114 L512,132 Q540,140 568,132 L628,114 Q650,108 658,128 L700,232 Z" fill="#8A8A90"/>
+      <rect x="330" y="232" width="420" height="26" rx="13" fill="#8A8A90"/>
+      <circle cx="458" cy="338" r="54" fill="none" stroke="#8A8A90" stroke-width="16"/>
+      <circle cx="622" cy="338" r="54" fill="none" stroke="#8A8A90" stroke-width="16"/>
+      <path d="M512,334 Q540,316 568,334" fill="none" stroke="#8A8A90" stroke-width="14" stroke-linecap="round"/>
+      ${T(540, 560, '3 חלונות בסתר פתוחים', 'font-family="Plex" font-size="26" fill="#5C5C61" text-anchor="middle" direction="rtl"')}
+    </svg>`;
+    $('foot').innerHTML = `<span></span>${signature('#8A8A90')}`;
+  },
+
+  // 11 · PAIN: typing "fire" into the address bar and hoping (night)
+  omnibox() {
+    document.body.className = 'night';
+    $('head').innerHTML = 'מקלידים fire<b>ומקווים לטוב.</b>';
+    const sug = [['console.firebase.google.com', '/u/1/project/pulse'], ['console.firebase.google.com', '/u/0/project/nova'], ['console.firebase.google.com', '/u/2/project/nova-staging'],
+      ['firebase.google.com', '/docs/auth'], ['console.firebase.google.com', '/u/0/project/old-nova'], ['console.firebase.google.com', '/u/1/project/nova']];
+    $('art').style.top = '540px';
+    $('art').innerHTML = `<svg width="888" height="620" viewBox="0 0 888 620">
+      <rect x="0" y="0" width="888" height="620" rx="34" fill="#141416" stroke="#26262A" stroke-width="2"/>
+      <circle cx="56" cy="50" r="13" fill="none" stroke="#8A8A90" stroke-width="3"/><path d="M66,60 l12,12" stroke="#8A8A90" stroke-width="3" stroke-linecap="round"/>
+      <text x="100" y="62" font-size="32" fill="#F4F4F5" font-family="Mono" style="direction:ltr">fire</text>
+      <rect x="180" y="30" width="4" height="40" rx="2" fill="#5EF2C2"/>
+      <line x1="0" y1="100" x2="888" y2="100" stroke="#26262A" stroke-width="2"/>
+      ${sug.map(([h, p], i) => { const y = 160 + i * 76;
+        return `<circle cx="56" cy="${y - 8}" r="12" fill="none" stroke="#5C5C61" stroke-width="2.5"/><path d="M56,${y - 15} v8 l6,4" fill="none" stroke="#5C5C61" stroke-width="2.5" stroke-linecap="round"/>
+          <text x="96" y="${y}" font-size="22" ${MONO}><tspan fill="#8A8A90">${h.startsWith('console.') ? 'console.' : ''}</tspan><tspan fill="#F4F4F5" font-family="Mono">fire</tspan><tspan fill="#8A8A90">${h.replace('console.', '').slice(4)}</tspan><tspan fill="#5C5C61">${p}</tspan></text>`; }).join('')}
+    </svg>`;
+    $('foot').innerHTML = `<span></span>${signature('#8A8A90')}`;
+  },
+
+  // 12 · BEFORE / AFTER: a home screen of shortcuts, then one widget (night over indigo)
+  beforeafter() {
+    document.body.className = 'night';
+    const mid = Math.round(H * 0.52);
+    $('head').innerHTML = 'לפני.';
+    document.body.insertAdjacentHTML('afterbegin', `<div class="split" style="top:${mid}px"></div>`);
+    const labels = ['Firebase', 'Firebase 2', 'Vercel', 'Play', 'Play (ישן)', 'GitHub', 'Sentry', 'Gmail עבודה', 'Analytics', 'GCP', 'Supabase', 'Nova site'];
+    const top = STATUS ? 440 : 280, cell = STATUS ? 168 : 128, sq = STATUS ? 92 : 70;
+    $('art').style.top = top + 'px';
+    $('art').innerHTML = `<svg width="888" height="${cell * 3}" viewBox="0 0 888 ${cell * 3}">${labels.map((l, i) => {
+      const cx = 888 - (i % 4) * 222 - 111, y = Math.floor(i / 4) * cell;
+      return `<rect x="${cx - sq / 2}" y="${y}" width="${sq}" height="${sq}" rx="${sq * .29}" fill="#1C1C1F" stroke="#26262A" stroke-width="2"/>
+        <circle cx="${cx}" cy="${y + sq / 2}" r="${sq * .2}" fill="#3A3A3F"/>
+        <circle cx="${cx + sq / 2 - 8}" cy="${y + sq - 8}" r="13" fill="#0A0A0B"/><circle cx="${cx + sq / 2 - 8}" cy="${y + sq - 8}" r="9" fill="#5C5C61"/>
+        ${T(cx, y + sq + 32, l, 'font-family="Plex" font-size="22" fill="#8A8A90" text-anchor="middle" direction="rtl"')}`; }).join('')}</svg>`;
+    document.body.insertAdjacentHTML('beforeend', `<div class="half em" style="top:${mid + (STATUS ? 70 : 40)}px">אחרי.</div>${widget(mid + (STATUS ? 250 : 170), STATUS ? 1.55 : 1.05)}`);
+    $('foot').innerHTML = `<span></span>${signature('#F4F4F5', '#5EF2C2')}`;
+    $('foot').style.color = '#F4F4F5';
+    if (!STATUS) $('foot').style.display = 'none';
+  },
+
+  // 13 · TEASER: countdown (night, no name)
+  countdown() {
+    document.body.className = 'night';
+    $('head').innerHTML = 'עוד שלושה ימים<b>סוגרים את הטאבים.</b>';
+    $('art').style.top = '540px';
+    $('art').innerHTML = `<svg width="1080" height="560" viewBox="0 0 1080 560">
+      <rect x="350" y="20" width="380" height="380" rx="96" fill="none" stroke="#5EF2C2" stroke-width="10"/>
+      ${T(540, 300, '3', 'font-family="Plex" font-weight="600" font-size="250" fill="#F4F4F5" text-anchor="middle"')}
+      ${[0, 1, 2].map(i => `<rect x="${450 + i * 66}" y="470" width="48" height="48" rx="13" fill="${i === 0 ? '#5EF2C2' : 'none'}" stroke="${i === 0 ? 'none' : '#3A3A3F'}" stroke-width="3"/>`).join('')}
+    </svg>`;
+    $('foot').innerHTML = soon();
+  },
+
+  // 14 · LAUNCH: it's here (indigo)
+  launch() {
+    document.body.className = 'indigo';
+    $('head').innerHTML = 'זה כאן.<b>בגוגל פליי.</b>';
+    const top = STATUS ? 580 : 450;
+    $('art').style.top = top + 'px';
+    $('art').innerHTML = `<svg width="1080" height="${STATUS ? 720 : 520}" viewBox="0 0 1080 ${STATUS ? 720 : 520}">
+      <rect x="250" y="0" width="580" height="${STATUS ? 900 : 700}" rx="78" fill="#2A23B8" stroke="#F4F4F5" stroke-opacity=".9" stroke-width="6"/>
+      <circle cx="540" cy="34" r="11" fill="#0A0A0B"/>
+      ${[0, 1, 2, 3].map(i => `<rect x="${306 + i * 124}" y="${STATUS ? 470 : 400}" width="96" height="96" rx="28" fill="#F4F4F5" fill-opacity=".14"/>`).join('')}
+    </svg>`;
+    document.body.insertAdjacentHTML('beforeend', widget(top + 90, STATUS ? 1.55 : 1.45) +
+      (STATUS ? `<div class="pill" style="top:${top + 760}px">להורדה בחינם</div>` : ''));
+    $('foot').innerHTML = `<span style="font: 400 26px/1.4 Plex, sans-serif;color:rgba(244,244,245,.72)">כל הפרויקט. במקום אחד.</span>${signature('#F4F4F5', '#5EF2C2')}`;
+  },
+};
+SCENES[v]();
+// status: everything below the headline moves down with it (the before/after and launch scenes place themselves)
+if (STATUS && !['beforeafter', 'launch'].includes(v)) $('art').style.top = (parseInt($('art').style.top) + 260) + 'px';
+
+// grain
+const g = $('grain'), gx = g.getContext('2d'), im = gx.createImageData(540, 675);
+let s = 777; for (let i = 0; i < im.data.length; i += 4) { s = (s * 1664525 + 1013904223) >>> 0; const c = s >>> 24; im.data[i] = im.data[i + 1] = im.data[i + 2] = c; im.data[i + 3] = 255; }
+gx.putImageData(im, 0, 0);
+window.ready = document.fonts.ready;
+</script>
+</body>

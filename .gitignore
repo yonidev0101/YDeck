@@ -1,0 +1,38 @@
+.gradle/
+.kotlin/
+build/
+local.properties
+*.iml
+.idea/
+# builds go to GitHub Releases, not git
+dist/
+releases/
+
+# render scratch (videos, ads)
+store/**/tmp/
+store/**/frames/
+
+# signing keys live in ~/.android-keys, never here
+*.jks
+*.keystore
+keystore.properties
+
+# site build output (node site/build.cjs)
+site/dist/
+site/.cache/
+
+# wrangler's local state for the relay
+relay/.wrangler/
+
+# heavy media: rendered films and sound stay out of git (the pages that make them are in store/)
+store/**/*.mp4
+store/**/*.wav
+store/**/*.mp3
+*.log
+
+# the developer's own projects: they seed debug builds, and the demo in store/play/source stands in when absent
+/projects.json
+
+# a folder's icon (Windows) and YDeck's personal state
+desktop.ini
+.ydeck.local.json

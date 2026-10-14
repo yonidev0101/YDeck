@@ -1,0 +1,155 @@
+<!doctype html>
+<!--
+  "The opening" (16 s, 1080×1920; ?lang=en; `node render.cjs night`, `LANG_CUT=en node render.cjs night`). Ends on the
+  mark, as the sting's last frames, so no sting is appended.
+  What the logo means, told as a clock. A thin ring with hour ticks and the time in the middle. From 09:00 to 19:00 the
+  day fills the ring in white, the amber piece leading it, one tick an hour, 30° an hour: ten hours are exactly the
+  logo's 300°. At seven it stops, and what is left undrawn is the night: the logo's opening. The amber piece steps into
+  it and becomes the dot, the place tomorrow starts. The clock runs through the night to 09:00, the dot brightens, and
+  the ring grows into the mark.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face { font-family: Plex; src: url("../../../app/src/main/res/font/plex_sans_hebrew_medium.ttf"); font-weight: 500; }
+  @font-face { font-family: Plex; src: url("../../../app/src/main/res/font/plex_sans_hebrew_regular.ttf"); font-weight: 400; }
+  html, body { margin: 0; background: #0B0B0D; overflow: hidden; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c" width="1080" height="1920"></canvas>
+<script>
+const W = 1080, H = 1920, D = Math.PI / 180;
+const EN = new URLSearchParams(location.search).get('lang') === 'en';
+const T = (he, en) => EN ? en : he;
+const g = document.getElementById('c').getContext('2d');
+const NIGHT = [11, 11, 13], PAPER = [244, 244, 245], MUTED = [139, 139, 147], AMBER = [245, 165, 36], GREY = [52, 52, 60];
+const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const seg = (t, a, b) => clamp((t - a) / (b - a));
+const ease = x => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+const out3 = x => 1 - Math.pow(1 - x, 3);
+const lerp = (a, b, k) => a + (b - a) * k;
+const mix = (a, b, k) => a.map((v, i) => Math.round(v + (b[i] - v) * k));
+const rgb = (c, a = 1) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+const LOGO = { r: Math.min(W, H) * 0.105, cx: W / 2, cy: H * 0.42 };
+
+// ---------- the clock ----------
+const DIAL = { r: 330, cx: 540, cy: 1080, stroke: 22 };
+const START = -10, CLOSE = 290, DOT = 320;               // the logo: drawn from −10° to 290°, the dot at −40°
+const DAY = [1.2, 6.8];                                  // 09:00 → 19:00
+// the day runs a little unevenly, like a real one: brisk mornings, a slower afternoon, a push at the end
+const dayK = t => { const x = seg(t, DAY[0], DAY[1]); return clamp(x + 0.05 * Math.sin(x * Math.PI * 2)); };
+const headAngle = t => START + 300 * dayK(t);
+window.HOURS = Array.from({ length: 11 }, (_, k) => { // when each hour's tick lights (the sound reads these)
+  for (let t = DAY[0]; t <= DAY[1] + 0.01; t += 0.002) if (dayK(t) >= k / 10 - 1e-6) return +t.toFixed(3);
+  return DAY[1];
+});
+function clockTime(t) {
+  // 09:00 → 19:00 with the day; then, through the night, on to 09:00 again
+  if (t < 8.0) return 9 + 10 * dayK(t);
+  return 19 + 14 * ease(seg(t, 8.0, 10.6));
+}
+
+// ---------- the scene ----------
+function dial(t) {
+  const end = ease(seg(t, 12.2, 13.4));                 // the ring grows into the mark
+  const r = lerp(DIAL.r, LOGO.r, end), cx = lerp(DIAL.cx, LOGO.cx, end), cy = lerp(DIAL.cy, LOGO.cy, end);
+  const sw = lerp(DIAL.stroke, LOGO.r * 11 / 36, end);
+  const appear = out3(seg(t, 0, 1.0)), tickA = 1 - seg(t, 11.6, 12.3);
+  // the hour ticks, grey until the day reaches them; none in the opening: nothing happens at night
+  for (let k = 0; k <= 10; k++) {
+    const a = (START + 30 * k) * D, lit = t >= window.HOURS[k] ? 1 : 0, flash = Math.exp(-(t - window.HOURS[k]) * 6) * lit;
+    const c = mix(GREY, PAPER, lit * (0.55 + 0.45 * flash));
+    g.strokeStyle = rgb(c, appear * tickA); g.lineWidth = 8; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(cx + Math.cos(a) * (r + 46), cy + Math.sin(a) * (r + 46)); g.lineTo(cx + Math.cos(a) * (r + 72), cy + Math.sin(a) * (r + 72)); g.stroke();
+  }
+  // the empty ring, faint, so the day has somewhere to go; it goes once the day is closed, so the night is truly open
+  g.strokeStyle = rgb(GREY, appear * (1 - ease(seg(t, 7.2, 8.0))) * 0.6); g.lineWidth = sw;
+  g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.stroke();
+  // the day, done: white
+  const head = Math.min(headAngle(t), CLOSE);
+  if (t > DAY[0] && head > START + 0.2) { g.strokeStyle = rgb(PAPER); g.lineWidth = sw; g.beginPath(); g.arc(cx, cy, r, START * D, head * D); g.stroke(); }
+  // the amber piece: ahead of the day, set apart by a space; at seven it steps into the opening and becomes the dot
+  const gapDeg = 26 / DIAL.r / D, pieceDeg = 40 / DIAL.r / D;
+  const step = ease(seg(t, 7.0, 7.9));
+  const a0 = lerp(head + gapDeg, DOT, step), half = lerp(pieceDeg / 2, 0, step);
+  const mid = lerp(a0 + pieceDeg / 2, DOT, step);
+  const born = out3(seg(t, 0.8, 1.2));
+  // the dot breathes through the night and brightens at 09:00
+  const breath = t > 8.0 && t < 10.6 ? 0.06 * Math.sin((t - 8.0) * 4.5) : 0;
+  const morning = Math.exp(-Math.max(0, t - 10.6) * 3) * (t > 10.6 ? 1 : 0);
+  const dotR = lerp(lerp(sw / 2, sw * 0.95, step), r * 7.5 / 36, end) * (1 + breath + 0.35 * morning);
+  if (born > 0) {
+    if (half > 0.05) {
+      g.strokeStyle = rgb(AMBER, born); g.lineWidth = sw; g.beginPath(); g.arc(cx, cy, r, (mid - half) * D, (mid + half) * D); g.stroke();
+    } else {
+      const glowR = dotR * (2.6 + 2 * morning);
+      const gl = g.createRadialGradient(cx + Math.cos(DOT * D) * r, cy + Math.sin(DOT * D) * r, 0, cx + Math.cos(DOT * D) * r, cy + Math.sin(DOT * D) * r, glowR);
+      gl.addColorStop(0, rgb(AMBER, 0.16 + 0.25 * morning)); gl.addColorStop(1, rgb(AMBER, 0));
+      g.fillStyle = gl; g.beginPath(); g.arc(cx + Math.cos(DOT * D) * r, cy + Math.sin(DOT * D) * r, glowR, 0, Math.PI * 2); g.fill();
+      g.fillStyle = rgb(AMBER); g.beginPath(); g.arc(cx + Math.cos(DOT * D) * r, cy + Math.sin(DOT * D) * r, dotR, 0, Math.PI * 2); g.fill();
+    }
+  }
+  // the time, in the middle
+  const timeA = appear * (1 - seg(t, 11.6, 12.2));
+  if (timeA > 0) {
+    const h = clockTime(t), hh = Math.floor(h) % 24, mm = Math.floor((h % 1) * 60);
+    const s = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+    const night = t > 8.0 && t < 10.6 ? 0.45 : 0;
+    g.font = '400 112px Plex'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.direction = 'ltr';
+    const cw = 66; g.fillStyle = rgb(mix(PAPER, MUTED, night), timeA);
+    [...s].forEach((ch, i) => g.fillText(ch, cx + (i - 2) * cw + (ch === ':' ? 0 : 0), cy + 6));
+  }
+}
+
+// ---------- the words ----------
+const HEADS = [[0.3, 2.7, T('יום עבודה הוא טבעת.', 'A workday is a ring.')], [2.9, 4.9, T('פותחים בבוקר,', 'You open it in the morning,')],
+  [5.0, 7.4, T('סוגרים בערב.', 'and close it in the evening.')], [7.6, 10.2, T('הלילה הוא הפתח.', 'The night is the opening.')],
+  [10.4, 12.4, T('והנקודה? משם מתחילים מחר.', 'The dot is where tomorrow starts.')]];
+function headline(t) {
+  for (const [a, b, s] of HEADS) {
+    const inn = out3(seg(t, a, a + .55)), gone = seg(t, b - .35, b), alpha = inn * (1 - gone);
+    if (alpha <= 0) continue;
+    const y = 470 + (1 - inn) * 34 - gone * 20;
+    let size = 88; g.direction = EN ? 'ltr' : 'rtl'; g.font = `500 ${size}px Plex`;
+    while (g.measureText(s).width > 900) { size -= 2; g.font = `500 ${size}px Plex`; }
+    g.globalAlpha = alpha; g.textAlign = 'center'; g.textBaseline = 'alphabetic';
+    if (s.endsWith('.')) {
+      const body = s.slice(0, -1), tw = g.measureText(body).width, gap = 28, sx = EN ? W / 2 - gap / 2 : W / 2 + gap / 2;
+      g.fillStyle = rgb(PAPER); g.fillText(body, sx, y);
+      g.fillStyle = rgb(AMBER); g.beginPath(); g.arc(EN ? sx + tw / 2 + gap - 9 : sx - tw / 2 - gap + 9, y - 10, size / 8.5, 0, Math.PI * 2); g.fill();
+    } else { g.fillStyle = rgb(PAPER); g.fillText(s, W / 2, y); }
+    g.globalAlpha = 1;
+  }
+}
+
+// ---------- the lockup, as the sting and the apps draw it ----------
+function lockup(t) {
+  const { r, cx, cy } = LOGO, stroke = r * 11 / 36;
+  const nk = out3(seg(t, 13.6, 14.15)), lk = out3(seg(t, 13.95, 14.45));
+  if (nk <= 0) return;
+  const ns = r * 0.95, top = cy + r + stroke + ns * 0.9;
+  g.font = `500 ${ns}px Plex`; g.letterSpacing = `${-0.02 * ns}px`;
+  const m = g.measureText('YDeck'), asc = m.fontBoundingBoxAscent, nameH = asc + m.fontBoundingBoxDescent;
+  g.save(); g.beginPath(); g.rect(0, top, W, nameH); g.clip();
+  g.fillStyle = rgb(PAPER); g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.direction = 'ltr';
+  g.fillText('YDeck', cx, top + asc + (1 - nk) * nameH); g.restore();
+  g.letterSpacing = '0px';
+  if (lk <= 0) return;
+  const LINE = T('שום דבר לא נשאר פתוח.', 'Nothing left open.');
+  g.font = `400 ${ns * 0.42}px Plex`; const la = g.measureText(LINE).fontBoundingBoxAscent;
+  g.globalAlpha = lk; g.fillStyle = rgb(MUTED); g.direction = EN ? 'ltr' : 'rtl';
+  g.fillText(LINE, cx, top + nameH + ns * 0.35 + la + (1 - lk) * 6); g.globalAlpha = 1;
+}
+
+window.DURATION = 16.0;
+window.render = t => {
+  g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = rgb(NIGHT); g.fillRect(0, 0, W, H);
+  headline(t); dial(t); lockup(t);
+};
+window.ready = Promise.all([document.fonts.load('500 40px Plex'), document.fonts.load('400 40px Plex')]).then(() => { window.render(0); return true; });
+</script>
+</body>
+</html>

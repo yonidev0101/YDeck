@@ -1,0 +1,14 @@
+# The phone ↔ computer relay (see src/index.js). Deploy: node_modules of yonidev-cloud has the logged-in wrangler:
+#   "../../yonidev-cloud/node_modules/.bin/wrangler" deploy   (run inside this folder)
+name = "ydeck-relay"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+[[durable_objects.bindings]]
+name = "BOXES"
+class_name = "Box"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Box"]

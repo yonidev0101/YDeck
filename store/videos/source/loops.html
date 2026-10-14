@@ -1,0 +1,179 @@
+<!doctype html>
+<!--
+  "Everything open" (13 s, 1080×1920; ?lang=en for English; `node render.cjs loops`, `LANG_CUT=en node render.cjs loops`).
+  It ends on the mark itself, as the sting's last frames, so no sting is appended.
+  The screen fills with small things in the brand's line (terminals, documents, messages, phones). Each is missing the
+  piece at its top-right corner, and that piece floats beside it in amber: open, nagging. They close one by one, faster
+  and faster: the piece slides in, the shape is whole, then grey, and everything settles into a quiet grid. One stays
+  open: the next step. It comes to the centre, its corners round until it is a ring, and its amber piece becomes the dot
+  in the opening. The logo is just the one thing you leave open on purpose.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face { font-family: Plex; src: url("../../../app/src/main/res/font/plex_sans_hebrew_medium.ttf"); font-weight: 500; }
+  @font-face { font-family: Plex; src: url("../../../app/src/main/res/font/plex_sans_hebrew_regular.ttf"); font-weight: 400; }
+  html, body { margin: 0; background: #0B0B0D; overflow: hidden; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c" width="1080" height="1920"></canvas>
+<script>
+const W = 1080, H = 1920, D = Math.PI / 180;
+const EN = new URLSearchParams(location.search).get('lang') === 'en';
+const T = (he, en) => EN ? en : he;
+const g = document.getElementById('c').getContext('2d');
+const NIGHT = [11, 11, 13], PAPER = [244, 244, 245], MUTED = [139, 139, 147], AMBER = [245, 165, 36], GREY = [52, 52, 60];
+const S = 16;                                         // the one stroke, in a shape's own units
+const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const seg = (t, a, b) => clamp((t - a) / (b - a));
+const ease = x => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+const out3 = x => 1 - Math.pow(1 - x, 3);
+const backOut = x => { const s = 1.7; x -= 1; return x * x * ((s + 1) * x + s) + 1; };
+const lerp = (a, b, k) => a + (b - a) * k;
+const mix = (a, b, k) => a.map((v, i) => Math.round(v + (b[i] - v) * k));
+const rgb = c => `rgb(${c[0]},${c[1]},${c[2]})`;
+let seed = 7; const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+const LOGO = { r: Math.min(W, H) * 0.105, cx: W / 2, cy: H * 0.42 };
+
+// ---------- the pen ----------
+const arcPts = (cx, cy, r, a0, a1, n = 12) => Array.from({ length: n + 1 }, (_, i) => { const a = (a0 + (a1 - a0) * i / n) * D; return [cx + r * Math.cos(a), cy + r * Math.sin(a)]; });
+// a rounded rectangle centred on 0,0, traced clockwise from the middle of its top-right corner
+function outline(w, h, r) {
+  const x = -w / 2, y = -h / 2;
+  return [...arcPts(x + w - r, y + r, r, -45, 0, 8), ...arcPts(x + w - r, y + h - r, r, 0, 90), ...arcPts(x + r, y + h - r, r, 90, 180),
+    ...arcPts(x + r, y + r, r, 180, 270), ...arcPts(x + w - r, y + r, r, 270, 315, 8)];
+}
+function len(p) { let L = 0; for (let i = 1; i < p.length; i++) L += Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]); return L; }
+function slice(p, a, b) {
+  const o = []; let acc = 0;
+  for (let i = 1; i < p.length; i++) {
+    const d = Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]), s0 = acc, s1 = acc + d; acc = s1;
+    if (s1 < a || s0 > b) continue;
+    const at = s => { const k = d ? (s - s0) / d : 0; return [p[i - 1][0] + (p[i][0] - p[i - 1][0]) * k, p[i - 1][1] + (p[i][1] - p[i - 1][1]) * k]; };
+    if (!o.length) o.push(at(Math.max(a, s0)));
+    o.push(at(Math.min(b, s1)));
+  }
+  return o;
+}
+function stroke(q, color, w) {
+  if (q.length < 2) return;
+  g.strokeStyle = rgb(color); g.lineWidth = w; g.lineCap = 'round'; g.lineJoin = 'round';
+  g.beginPath(); g.moveTo(...q[0]); q.slice(1).forEach(v => g.lineTo(...v)); g.stroke();
+}
+
+// ---------- the things that are open ----------
+const KINDS = {
+  term: { w: 230, h: 150, r: 26, inner: c => { stroke([[-80, -24], [-58, 0], [-80, 24]], c, S); stroke([[-28, 0], [50, 0]], c, S); } },
+  doc: { w: 150, h: 190, r: 24, inner: c => { [-45, -5, 35].forEach((y, i) => stroke([[-38, y], [[38, 22, 30][i], y]], c, S)); } },
+  chat: { w: 230, h: 140, r: 40, inner: c => { stroke([[-70, -18], [70, -18]], c, S); stroke([[-70, 22], [20, 22]], c, S); } },
+  phone: { w: 120, h: 190, r: 28, inner: c => { stroke([[-18, 60], [18, 60]], c, S); } },
+  card: { w: 170, h: 170, r: 30, inner: c => { stroke([[-40, 0], [40, 0]], c, S); } },
+};
+const COLS = [230, 540, 850], ROWS = [770, 975, 1180, 1385, 1590], OPEN = 7;      // the one left open: the middle of the grid
+const ORDER = ['term', 'doc', 'chat', 'phone', 'term', 'doc', 'chat', 'card', 'phone', 'doc', 'term', 'chat', 'phone', 'term', 'doc'];
+const THINGS = ORDER.map((kind, i) => ({
+  kind, x: COLS[i % 3], y: ROWS[Math.floor(i / 3)],
+  dx: (rnd() - .5) * 90, dy: (rnd() - .5) * 60, rot: (rnd() - .5) * 22, sc: .82 + rnd() * .22, bob: rnd() * 6, born: .15 + i * .1,
+}));
+// they close in a shuffled order, slowly at first and then faster and faster
+const closers = THINGS.map((_, i) => i).filter(i => i !== OPEN).sort(() => rnd() - .5);
+closers.forEach((i, k) => { const x = k / closers.length; THINGS[i].close = 3.1 + 3.2 * (1 - Math.pow(1 - x, 2.2)); });
+window.CLOSES = closers.map(i => [THINGS[i].close, THINGS[i].x]);   // the sound reads these (sound-loops.cjs keeps a copy)
+
+const PIECE = 44, GAP = 26, TIDY = [6.5, 7.6], CENTRE = [7.1, 8.1], MORPH = [8.3, 10.2];
+function thing(o, i, t) {
+  const born = backOut(clamp((t - o.born) / .35));
+  if (t < o.born) return;
+  const open = i === OPEN, K = KINDS[o.kind];
+  const tidy = ease(seg(t, TIDY[0], TIDY[1])), away = open ? 1 : 1 - ease(seg(t, 7.9, 8.6));
+  const closeK = open ? 0 : ease(seg(t, o.close, o.close + .2));
+  const whiteK = open ? 0 : seg(t, o.close + .18, o.close + .3), greyK = open ? 0 : ease(seg(t, o.close + .45, o.close + .9));
+  // where it sits: scattered and tilted, then tidy; the open one comes to the centre and grows
+  let x = o.x + o.dx * (1 - tidy), y = o.y + o.dy * (1 - tidy), rot = o.rot * (1 - tidy), sc = lerp(o.sc, .78, tidy) * born;
+  let w = K.w, h = K.h, r = K.r, sw = S, innerA = 1;
+  let draw = null, pieceLen = PIECE, gap = GAP * (1 - closeK), lift = 30 * (1 - closeK);
+  if (open) {
+    const c = ease(seg(t, CENTRE[0], CENTRE[1])), m = ease(seg(t, MORPH[0], MORPH[1]));
+    const R0 = 85;                                    // the ring it becomes, in its own units
+    x = lerp(x, lerp(540, LOGO.cx, m), c); y = lerp(y, lerp(1060, LOGO.cy, m), c);
+    sc = lerp(sc, lerp(1.45, LOGO.r / R0, m), c);
+    r = lerp(r, R0, m); w = lerp(w, 2 * R0, m); h = lerp(h, 2 * R0, m);
+    rot = lerp(rot, 5, m);                              // the corner's middle (−45°) turns to the logo's dot (−40°)
+    sw = lerp(S, R0 * 11 / 36, m); innerA = 1 - seg(t, MORPH[0], MORPH[0] + .5);
+    draw = m; lift = lerp(30, 0, ease(seg(t, MORPH[0], MORPH[0] + .8)));
+    gap = GAP; pieceLen = lerp(PIECE, 0, m);
+  }
+  const color = mix(mix(PAPER, PAPER, whiteK), GREY, greyK);
+  g.save(); g.globalAlpha = away; g.translate(x, y); g.rotate(rot * D); g.scale(sc, sc);
+  const p = outline(w, h, r), L = len(p);
+  // the outline, missing its corner (and, as it becomes the ring, missing exactly the logo's opening)
+  let a0 = pieceLen / 2 + gap, a1 = L - pieceLen / 2 - gap;
+  if (draw !== null && draw > 0) { const half = lerp(a0, L * 30 / 360, draw); a0 = half; a1 = L - half; }
+  if (closeK >= 1) stroke(p, color, sw); else stroke(slice(p, a0, a1), color, sw);
+  g.globalAlpha = away * innerA; K.inner(color); g.globalAlpha = away;
+  // the piece: amber and hovering while open (it breathes), white once it slots in, then grey with the rest
+  const bob = open && t > MORPH[0] ? 0 : Math.sin(t * 3.1 + o.bob) * 5 * (1 - closeK);
+  const off = (lift + bob) * Math.SQRT1_2;
+  const pc = closeK < 1 ? AMBER : mix(mix(AMBER, PAPER, whiteK), GREY, greyK);
+  if (closeK < 1 || greyK < 1 || true) {
+    g.translate(off, -off);
+    if (pieceLen > 1) stroke([...slice(p, L - pieceLen / 2, L), ...slice(p, 0, pieceLen / 2)], pc, sw);
+    else { g.fillStyle = rgb(AMBER); g.beginPath(); g.arc(p[0][0], p[0][1], R0dot(sw), 0, Math.PI * 2); g.fill(); }
+  }
+  g.restore(); g.globalAlpha = 1;
+}
+// the dot once the piece has gathered: the logo's 7.5/36 of the ring
+const R0dot = sw => sw / (11 / 36) * 7.5 / 36;
+
+// ---------- the words ----------
+const HEADS = [[0.3, 2.7, T('כל מה שפתוח לך בראש.', 'Everything open in your head.')], [2.85, 6.4, T('סוגרים, אחד אחד.', 'Close it, one by one.')],
+  [6.6, 9.4, T('עד שנשאר רק הצעד הבא.', 'Until only the next step is left.')]];
+function headline(t) {
+  for (const [a, b, s] of HEADS) {
+    const inn = out3(seg(t, a, a + .55)), gone = seg(t, b - .35, b), alpha = inn * (1 - gone);
+    if (alpha <= 0) continue;
+    const y = 470 + (1 - inn) * 34 - gone * 20;
+    let size = 88; g.direction = EN ? 'ltr' : 'rtl'; g.font = `500 ${size}px Plex`;
+    while (g.measureText(s).width > 900) { size -= 2; g.font = `500 ${size}px Plex`; }
+    const body = s.replace(/\.$/, ''), tw = g.measureText(body).width, gap = 28;
+    const sx = EN ? W / 2 - gap / 2 : W / 2 + gap / 2;
+    g.globalAlpha = alpha; g.fillStyle = rgb(PAPER); g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.fillText(body, sx, y);
+    g.fillStyle = rgb(AMBER); g.beginPath(); g.arc(EN ? sx + tw / 2 + gap - 9 : sx - tw / 2 - gap + 9, y - 10, size / 8.5, 0, Math.PI * 2); g.fill();
+    g.globalAlpha = 1;
+  }
+}
+
+// ---------- the lockup at the end, as the sting and the apps draw it ----------
+function lockup(t) {
+  const { r, cx, cy } = LOGO, stroke = r * 11 / 36;
+  const nk = out3(seg(t, 10.45, 11.0)), lk = out3(seg(t, 10.8, 11.3));
+  if (nk <= 0) return;
+  const ns = r * 0.95, top = cy + r + stroke + ns * 0.9;
+  g.font = `500 ${ns}px Plex`; g.letterSpacing = `${-0.02 * ns}px`;
+  const m = g.measureText('YDeck'), asc = m.fontBoundingBoxAscent, nameH = asc + m.fontBoundingBoxDescent;
+  g.save(); g.beginPath(); g.rect(0, top, W, nameH); g.clip();
+  g.fillStyle = rgb(PAPER); g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.direction = 'ltr';
+  g.fillText('YDeck', cx, top + asc + (1 - nk) * nameH); g.restore();
+  g.letterSpacing = '0px';
+  if (lk <= 0) return;
+  const LINE = T('שום דבר לא נשאר פתוח.', 'Nothing left open.');
+  g.font = `400 ${ns * 0.42}px Plex`; const la = g.measureText(LINE).fontBoundingBoxAscent;
+  g.globalAlpha = lk; g.fillStyle = rgb(MUTED); g.direction = EN ? 'ltr' : 'rtl';
+  g.fillText(LINE, cx, top + nameH + ns * 0.35 + la + (1 - lk) * 6); g.globalAlpha = 1;
+}
+
+window.DURATION = 13.0;
+window.render = t => {
+  g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = rgb(NIGHT); g.fillRect(0, 0, W, H);
+  headline(t);
+  THINGS.forEach((o, i) => { if (i !== OPEN) thing(o, i, t); });
+  thing(THINGS[OPEN], OPEN, t);                       // the open one is drawn last, above the rest
+  lockup(t);
+};
+window.ready = Promise.all([document.fonts.load('500 40px Plex'), document.fonts.load('400 40px Plex')]).then(() => { window.render(0); return true; });
+</script>
+</body>
+</html>

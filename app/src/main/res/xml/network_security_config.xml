@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The app talks to two places: Google's favicon service (google.com, which redirects to gstatic.com) and YDeck's relay
+  to the computer (workers.dev). Those hosts also trust user-installed CAs, so they work behind content filters that
+  re-sign HTTPS with their own root (e.g. Rimon/Netspark). For the relay that costs nothing: what goes through it is
+  sealed end to end (AES-GCM, key from the QR code), so a filter in the middle sees only ciphertext.
+  Everything else trusts the system store only.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">google.com</domain>
+        <domain includeSubdomains="true">gstatic.com</domain>
+        <domain includeSubdomains="false">ydeck-relay.yonidev-cloud.workers.dev</domain>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </domain-config>
+</network-security-config>

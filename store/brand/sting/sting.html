@@ -1,0 +1,186 @@
+<!doctype html>
+<!--
+  YDeck logo sting, "The deal". Frame-exact: window.render(t) draws time t (seconds); render.cjs films it.
+  ?w=1080&h=1920 (also 1920x1080, 1080x1080) · ?ground=indigo|night · ?play=1 loops it live in a browser.
+
+  0.00  a stack of eight white cards in the middle, where the Y's stem will stand
+  0.30  riffle: the stack breathes once
+  0.62  deal: cards fly out one by one, alternating left/right, and land square in the two 2x2 grids
+  1.22  the Y grows out of the spot the stack left: the stem rises, then forks into the two arms
+  1.70  the last card (outer top right) flips over to mint
+  1.95  YDeck rises under the mark
+-->
+<meta charset="utf-8">
+<style>
+  @font-face { font-family: Plex; src: url("../../../app/src/main/res/font/plex_sans_hebrew_semibold.ttf"); font-weight: 600; }
+  html, body { margin: 0; background: #000; }
+  canvas { display: block; }
+</style>
+<canvas id="c"></canvas>
+<script>
+const q = new URLSearchParams(location.search);
+const W = +(q.get('w') || 1080), H = +(q.get('h') || 1920);
+const GROUND = q.get('ground') === 'night' ? '#0A0A0B' : '#3D35E0';
+const WHITE = '#FFFFFF', MINT = '#5EF2C2';
+const c = document.getElementById('c'); c.width = W; c.height = H;
+const x = c.getContext('2d');
+
+// ---- easing ----
+const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const seg = (t, a, d) => clamp((t - a) / d);
+const expoOut = p => p >= 1 ? 1 : 1 - Math.pow(2, -10 * p);
+const p3out = p => 1 - Math.pow(1 - p, 3);
+const p3in = p => p * p * p;
+const backOut = p => { const s = 1.4; p -= 1; return p * p * ((s + 1) * p + s) + 1; };
+const lerp = (a, b, k) => a + (b - a) * k;
+
+// ---- the mark, in its own units (viewBox 48 76 542 489, same as the SVGs and the app icon) ----
+const Y = [
+  'M296.4,364.4L113.1,181.3Q95.4,163.6 113.1,145.9L144.9,114.1Q162.6,96.4 180.3,114.1L363.6,297.4Z',
+  'M262,513L262,330C262,310 276,295.8 290,281.8L457.7,114.1Q475.4,96.4 493.1,114.1L524.9,145.9Q542.6,163.6 524.9,181.3L376,330.2L376,513Q376,545 344,545L294,545Q262,545 262,513Z',
+  'M262,455L376,341L376,513Q376,545 344,545L294,545Q262,545 262,513Z',
+].map(d => new Path2D(d));
+const T = 66, R = 16;
+// deal order: inner cards first, alternating sides; the mint card comes last
+const SLOTS = [[150, 312], [422, 312], [150, 394], [422, 394], [68, 312], [504, 394], [68, 394], [504, 312]];
+const MINT_SLOT = 7;
+const DECK = [286, 446];               // the stack sits on the stem's foot
+const MARK_CX = 319, MARK_CY = 320;    // centre of the viewBox
+
+// layout: portrait puts the mark above centre with the name under it; landscape/square centre the lockup
+const portrait = H > W * 1.2;
+const K = portrait ? 1.12 : (H / 1080) * 0.78;
+const CX = W / 2, CY = portrait ? H * 0.445 : H * 0.43;
+const NAME_SIZE = portrait ? 118 : 92 * (H / 1080);
+const NAME_Y = CY + 300 * K;
+
+function rr(px, py, w, h, r) {
+  x.beginPath(); x.moveTo(px + r, py); x.arcTo(px + w, py, px + w, py + h, r); x.arcTo(px + w, py + h, px, py + h, r);
+  x.arcTo(px, py + h, px, py, r); x.arcTo(px, py, px + w, py, r); x.closePath();
+}
+function card(px, py, rot, sx, color, edge) {
+  x.save();
+  x.translate(px + T / 2, py + T / 2); x.rotate(rot); x.scale(sx, 1);
+  rr(-T / 2, -T / 2, T, T, R);
+  x.fillStyle = color; x.fill();
+  // a hairline in the ground colour separates stacked cards without a shadow
+  if (edge) { x.lineWidth = 3; x.strokeStyle = GROUND; x.stroke(); }
+  x.restore();
+}
+
+const ylc = document.createElement('canvas'); ylc.width = W; ylc.height = H;
+const yl = ylc.getContext('2d');
+
+// ---- grain (seeded, changes every frame like film) ----
+const grain = document.createElement('canvas'); grain.width = 256; grain.height = 256;
+const gx = grain.getContext('2d'), gd = gx.createImageData(256, 256);
+function grainFrame(f) {
+  let s = (f * 2654435761) >>> 0;
+  for (let i = 0; i < gd.data.length; i += 4) {
+    s = (s * 1664525 + 1013904223) >>> 0; const v = s >>> 24;
+    gd.data[i] = gd.data[i + 1] = gd.data[i + 2] = v; gd.data[i + 3] = 255;
+  }
+  gx.putImageData(gd, 0, 0);
+}
+
+window.render = (t, f = Math.round(t * 30)) => {
+  x.setTransform(1, 0, 0, 1, 0, 0);
+  x.fillStyle = GROUND; x.fillRect(0, 0, W, H);
+
+  x.save();
+  x.translate(CX, CY); x.scale(K, K); x.translate(-MARK_CX, -MARK_CY);
+
+  // ---- cards ----
+  const appear = p3out(seg(t, 0, 0.3));
+  const riffle = Math.sin(Math.PI * seg(t, 0.3, 0.3));        // 0 → 1 → 0
+  const order = [];
+  SLOTS.forEach(([sx, sy], i) => {
+    const start = 0.62 + i * 0.075, d = 0.42;
+    const k = seg(t, start, d), e = expoOut(k);
+    // in the stack: card i sits i*3 units higher, the riffle fans them a little
+    const stackY = DECK[1] - i * 3 - riffle * i * 4.5;
+    const stackX = DECK[0] + riffle * (i % 2 ? 1 : -1) * i * 1.6;
+    const px = lerp(stackX, sx, e);
+    const py = lerp(stackY, sy, e) - Math.sin(Math.PI * k) * 46;   // a small arc, like a dealt card
+    const side = sx < MARK_CX ? -1 : 1;
+    const rot = (1 - e) * side * 0.32 * Math.sin(Math.PI * Math.min(1, k * 1.4));
+    // the flip: mint card turns over after landing
+    let sxScale = 1, color = WHITE;
+    if (i === MINT_SLOT) {
+      const fk = seg(t, 1.70, 0.26);
+      sxScale = Math.abs(Math.cos(Math.PI * p3out(fk)));
+      if (fk >= 0.5) color = MINT;
+      // a tiny press when it lands face up
+      const press = Math.sin(Math.PI * seg(t, 1.96, 0.18));
+      sxScale *= 1 - 0.06 * press;
+    }
+    order.push({ px, py, rot, sxScale, color, flying: k > 0 && k < 1, landed: k >= 1, i });
+  });
+  // draw: stacked cards bottom-up, then landed, then those in flight on top
+  x.globalAlpha = appear;
+  const pre = Math.max(0, 1 - appear) * 30;
+  order.filter(o => !o.flying && !o.landed).forEach(o => card(o.px, o.py + pre, o.rot, o.sxScale, o.color, true));
+  order.filter(o => o.landed).forEach(o => card(o.px, o.py, 0, o.sxScale, o.color, false));
+  order.filter(o => o.flying).forEach(o => card(o.px, o.py, o.rot, o.sxScale, o.color, true));
+  x.globalAlpha = 1;
+
+  // ---- the Y grows from where the stack was: stem up, then the fork ----
+  const stem = p3out(seg(t, 1.20, 0.30));
+  const arms = expoOut(seg(t, 1.40, 0.55));
+  if (stem > 0) {
+    // Each region is clipped and drawn on its own: one shared clip would cancel where opposite windings overlap.
+    // The stack draws into an offscreen layer first so overlapping regions don't double the anti-aliased edges.
+    const regions = [];
+    const top = lerp(548, 300, stem);
+    const r0 = new Path2D(); r0.rect(250, top, 140, 548 - top); regions.push(r0);
+    // each arm: a band along its diagonal, growing out from the fork
+    const J = [319, 318], L = 300 * arms;
+    if (arms > 0) for (const dir of [-1, 1]) {
+      const ux = dir / Math.SQRT2, uy = -1 / Math.SQRT2, nx = -uy, ny = ux, w = 110;
+      const a = [J[0] - ux * 40, J[1] - uy * 40], b = [J[0] + ux * L, J[1] + uy * L];
+      const r = new Path2D();
+      r.moveTo(a[0] + nx * w, a[1] + ny * w); r.lineTo(b[0] + nx * w, b[1] + ny * w);
+      r.lineTo(b[0] - nx * w, b[1] - ny * w); r.lineTo(a[0] - nx * w, a[1] - ny * w); r.closePath();
+      regions.push(r);
+    }
+    const m = x.getTransform();
+    yl.setTransform(1, 0, 0, 1, 0, 0); yl.clearRect(0, 0, W, H); yl.setTransform(m);
+    for (const r of regions) {
+      yl.save(); yl.clip(r); yl.fillStyle = '#000';
+      yl.globalCompositeOperation = 'source-over'; Y.forEach(p => yl.fill(p)); yl.restore();
+    }
+    // one solid colour regardless of overlaps: recolour the coverage white, then composite once
+    yl.setTransform(1, 0, 0, 1, 0, 0); yl.globalCompositeOperation = 'source-in';
+    yl.fillStyle = WHITE; yl.fillRect(0, 0, W, H); yl.globalCompositeOperation = 'source-over';
+    x.save(); x.setTransform(1, 0, 0, 1, 0, 0); x.drawImage(ylc, 0, 0); x.restore();
+  }
+  x.restore();
+
+  // ---- the name ----
+  const nk = p3out(seg(t, 1.95, 0.6));
+  if (nk > 0) {
+    x.save();
+    x.font = `600 ${NAME_SIZE}px Plex, "IBM Plex Sans Hebrew", system-ui, sans-serif`;
+    x.letterSpacing = `${-0.03 * NAME_SIZE}px`;
+    x.textAlign = 'center'; x.textBaseline = 'alphabetic';
+    const base = NAME_Y + NAME_SIZE * 0.8;
+    x.beginPath(); x.rect(0, base - NAME_SIZE * 1.1, W, NAME_SIZE * 1.35); x.clip();   // revealed from below, through a mask
+    x.fillStyle = WHITE;
+    x.fillText('YDeck', CX, base + (1 - nk) * NAME_SIZE * 0.9);
+    x.restore();
+  }
+
+  // ---- grain ----
+  grainFrame(f);
+  x.save(); x.globalAlpha = 0.035; x.globalCompositeOperation = 'overlay';
+  x.fillStyle = x.createPattern(grain, 'repeat'); x.fillRect(0, 0, W, H); x.restore();
+};
+
+window.DURATION = 3.4;
+window.ready = document.fonts.load('600 40px Plex').then(() => { window.render(0); });
+if (q.get('play')) {
+  let t0 = performance.now();
+  const loop = now => { const t = ((now - t0) / 1000) % (window.DURATION + 0.8); window.render(t); requestAnimationFrame(loop); };
+  window.ready.then(() => requestAnimationFrame(loop));
+}
+</script>

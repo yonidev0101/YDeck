@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Nova's monogram tile, as BrandArt draws it (corner = 29% of the side). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#0B0B0C" />
+    <corners android:radius="8.7dp" />
+</shape>

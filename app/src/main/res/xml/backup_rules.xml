@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Same scope as data_extraction_rules.xml, in the older format some backup tools still read. -->
+<full-backup-content>
+    <include domain="file" path="projects.json" />
+    <include domain="file" path="logos/" />
+</full-backup-content>

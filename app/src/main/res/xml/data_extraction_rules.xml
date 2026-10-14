@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android's own backup (Google account, and phone-to-phone transfer) carries the projects and their logos only.
+  Favicons are re-fetched, and widget state belongs to widget ids that don't exist on the new phone.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="file" path="projects.json" />
+        <include domain="file" path="logos/" />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="file" path="projects.json" />
+        <include domain="file" path="logos/" />
+    </device-transfer>
+</data-extraction-rules>

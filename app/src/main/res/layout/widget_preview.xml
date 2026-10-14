@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Static picture of the widget for the launcher's widget list (Android 12+): the "glass" design at 4×2, showing the
+  sample project Nova (black, so the glass stays neutral). Mirrors DeckWidget's Wide layout; the 0.2 squares
+  version is kept in releases/source-0.5/.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/preview_surface"
+    android:layoutDirection="rtl"
+    android:orientation="vertical"
+    android:paddingStart="14dp"
+    android:paddingTop="16dp"
+    android:paddingEnd="14dp"
+    android:paddingBottom="14dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="36dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:background="@drawable/preview_logo"
+            android:gravity="center"
+            android:importantForAccessibility="no"
+            android:text="N"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="sans-serif-medium"
+                android:text="Nova"
+                android:textColor="@color/widget_text"
+                android:textSize="15sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="dana@nova.dev"
+                android:textColor="@color/widget_muted"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <!-- page dots: the current project is the short bar -->
+        <FrameLayout android:layout_width="14dp" android:layout_height="5dp" android:layout_marginStart="8dp" android:background="@drawable/preview_dot_active" />
+        <FrameLayout android:layout_width="5dp" android:layout_height="5dp" android:layout_marginStart="4dp" android:background="@drawable/preview_dot" />
+        <FrameLayout android:layout_width="5dp" android:layout_height="5dp" android:layout_marginStart="4dp" android:layout_marginEnd="4dp" android:background="@drawable/preview_dot" />
+    </LinearLayout>
+
+    <FrameLayout android:layout_width="match_parent" android:layout_height="6dp" />
+
+        <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"
+            android:gravity="center_vertical" android:orientation="horizontal">
+            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                android:gravity="center_horizontal" android:orientation="vertical">
+                <ImageView android:layout_width="28dp" android:layout_height="28dp" android:importantForAccessibility="no"
+                    android:src="@drawable/si_firebase" android:tint="@color/widget_text" />
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="5dp"
+                    android:maxLines="1" android:text="Firebase" android:textColor="@color/widget_label" android:textSize="11.5sp" />
+            </LinearLayout>
+            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                android:gravity="center_horizontal" android:orientation="vertical">
+                <ImageView android:layout_width="28dp" android:layout_height="28dp" android:importantForAccessibility="no"
+                    android:src="@drawable/si_googleplay" android:tint="@color/widget_ink" />
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="5dp"
+                    android:maxLines="1" android:text="Play" android:textColor="@color/widget_label" android:textSize="11.5sp" />
+            </LinearLayout>
+            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                android:gravity="center_horizontal" android:orientation="vertical">
+                <ImageView android:layout_width="28dp" android:layout_height="28dp" android:importantForAccessibility="no"
+                    android:src="@drawable/si_vercel" android:tint="@color/widget_ink" />
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="5dp"
+                    android:maxLines="1" android:text="Vercel" android:textColor="@color/widget_label" android:textSize="11.5sp" />
+            </LinearLayout>
+            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                android:gravity="center_horizontal" android:orientation="vertical">
+                <ImageView android:layout_width="28dp" android:layout_height="28dp" android:importantForAccessibility="no"
+                    android:src="@drawable/si_github" android:tint="@color/widget_ink" />
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="5dp"
+                    android:maxLines="1" android:text="GitHub" android:textColor="@color/widget_label" android:textSize="11.5sp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"
+            android:gravity="center_vertical" android:orientation="horizontal">
+            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                android:gravity="center_horizontal" android:orientation="vertical">
+                <ImageView android:layout_width="28dp" android:layout_height="28dp" android:importantForAccessibility="no"
+                    android:src="@drawable/si_sentry" android:tint="@color/widget_sentry" />
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="5dp"
+                    android:maxLines="1" android:text="Sentry" android:textColor="@color/widget_label" android:textSize="11.5sp" />
+            </LinearLayout>
+            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                android:gravity="center_horizontal" android:orientation="vertical">
+                <ImageView android:layout_width="28dp" android:layout_height="28dp" android:importantForAccessibility="no"
+                    android:src="@drawable/si_googleanalytics" android:tint="#E37400" />
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="5dp"
+                    android:maxLines="1" android:text="Analytics" android:textColor="@color/widget_label" android:textSize="11.5sp" />
+            </LinearLayout>
+            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                android:gravity="center_horizontal" android:orientation="vertical">
+                <ImageView android:layout_width="28dp" android:layout_height="28dp" android:importantForAccessibility="no"
+                    android:src="@drawable/si_googledrive" android:tint="#4285F4" />
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="5dp"
+                    android:maxLines="1" android:text="Drive" android:textColor="@color/widget_label" android:textSize="11.5sp" />
+            </LinearLayout>
+            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                android:gravity="center_horizontal" android:orientation="vertical">
+                <ImageView android:layout_width="28dp" android:layout_height="28dp" android:importantForAccessibility="no"
+                    android:src="@drawable/ic_s_dots" android:tint="@color/widget_label" />
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="5dp"
+                    android:maxLines="1" android:text="עוד" android:textColor="@color/widget_label" android:textSize="11.5sp" />
+            </LinearLayout>
+        </LinearLayout>
+</LinearLayout>

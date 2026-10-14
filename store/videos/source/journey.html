@@ -1,0 +1,198 @@
+<!doctype html>
+<!--
+  "The journey": one take, no cuts, 13.2 s, 1080×1920 (`node render.cjs journey`). It ends on the mark itself, so no sting
+  is appended: its last 2 s are the sting's last frames (the dot lands, "YDeck" rises, then the line, as the apps draw them).
+  The amber piece races along a white line through the end of a working day and closes what is open on the way: it
+  answers the agent, checks the changes, commits, stops the server, and keeps the next step. The camera rides with it,
+  turning with the line. Then it pulls back: the line it drew all along is the ring of the logo, and the amber piece
+  stops in the opening and becomes the dot. In the brand's line: white is done, amber the one open piece, grey closed;
+  indigo only a drop (the agent's line typed at the very start).
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face { font-family: Plex; src: url("../../../app/src/main/res/font/plex_sans_hebrew_medium.ttf"); font-weight: 500; }
+  @font-face { font-family: Plex; src: url("../../../app/src/main/res/font/plex_sans_hebrew_regular.ttf"); font-weight: 400; }
+  html, body { margin: 0; background: #0B0B0D; overflow: hidden; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c" width="1080" height="1920"></canvas>
+<script>
+const W = 1080, H = 1920, D = Math.PI / 180;
+// ?lang=en for the English cut; Hebrew by default
+const EN = new URLSearchParams(location.search).get('lang') === 'en';
+const T = (he, en) => EN ? en : he;
+const g = document.getElementById('c').getContext('2d');
+const NIGHT = '#0B0B0D', PAPER = '#F4F4F5', MUTED = '#8B8B93', AMBER = '#F5A524', THINK = '#6E66F8', GREY = '#3A3A42';
+const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const seg = (t, a, b) => clamp((t - a) / (b - a));
+const ease = x => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+const out3 = x => 1 - Math.pow(1 - x, 3);
+const lerp = (a, b, k) => a + (b - a) * k;
+
+// ---------- the world: one big ring; the day runs clockwise along the logo's arc, from −10° to 290° ----------
+const R = 2000, S = 20, Z0 = 1.3;              // S: the stroke in the world; Z0: how close the camera rides (so 26 px on screen)
+const LOGO = { r: Math.min(W, H) * 0.105, cx: W / 2, cy: H * 0.42 };   // the sting's mark (store/brand/logo/sting.html)
+const P = a => [R * Math.cos(a * D), R * Math.sin(a * D)];
+const ST = [ // where each stop is, when the amber piece arrives, when what it closed turns white, when it leaves
+  { a: 30, A: 0.9, C: 1.45, L: 1.5, word: T('לענות לסוכן.', 'Answer the agent.') },
+  { a: 90, A: 2.5, C: 2.95, L: 3.0, word: T('לבדוק כל שינוי.', 'Check every change.') },
+  { a: 150, A: 4.0, C: 4.45, L: 4.5, word: T('לשמור בקומיט.', 'Commit it.') },
+  { a: 210, A: 5.5, C: 5.95, L: 6.0, word: T('לעצור את השרת.', 'Stop the server.') },
+  { a: 260, A: 7.0, C: null, L: 7.9, word: T('להשאיר צעד הבא.', 'Leave the next step.') },
+];
+const END = 320, TRAIL_END = 290, ARRIVE = 8.9, PULL = [8.9, 10.9];
+
+// the angle of the amber piece on the ring at time t
+function theta(t) {
+  if (t < ST[0].L) return ST[0].a;
+  for (let i = 0; i < ST.length; i++) {
+    const s = ST[i], n = ST[i + 1];
+    if (t < s.L) return s.a;
+    if (n && t < n.A) return lerp(s.a, n.a, ease(seg(t, s.L, n.A)));
+    if (!n) return lerp(s.a, END, ease(seg(t, s.L, ARRIVE)));
+  }
+}
+// how far along a travel it is (0 at a stop), for the camera's breath
+function travel(t) {
+  for (let i = 0; i < ST.length; i++) {
+    const s = ST[i], n = ST[i + 1], to = n ? n.A : ARRIVE;
+    if (t >= s.L && t < to) return Math.sin(Math.PI * seg(t, s.L, to));
+  }
+  return 0;
+}
+
+// ---------- the stops, drawn in their own frame: x along the line (the piece moves toward −x), y up is negative ----------
+function rr(x, y, w, h, r) { g.beginPath(); g.roundRect(x, y, w, h, r); g.stroke(); }
+function ln(pts, color) { g.strokeStyle = color; g.beginPath(); g.moveTo(...pts[0]); pts.slice(1).forEach(p => g.lineTo(...p)); g.stroke(); }
+const SLOT = [[70, -210], [-90, -150], [-27, -170], [-130, -150], [6, -160]];   // where the amber piece sits at each stop
+const STOPS = [
+  t => { g.strokeStyle = PAPER; rr(-200, -330, 400, 240, 34); ln([[-150, -245], [-120, -210], [-150, -175]], PAPER);
+    const k = ease(seg(t, 0.25, 0.8)); if (k > 0) ln([[-90, -210], [lerp(-90, 40, k), -210]], k < 1 ? THINK : PAPER); },
+  () => { g.strokeStyle = PAPER; rr(-140, -380, 280, 320, 28); [[-310, 70], [-260, 40], [-210, 60]].forEach(([y, e]) => ln([[-90, y], [e, y]], PAPER)); },
+  () => { ln([[0, -390], [0, -80]], PAPER); [-330, -250].forEach(y => ln([[-27, y], [27, y]], PAPER)); },
+  () => { g.strokeStyle = PAPER; rr(-180, -360, 360, 120, 26); rr(-180, -210, 360, 120, 26); ln([[-130, -300], [-76, -300]], PAPER); },
+  // the list: two done (a tick and the line), the last one an empty box waiting for its line
+  () => { [-320, -240, -160].forEach((y, i) => {
+    if (i < 2) { ln([[60, y], [-140, y]], PAPER); ln([[98, y + 1], [114, y + 16], [142, y - 16]], PAPER); }
+    else { g.strokeStyle = PAPER; rr(94, y - 26, 52, 52, 14); } }); },
+];
+
+// ---------- the words, across the top, moving the way the piece moves ----------
+const WORDS = [{ s: T('סוף היום.', 'End of the day.'), a: 0.0, b: 0.85 }, ...ST.map(s => ({ s: s.word, a: s.A - 0.15, b: s.L + 0.2 }))];
+function words(t) {
+  for (const w of WORDS) {
+    if (t < w.a || t > w.b + 0.25) continue;
+    const inn = out3(seg(t, w.a, w.a + 0.28)), out = ease(seg(t, w.b, w.b + 0.25));
+    const x = W / 2 + (1 - inn) * 90 - out * 120, alpha = inn * (1 - out);
+    let size = 96; g.font = `500 ${size}px Plex`; g.direction = EN ? 'ltr' : 'rtl';
+    while (g.measureText(w.s).width > 900) { size -= 2; g.font = `500 ${size}px Plex`; }
+    const body = w.s.replace(/\.$/, ''), tw = g.measureText(body).width, gap = 30;
+    g.globalAlpha = alpha; g.fillStyle = PAPER; g.textAlign = 'center'; g.textBaseline = 'alphabetic';
+    const sx = EN ? x - gap / 2 : x + gap / 2;
+    g.fillText(body, sx, 470);
+    g.fillStyle = AMBER; g.beginPath(); g.arc(EN ? sx + tw / 2 + gap - 9 : sx - tw / 2 - gap + 9, 460, size / 8.5, 0, Math.PI * 2); g.fill();
+    g.globalAlpha = 1;
+  }
+}
+
+// ---------- the camera ----------
+function camera(t) {
+  const th = theta(t), k = ease(seg(t, PULL[0], PULL[1]));
+  const zf = LOGO.r / R;
+  const z = t < PULL[0] ? Z0 * (1 - 0.24 * travel(t)) : Math.exp(lerp(Math.log(Z0), Math.log(zf), k));
+  const q = (z - zf) / (Z0 - zf), c = P(th);
+  return {
+    z, k, th,
+    alpha: lerp(90 - th, -360, k) * D,                       // the line runs across the screen; at the end, upright
+    wc: [c[0] * q, c[1] * q],                                // what the camera looks at: the piece, then the ring's centre
+    anchor: [W / 2, lerp(LOGO.cy, 1280, q)],
+  };
+}
+const toScreen = (cam, p) => {
+  const x = p[0] - cam.wc[0], y = p[1] - cam.wc[1], c = Math.cos(cam.alpha), s = Math.sin(cam.alpha);
+  return [cam.anchor[0] + cam.z * (x * c - y * s), cam.anchor[1] + cam.z * (x * s + y * c)];
+};
+
+// ---------- the lockup at the end, exactly as the sting and the apps draw it ----------
+function lockup(t) {
+  const { r, cx, cy } = LOGO, stroke = r * 11 / 36;
+  const nk = out3(seg(t, 11.15, 11.7)), lk = out3(seg(t, 11.5, 12.0));
+  if (nk <= 0) return;
+  const ns = r * 0.95, top = cy + r + stroke + ns * 0.9;
+  g.font = `500 ${ns}px Plex`; g.letterSpacing = `${-0.02 * ns}px`;
+  const m = g.measureText('YDeck'), asc = m.fontBoundingBoxAscent, nameH = asc + m.fontBoundingBoxDescent;
+  g.save(); g.beginPath(); g.rect(0, top, W, nameH); g.clip();
+  g.fillStyle = PAPER; g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.direction = 'ltr';
+  g.fillText('YDeck', cx, top + asc + (1 - nk) * nameH); g.restore();
+  g.letterSpacing = '0px';
+  if (lk <= 0) return;
+  const LINE = T('שום דבר לא נשאר פתוח.', 'Nothing left open.');
+  g.font = `400 ${ns * 0.42}px Plex`; const la = g.measureText(LINE).fontBoundingBoxAscent;
+  g.globalAlpha = lk; g.fillStyle = MUTED; g.direction = EN ? 'ltr' : 'rtl';
+  g.fillText(LINE, cx, top + nameH + ns * 0.35 + la + (1 - lk) * 6); g.globalAlpha = 1;
+}
+
+window.DURATION = 13.2;
+window.render = t => {
+  g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = NIGHT; g.fillRect(0, 0, W, H);
+  const cam = camera(t), th = cam.th;
+  // the world
+  g.setTransform(cam.z, 0, 0, cam.z, 0, 0);
+  g.setTransform(1, 0, 0, 1, cam.anchor[0], cam.anchor[1]); g.scale(cam.z, cam.z); g.rotate(cam.alpha); g.translate(-cam.wc[0], -cam.wc[1]);
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  const screenW = lerp(S * Z0, LOGO.r * 11 / 36, cam.k), lw = screenW / cam.z;
+  // the hours passing under the line, in grey: they give the ride its speed, and go before the pull back
+  const ticksA = 1 - seg(t, PULL[0], PULL[0] + 0.5);
+  if (ticksA > 0) {
+    g.globalAlpha = ticksA; g.strokeStyle = GREY; g.lineWidth = 10;
+    for (let a = -10; a <= 300; a += 3) { const c = Math.cos(a * D), s = Math.sin(a * D); g.beginPath(); g.moveTo(c * (R + 60), s * (R + 60)); g.lineTo(c * (R + 90), s * (R + 90)); g.stroke(); }
+    g.globalAlpha = 1;
+  }
+  // the line drawn so far: the day, done (white)
+  g.strokeStyle = PAPER; g.lineWidth = lw;
+  g.beginPath(); g.arc(0, 0, R, -10 * D, Math.min(th, TRAIL_END) * D); g.stroke();
+  // the stops, each in its own frame, standing on the line
+  const stopsA = 1 - seg(t, PULL[0], PULL[0] + 0.6);
+  ST.forEach((s, i) => {
+    if (stopsA <= 0 || Math.abs(s.a - th) > 40) return;
+    g.save(); const p = P(s.a); g.translate(p[0], p[1]); g.rotate((s.a - 90) * D);
+    g.globalAlpha = stopsA; g.lineWidth = S; g.lineCap = 'round'; g.lineJoin = 'round';
+    STOPS[i](t);
+    // what the piece closed stays behind, white
+    if (s.C !== null && t >= s.C) ln([[SLOT[i][0], SLOT[i][1]], [SLOT[i][0] + 54, SLOT[i][1]]], PAPER);
+    g.restore(); g.globalAlpha = 1;
+  });
+  // the amber piece: on the line while it travels, up in its place at each stop
+  let lift = 0, si = 0;
+  ST.forEach((s, i) => { const l = i === 0 ? (t >= s.A ? 1 : 0) * (1 - ease(seg(t, s.L, s.L + 0.22))) : ease(seg(t, s.A - 0.22, s.A)) * (1 - ease(seg(t, s.L, s.L + 0.22))); if (l > lift) { lift = l; si = i; } });
+  const appear = out3(seg(t, 0.9, 1.1));
+  if (appear > 0) {
+    const base = P(th), s = ST[si], sp = P(s.a);
+    // the slot in world coordinates
+    const ca = Math.cos((s.a - 90) * D), sa = Math.sin((s.a - 90) * D), [sx, sy] = SLOT[si];
+    const slot = [sp[0] + (sx + 27) * ca - sy * sa, sp[1] + (sx + 27) * sa + sy * ca];
+    const wp = [lerp(base[0], slot[0], lift), lerp(base[1], slot[1], lift)];
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    const sc = toScreen(cam, wp), ang = cam.alpha + (th - 90) * D;
+    const morph = ease(seg(t, 9.7, PULL[1]));
+    const dotR = LOGO.r * 7.5 / 36 * (1 + 0.12 * Math.sin(Math.PI * seg(t, PULL[1], PULL[1] + 0.3)));
+    const half = 27 * Z0 * appear * (1 - morph);
+    const thick = lerp(S * Z0, dotR * 2, morph);
+    g.save(); g.translate(sc[0], sc[1]); g.rotate(ang);
+    g.strokeStyle = AMBER; g.lineCap = 'round'; g.lineWidth = thick;
+    if (half > 0.5) { g.beginPath(); g.moveTo(-half, 0); g.lineTo(half, 0); g.stroke(); }
+    else { g.fillStyle = AMBER; g.beginPath(); g.arc(0, 0, thick / 2, 0, Math.PI * 2); g.fill(); }
+    g.restore();
+  }
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  words(t);
+  lockup(t);
+};
+window.ready = Promise.all([document.fonts.load('500 40px Plex'), document.fonts.load('400 40px Plex')]).then(() => { window.render(0); return true; });
+</script>
+</body>
+</html>

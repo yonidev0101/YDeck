@@ -1,0 +1,283 @@
+<!doctype html>
+<!--
+  "The trick": YDeck is a deck, so the film is a card trick. 14.4 s, 1080x1920, frame-exact (window.render(t)); render.cjs adds the sting.
+   0.2  "בוא נעשה קסם קטן."      a deck of indigo-backed cards, riffle-shuffled
+   2.1  "תבחר פרויקט."           the cards fan out face down; a finger hovers and draws one
+   4.7  "בחרת Nova."             the card flies to the middle and flips: Nova
+   6.25 "עכשיו תבחר שירות."      the card opens into the widget; the finger taps Firebase
+   8.65 "באיזה חשבון הוא ייפתח?"  a reel of accounts spins and slows
+  10.7  "בחשבון הנכון."          it lands on dana@nova.dev, mint
+  12.45 "זה לא קסם. זה YDeck."   the card closes, flips to its back and grows to fill the screen: the sting starts on indigo
+-->
+<meta charset="utf-8">
+<script src="../../play/source/icons.js"></script>
+<style>
+  @font-face { font-family: Plex; src: url("../../../app/src/main/res/font/plex_sans_hebrew_regular.ttf"); font-weight: 400; }
+  @font-face { font-family: Plex; src: url("../../../app/src/main/res/font/plex_sans_hebrew_medium.ttf"); font-weight: 500; }
+  @font-face { font-family: Plex; src: url("../../../app/src/main/res/font/plex_sans_hebrew_semibold.ttf"); font-weight: 600; }
+  @font-face { font-family: Noto; src: url("../../../app/src/main/res/font/noto_sans_hebrew.ttf"); font-weight: 100 900; }
+  @font-face { font-family: Mono; src: url("../../../app/src/main/res/font/plex_mono_medium.ttf"); font-weight: 500; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1080px; height: 1920px; overflow: hidden; background: #0A0A0B; -webkit-font-smoothing: antialiased; }
+  canvas { position: absolute; left: 0; top: 0; }
+  .head { position: absolute; top: 250px; right: 96px; left: 96px; direction: rtl; font: 200 104px/1.12 Noto, sans-serif; letter-spacing: -0.02em; color: #F4F4F5; }
+  .mask { overflow: hidden; padding-bottom: 10px; }
+  .l2 { color: #5EF2C2; font-weight: 300; }
+</style>
+<canvas id="c" width="1080" height="1920"></canvas>
+<div class="head" id="head"><div class="mask"><div id="l1"></div></div><div class="mask"><div class="l2" id="l2"></div></div></div>
+<canvas id="grain" width="540" height="960" style="width:1080px;height:1920px;opacity:.045;mix-blend-mode:overlay"></canvas>
+<script>
+const $ = id => document.getElementById(id);
+const x = $('c').getContext('2d');
+const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const seg = (t, a, d) => clamp((t - a) / d);
+const p3 = p => 1 - Math.pow(1 - p, 3);
+const p3in = p => p * p * p;
+const io = p => p < .5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+const expo = p => p >= 1 ? 1 : 1 - Math.pow(2, -10 * p);
+const back = p => { const s = 1.5; p -= 1; return p * p * ((s + 1) * p + s) + 1; };
+const lerp = (a, b, k) => a + (b - a) * k;
+const INDIGO = '#3D35E0', MINT = '#5EF2C2', NIGHT = '#0A0A0B', ON = '#F4F4F5';
+
+// ---- headlines ----
+const LINES = [
+  [0.2, 1.95, 'בוא נעשה', 'קסם קטן.'],
+  [2.1, 4.5, 'תבחר', 'פרויקט.'],
+  [4.7, 6.1, 'בחרת Nova.', 'בחירה טובה.'],
+  [6.25, 8.5, 'עכשיו תבחר', 'שירות.'],
+  [8.65, 10.55, 'באיזה חשבון', 'הוא ייפתח?'],
+  [10.7, 12.3, 'בחשבון הנכון.', 'כמו תמיד.'],
+  [12.45, 14.0, 'זה לא קסם.', 'זה YDeck.'],
+];
+function headline(t) {
+  const cur = LINES.find(([a, b]) => t >= a - 0.01 && t < b + 0.32);
+  if (!cur) { $('l1').textContent = $('l2').textContent = ''; return; }
+  const [a, b, one, two] = cur;
+  $('l1').textContent = one; $('l2').textContent = two;
+  const inn = at => (1 - p3(seg(t, at, 0.45))) * 130, out = -p3in(seg(t, b, 0.28)) * 130;
+  $('l1').style.transform = `translateY(${t < b ? inn(a) : out}px)`;
+  $('l2').style.transform = `translateY(${t < b ? inn(a + 0.14) : out}px)`;
+}
+
+// ---- the mark (for card backs) ----
+const YP = ['M296.4,364.4L113.1,181.3Q95.4,163.6 113.1,145.9L144.9,114.1Q162.6,96.4 180.3,114.1L363.6,297.4Z',
+  'M262,513L262,330C262,310 276,295.8 290,281.8L457.7,114.1Q475.4,96.4 493.1,114.1L524.9,145.9Q542.6,163.6 524.9,181.3L376,330.2L376,513Q376,545 344,545L294,545Q262,545 262,513Z',
+  'M262,455L376,341L376,513Q376,545 344,545L294,545Q262,545 262,513Z'].map(d => new Path2D(d));
+const TILES = [[68, 312], [150, 312], [68, 394], [150, 394], [422, 312], [504, 312], [422, 394], [504, 394]];
+function rr(px, py, w, h, r) { x.beginPath(); x.roundRect(px, py, w, h, r); }
+function markAt(cx, cy, k, fg, hi) {
+  x.save(); x.translate(cx, cy); x.scale(k, k); x.translate(-319, -320);
+  TILES.forEach(([tx, ty], i) => { rr(tx, ty, 66, 66, 16); x.fillStyle = i === 5 && hi ? hi : fg; x.fill(); });
+  x.fillStyle = fg; YP.forEach(p => x.fill(p));
+  x.restore();
+}
+const ICON = {};
+for (const [k, v] of Object.entries(ICONS)) ICON[k] = { s: 1 / +v.vb[0], paths: v.paths.map(p => ({ p: new Path2D(p.d), stroke: p.stroke, sw: +p.sw })) };
+function icon(name, color, size, cx, cy) {
+  const i = ICON[name]; x.save(); x.translate(cx - size / 2, cy - size / 2); x.scale(size * i.s, size * i.s);
+  i.paths.forEach(p => { if (p.stroke) { x.strokeStyle = color; x.lineWidth = p.sw; x.lineCap = 'round'; x.stroke(p.p); } else { x.fillStyle = color; x.fill(p.p); } });
+  x.restore();
+}
+function text(s, px, py, font, color, align = 'center', dir = 'rtl') {
+  x.font = font; x.fillStyle = color; x.textAlign = align; x.direction = dir; x.fillText(s, px, py);
+}
+
+// ---- cards ----
+const CW = 300, CH = 420;
+const PROJECTS = [['Pulse', 'P', '#FF5A36'], ['Orbit', 'O', '#0EA5E9'], ['Atlas', 'A', '#F59E0B'], ['Kite', 'K', '#EC4899'],
+  ['Nova', 'N', '#0B0B0C'], ['Echo', 'E', '#8B5CF6'], ['Studio', 'S', '#16A34A']];
+const PICK = 4; // Nova
+function cardBack(w, h) {
+  rr(-w / 2, -h / 2, w, h, 30); x.fillStyle = INDIGO; x.fill();
+  x.lineWidth = 3; x.strokeStyle = 'rgba(10,10,11,.55)'; x.stroke();
+  rr(-w / 2 + 16, -h / 2 + 16, w - 32, h - 32, 20); x.lineWidth = 2; x.strokeStyle = 'rgba(244,244,245,.28)'; x.stroke();
+  markAt(0, 0, w / 300 * 0.3, '#FFFFFF', MINT);
+}
+function cardFace(w, h, [name, mono, color]) {
+  rr(-w / 2, -h / 2, w, h, 30); x.fillStyle = '#FFFFFF'; x.fill();
+  const k = w / 300;
+  text(mono, -w / 2 + 34 * k, -h / 2 + 62 * k, `600 ${40 * k}px Plex`, color, 'center', 'ltr');
+  x.save(); x.translate(w / 2 - 34 * k, h / 2 - 62 * k); x.rotate(Math.PI); text(mono, 0, 0, `600 ${40 * k}px Plex`, color, 'center', 'ltr'); x.restore();
+  rr(-56 * k, -96 * k, 112 * k, 112 * k, 32 * k); x.fillStyle = color; x.fill();
+  text(mono, 0, -18 * k, `600 ${60 * k}px Plex`, '#FFFFFF', 'center', 'ltr');
+  text(name, 0, 70 * k, `500 ${40 * k}px Plex`, '#1D1D1F', 'center', 'ltr');
+  text('4 שירותים · חשבון אחד', 0, 112 * k, `400 ${21 * k}px Plex`, '#6E6E73');
+}
+// one card: centre, rotation, horizontal flip scale (sign picks the side: >0 back, <0 face), size
+function card(cx, cy, rot, flip, proj, w = CW, h = CH, alpha = 1) {
+  x.save(); x.globalAlpha = alpha; x.translate(cx, cy); x.rotate(rot); x.scale(Math.abs(flip) || 0.001, 1);
+  if (flip >= 0) cardBack(w, h); else cardFace(w, h, proj);
+  x.restore();
+}
+
+// ---- the widget the card opens into ----
+const SLOTS = [['si_googleplay', 'Play', '#FFFFFF', 1], ['si_firebase', 'Firebase', '#DD2C00'], ['si_github', 'GitHub', '#181717'], ['si_vercel', 'Vercel', '#000000'],
+  ['si_googleanalytics', 'Analytics', '#E37400'], ['si_supabase', 'Supabase', '#3FCF8E'], ['si_sentry', 'Sentry', '#362D59'], ['ic_s_dots', 'עוד', '#3C3C43']];
+const WW = 780, WH = 600, CX = 540, CY = 1040;
+function slotPos(i) { const col = i % 4, row = Math.floor(i / 4); return [CX + WW / 2 - 108 - col * 188, CY - WH / 2 + 248 + row * 178]; }
+function widgetCard(k, t) {
+  // k: 0 = still the Nova card, 1 = the full widget
+  const w = lerp(CW * 1.25, WW, k), h = lerp(CH * 1.25, WH, k);
+  x.save(); x.translate(CX, CY);
+  rr(-w / 2, -h / 2, w, h, lerp(38, 56, k)); x.fillStyle = '#FFFFFF'; x.fill();
+  // the logo square travels from the card's centre to the header's right
+  const lx = lerp(0, w / 2 - 70, k), ly = lerp(-50, -h / 2 + 72, k), ls = lerp(140, 64, k);
+  rr(lx - ls / 2, ly - ls / 2, ls, ls, ls * .28); x.fillStyle = '#0B0B0C'; x.fill();
+  text('N', lx, ly + ls * 0.19, `600 ${ls * 0.52}px Plex`, '#FFFFFF', 'center', 'ltr');
+  const nx = lerp(0, w / 2 - 122, k), ny = lerp(87.5, -h / 2 + 64, k);
+  text('Nova', nx, ny, `500 ${lerp(50, 34, k)}px Plex`, '#1D1D1F', k > .5 ? 'right' : 'center', 'ltr');
+  // the playing-card details fade as it opens
+  x.globalAlpha = 1 - seg(k, 0, .3);
+  text('N', -w / 2 + 42, -h / 2 + 77, '600 50px Plex', '#0B0B0C', 'center', 'ltr');
+  x.save(); x.translate(w / 2 - 42, h / 2 - 77); x.rotate(Math.PI); text('N', 0, 0, '600 50px Plex', '#0B0B0C', 'center', 'ltr'); x.restore();
+  text('4 שירותים · חשבון אחד', 0, 140, '400 26px Plex', '#6E6E73');
+  x.globalAlpha = seg(k, .6, .4);
+  x.beginPath(); x.arc(w / 2 - 128, -h / 2 + 94, 6, 0, 7); x.fillStyle = '#30A14E'; x.fill();
+  text('dana', w / 2 - 142, -h / 2 + 102, '400 24px Plex', '#6E6E73', 'right', 'ltr');
+  text('1/4', -w / 2 + 160, -h / 2 + 82, '400 24px Plex', '#6E6E73', 'center', 'ltr');
+  icon('ic_chev_right', '#6E6E73', 28, -w / 2 + 96, -h / 2 + 74); icon('ic_chev_left', '#6E6E73', 28, -w / 2 + 54, -h / 2 + 74);
+  x.globalAlpha = 1; x.restore();
+  // tiles arrive one by one
+  SLOTS.forEach(([n, l, c, p], i) => {
+    const a = p3(seg(k, 0.35 + i * 0.07, 0.3));
+    if (a <= 0) return;
+    const [sx, sy] = slotPos(i);
+    const press = i === 1 ? Math.sin(Math.PI * seg(t, 7.6, 0.22)) : 0;
+    const s = (0.6 + 0.4 * a) * (1 - 0.08 * press), size = 116 * s;
+    x.save(); x.globalAlpha = a;
+    rr(sx - size / 2, sy - size / 2, size, size, 34 * s); x.fillStyle = p ? '#0B0B0C' : '#F2F2F7'; x.fill();
+    icon(n, c, 56 * s, sx, sy);
+    text(l, sx, sy + 92, '500 24px Plex', '#3C3C43', 'center', /[א-ת]/.test(l) ? 'rtl' : 'ltr');
+    x.restore();
+  });
+  // mint ring after the tap
+  const ring = seg(t, 7.65, 0.7);
+  if (ring > 0 && ring < 1) {
+    const [sx, sy] = slotPos(1), s = 116 * (1 + 0.3 * p3(ring));
+    rr(sx - s / 2, sy - s / 2, s, s, 36); x.lineWidth = 5; x.strokeStyle = `rgba(94,242,194,${1 - ring})`; x.stroke();
+  }
+}
+
+// ---- the finger (a soft round touch) ----
+function finger(px, py, a, press = 0) {
+  if (a <= 0) return;
+  x.save(); x.globalAlpha = a;
+  x.beginPath(); x.arc(px, py, 46 * (1 - 0.12 * press), 0, 7);
+  x.fillStyle = 'rgba(244,244,245,.22)'; x.fill(); x.lineWidth = 4; x.strokeStyle = 'rgba(244,244,245,.9)'; x.stroke();
+  x.restore();
+}
+
+// ---- the account reel ----
+const ACCTS = ['dana.cohen@gmail.com', 'hello@novastudio.io', 'dana@nova.dev', 'dana.c.dev@gmail.com'];
+const REEL_START = 8.75, REEL_DUR = 1.85, REEL_TOTAL = 4 * 4 + 2; // lands on index 2 (dana@nova.dev)
+const reelPos = t => REEL_TOTAL * (1 - Math.pow(1 - seg(t, REEL_START, REEL_DUR), 3.2));
+window.reelPos = reelPos;
+function reel(t, a) {
+  if (a <= 0) return;
+  const top = 1440, w = 780, h = 120, pos = reelPos(t), landed = t >= REEL_START + REEL_DUR;
+  x.save(); x.globalAlpha = a;
+  rr(CX - w / 2, top, w, h, 60); x.fillStyle = '#141416'; x.fill();
+  x.lineWidth = 3; x.strokeStyle = landed ? `rgba(94,242,194,${0.4 + 0.6 * seg(t, REEL_START + REEL_DUR, 0.2)})` : '#26262A'; x.stroke();
+  x.save(); rr(CX - w / 2, top, w, h, 60); x.clip();
+  for (let d = -2; d <= 2; d++) {
+    const idx = Math.floor(pos) + d, off = (idx - pos) * 86;
+    const s = ACCTS[((idx % 4) + 4) % 4], y = top + h / 2 + off;
+    const fade = 1 - Math.min(1, Math.abs(off) / 110);
+    if (fade <= 0) continue;
+    const center = landed && d === 0 && ((idx % 4) + 4) % 4 === 2;
+    x.globalAlpha = a * fade;
+    text(s, CX + (landed ? 20 : 0), y + 13, '500 36px Mono', center ? MINT : '#C9C9CE', 'center', 'ltr');
+  }
+  x.restore();
+  if (landed) {
+    const k = p3(seg(t, REEL_START + REEL_DUR, 0.3));
+    x.globalAlpha = a * k; x.beginPath(); x.arc(CX - w / 2 + 64, top + h / 2, 22, 0, 7); x.fillStyle = MINT; x.fill();
+    x.lineWidth = 5; x.strokeStyle = NIGHT; x.lineCap = 'round'; x.lineJoin = 'round';
+    x.beginPath(); x.moveTo(CX - w / 2 + 54, top + h / 2); x.lineTo(CX - w / 2 + 61, top + h / 2 + 8); x.lineTo(CX - w / 2 + 75, top + h / 2 - 8); x.stroke();
+  }
+  x.restore();
+}
+
+// ---- the deck: shuffle, fan, pick ----
+const N = PROJECTS.length;
+const FAN_PIVOT = [540, 1720], FAN_R = 640;
+const fanAngle = i => (i - (N - 1) / 2) * 0.17;
+function fanPos(i) { const a = fanAngle(i); return [FAN_PIVOT[0] + FAN_R * Math.sin(a), FAN_PIVOT[1] - FAN_R * Math.cos(a), a]; }
+
+function deck(t) {
+  const appear = p3(seg(t, 0.05, 0.4));
+  if (t > 6.3) return;
+  // riffle: split 0.55–0.9, interleave 1.0–1.65 (one card at a time), square up 1.65–1.85
+  const split = io(seg(t, 0.55, 0.35)) * (1 - io(seg(t, 1.0, 0.65)));
+  const fan = io(seg(t, 2.05, 0.65));
+  const pick = p3(seg(t, 3.85, 0.45));          // the chosen card rises out of the fan
+  const toMid = io(seg(t, 4.55, 0.55));          // ...and flies to the middle
+  const flip = seg(t, 5.05, 0.4);                // ...and turns over
+  const rest = 1 - seg(t, 4.6, 0.35);            // the other cards drop away
+  const order = [...Array(N).keys()].filter(i => i !== PICK).concat(PICK);
+  order.forEach(i => {
+    // stacked: card i sits a few px higher; while split, even cards go left, odd right
+    const side = i % 2 ? 1 : -1;
+    const interleaveAt = 1.0 + i * 0.085;
+    const back = seg(t, interleaveAt, 0.18);
+    const s = split > 0 ? (t < 1.0 ? split : (1 - back)) : 0;
+    let px = CX + side * 190 * s, py = CY + 120 - i * 4 - 30 * s, rot = side * 0.12 * s;
+    // fan
+    const [fx, fy, fa] = fanPos(i);
+    px = lerp(px, fx, fan); py = lerp(py, fy, fan); rot = lerp(rot, fa, fan);
+    let fl = 1, w = CW, h = CH, alpha = appear;
+    if (i === PICK) {
+      py -= 150 * pick; px += Math.sin(fa) * -150 * pick;
+      px = lerp(px, CX, toMid); py = lerp(py, CY, toMid); rot = lerp(rot, 0, toMid);
+      const grow = lerp(1, 1.25, toMid); w *= grow; h *= grow;
+      fl = Math.cos(Math.PI * p3(flip));
+    } else {
+      py += (1 - rest) * 900 * p3in(1 - rest); alpha *= rest;
+    }
+    card(px, py, rot, fl, PROJECTS[i], w, h, alpha);
+  });
+  // the finger hovers along the fan and draws Nova
+  const hover = seg(t, 2.9, 0.95), fa = seg(t, 2.75, 0.2) * (1 - seg(t, 4.3, 0.25));
+  const from = fanPos(1), to = fanPos(PICK);
+  const hx = lerp(from[0], to[0], io(hover)), hy = lerp(from[1], to[1], io(hover)) - 40 - 150 * pick;
+  finger(hx, hy + 30 * Math.sin(hover * Math.PI * 2) * (1 - hover), fa, Math.sin(Math.PI * seg(t, 3.8, 0.2)));
+}
+
+// ---- grain ----
+const g = $('grain'), gx = g.getContext('2d'), gd = gx.createImageData(540, 960);
+function grain(f) { let s = (f * 2654435761) >>> 0; for (let i = 0; i < gd.data.length; i += 4) { s = (s * 1664525 + 1013904223) >>> 0; const c = s >>> 24; gd.data[i] = gd.data[i + 1] = gd.data[i + 2] = c; gd.data[i + 3] = 255; } gx.putImageData(gd, 0, 0); }
+
+window.render = (t, f = Math.round(t * 30)) => {
+  x.setTransform(1, 0, 0, 1, 0, 0);
+  x.fillStyle = NIGHT; x.fillRect(0, 0, 1080, 1920);
+  headline(t);
+  deck(t);
+
+  // the card opens into the widget (6.3–7.0), the tap (7.6), the reel (8.7–10.6), then it closes back into the card (12.4)
+  if (t >= 5.45 && t < 12.8) {
+    const open = io(seg(t, 6.3, 0.7)) * (1 - io(seg(t, 12.35, 0.45)));
+    if (t >= 6.3 || t >= 5.45) {
+      if (t < 6.3) { /* the flipped card is drawn by deck() until the widget takes over */ }
+      else widgetCard(open, t);
+    }
+    const [fx, fy] = slotPos(1);
+    finger(fx, fy + 20, seg(t, 7.2, 0.25) * (1 - seg(t, 7.95, 0.25)), Math.sin(Math.PI * seg(t, 7.6, 0.22)));
+    reel(t, p3(seg(t, 8.5, 0.35)) * (1 - seg(t, 12.2, 0.3)));
+  }
+
+  // the finale: the card flips to its indigo back and grows until it is the whole screen
+  if (t >= 12.8) {
+    const flipBack = seg(t, 12.8, 0.35), grow = p3in(seg(t, 13.25, 0.9));
+    const fl = Math.cos(Math.PI * (1 - p3(flipBack)));      // face (−1) → back (+1)
+    const k = 1.25 * (1 + 7.5 * grow);
+    if (grow < 1) card(CX, CY, 0, fl < 0 ? fl : Math.max(fl, 0.001), PROJECTS[PICK], CW * k, CH * k, 1);
+    else { x.fillStyle = INDIGO; x.fillRect(0, 0, 1080, 1920); }
+  }
+  grain(f);
+};
+window.DURATION = 14.4;
+// fonts used only inside the canvas must be loaded explicitly
+window.ready = Promise.all(['400 40px Plex', '500 40px Plex', '600 40px Plex', '500 36px Mono', '200 100px Noto', '300 100px Noto'].map(f => document.fonts.load(f)))
+  .then(() => document.fonts.ready).then(() => window.render(0));
+</script>

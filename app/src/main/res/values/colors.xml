@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg">#0B0B0D</color>
+    <!-- Widget preview (launcher's widget list), matching DeckWidget's glass palette. -->
+    <color name="widget_surface">#D60B0B0D</color>
+    <color name="widget_text">#F4F4F5</color>
+    <color name="widget_muted">#A1A1A8</color>
+    <color name="widget_label">#D1D1D6</color>
+    <color name="widget_dot">#4DF5F5F7</color>
+    <!-- near-black brand marks (Play, Vercel, GitHub) and Sentry, as BrandColors.adapt shows them -->
+    <color name="widget_ink">#F4F4F5</color>
+    <color name="widget_sentry">#F4F4F5</color>
+    <color name="ydeck_indigo">#3D35E0</color>
+    <color name="ydeck_night">#0B0B0D</color>
+</resources>

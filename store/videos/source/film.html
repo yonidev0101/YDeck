@@ -1,0 +1,239 @@
+<!doctype html>
+<!--
+  "The problems, then YDeck": a 14 s status film (1080x1920) that ends where the logo sting begins (render.cjs joins them).
+  Frame-exact: window.render(t). Beats (same times as sound.cjs):
+   0.0  37 tabs        Chrome's tab counter races 1 → 37
+   3.0  which account? the Google account chooser, a cursor that can't decide
+   5.6  wrong account  Firebase: no access, the lock shakes
+   8.2  indigo rises from the bottom
+   9.0  one tap        the widget; tap Firebase → it opened as dana@nova.dev; tap Vercel → Chrome Beta
+  13.5  everything clears to plain indigo, ready for the sting
+-->
+<meta charset="utf-8">
+<script src="../../play/source/icons.js"></script>
+<style>
+  @font-face { font-family: Plex; src: url("../../../app/src/main/res/font/plex_sans_hebrew_regular.ttf"); font-weight: 400; }
+  @font-face { font-family: Plex; src: url("../../../app/src/main/res/font/plex_sans_hebrew_medium.ttf"); font-weight: 500; }
+  @font-face { font-family: Plex; src: url("../../../app/src/main/res/font/plex_sans_hebrew_semibold.ttf"); font-weight: 600; }
+  @font-face { font-family: Noto; src: url("../../../app/src/main/res/font/noto_sans_hebrew.ttf"); font-weight: 100 900; }
+  @font-face { font-family: Mono; src: url("../../../app/src/main/res/font/plex_mono_medium.ttf"); font-weight: 500; }
+  @font-face { font-family: MonoR; src: url("../../../app/src/main/res/font/plex_mono_regular.ttf"); font-weight: 400; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1080px; height: 1920px; overflow: hidden; background: #0A0A0B; -webkit-font-smoothing: antialiased; }
+  .abs { position: absolute; }
+  #indigo { left: 0; right: 0; bottom: 0; height: 0; background: #3D35E0; }
+  #grain { inset: 0; width: 1080px; height: 1920px; opacity: .045; mix-blend-mode: overlay; }
+  /* headline: two lines, each revealed from below through its own mask */
+  .head { top: 250px; right: 96px; left: 96px; direction: rtl; font: 200 104px/1.12 Noto, sans-serif; letter-spacing: -0.02em; color: #F4F4F5; }
+  .mask { overflow: hidden; padding-bottom: 10px; }
+  .mask > div { will-change: transform; }
+  .l2 { color: #5EF2C2; font-weight: 300; }
+  .art { left: 0; right: 0; top: 0; height: 1920px; }
+  .art > svg { position: absolute; }
+  /* the real widget (DeckWidget.kt) */
+  .widget { --k: 1.55; left: 50%; width: calc(316px * var(--k)); margin-left: calc(-158px * var(--k)); background: #fff; border-radius: calc(28px * var(--k));
+    padding: calc(16px * var(--k)) calc(14px * var(--k)) calc(12px * var(--k)); color: #1D1D1F; font-family: Plex, sans-serif; direction: rtl; box-shadow: 0 30px 70px rgba(10, 8, 60, .35); }
+  .w-hdr { display: flex; align-items: center; height: calc(38px * var(--k)); gap: calc(10px * var(--k)); }
+  .w-logo { width: calc(34px * var(--k)); height: calc(34px * var(--k)); border-radius: calc(10px * var(--k)); background: #0B0B0C; color: #fff; display: grid; place-items: center; font: 600 calc(17px * var(--k))/1 Plex, sans-serif; }
+  .w-id { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+  .w-name { font-size: calc(16px * var(--k)); font-weight: 500; line-height: 1.2; }
+  .w-acct { display: flex; align-items: center; gap: calc(5px * var(--k)); font-size: calc(12px * var(--k)); color: #6E6E73; }
+  .w-dot { width: calc(6px * var(--k)); height: calc(6px * var(--k)); border-radius: 50%; background: #30A14E; }
+  .w-count { font-size: calc(12px * var(--k)); color: #6E6E73; }
+  .w-nav svg { width: calc(16px * var(--k)); height: calc(16px * var(--k)); margin: 0 calc(7px * var(--k)); color: #6E6E73; }
+  .w-grid { display: grid; grid-template-columns: repeat(4, 1fr); row-gap: calc(10px * var(--k)); margin-top: calc(12px * var(--k)); }
+  .w-slot { display: flex; flex-direction: column; align-items: center; gap: calc(6px * var(--k)); }
+  .w-sq { position: relative; width: calc(54px * var(--k)); height: calc(54px * var(--k)); border-radius: calc(54px * .29 * var(--k)); background: #F2F2F7; display: grid; place-items: center; }
+  .w-sq svg { width: calc(26px * var(--k)); height: calc(26px * var(--k)); }
+  .w-sq.p { background: #0B0B0C; }
+  .w-lbl { font-size: calc(11px * var(--k)); font-weight: 500; color: #3C3C43; line-height: 1; }
+  .ring { position: absolute; inset: -6px; border-radius: 30px; border: 4px solid #5EF2C2; opacity: 0; }
+  .finger { width: 92px; height: 92px; margin: -46px 0 0 -46px; border-radius: 50%; background: rgba(61,53,224,.22); border: 4px solid rgba(61,53,224,.85); opacity: 0; }
+  .toast { left: 50%; display: flex; align-items: center; gap: 14px; padding: 20px 30px 20px 26px; border-radius: 999px; white-space: nowrap;
+    background: rgba(11, 11, 12, .3); font: 500 30px/1 Plex, sans-serif; color: #F4F4F5; direction: rtl; }
+  .toast i { width: 12px; height: 12px; border-radius: 50%; background: #5EF2C2; }
+  .toast .mono { font: 500 28px/1 Mono, monospace; color: #5EF2C2; direction: ltr; unicode-bidi: isolate; }
+</style>
+<div class="abs" id="indigo"></div>
+<div class="abs art" id="art"></div>
+<div class="abs head"><div class="mask"><div id="l1"></div></div><div class="mask"><div class="l2" id="l2"></div></div></div>
+<canvas class="abs" id="grain" width="540" height="960"></canvas>
+<script>
+const $ = id => document.getElementById(id);
+const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const seg = (t, a, d) => clamp((t - a) / d);
+const p3 = p => 1 - Math.pow(1 - p, 3);
+const expo = p => p >= 1 ? 1 : 1 - Math.pow(2, -10 * p);
+const p3in = p => p * p * p;
+const lerp = (a, b, k) => a + (b - a) * k;
+const T = (x, y, s, attrs = '') => `<text x="${x}" y="${y}" ${attrs}>${s}</text>`;
+const svgIcon = (name, color) => { const i = ICONS[name];
+  return `<svg viewBox="0 0 ${i.vb[0]} ${i.vb[1]}">${i.paths.map(p => p.stroke
+    ? `<path d="${p.d}" fill="none" stroke="currentColor" stroke-width="${p.sw}" stroke-linecap="round" stroke-linejoin="round"/>`
+    : `<path d="${p.d}" fill="${color}"/>`).join('')}</svg>`; };
+
+// ---- the headlines, one pair per scene ----
+const LINES = [
+  [0.15, 2.75, '37 טאבים.', 'אף אחד לא הנכון.'],
+  [3.05, 5.35, 'איזה חשבון', 'זה היה?'],
+  [5.65, 8.0, 'Firebase נפתח', 'בחשבון הלא נכון.'],
+  [9.1, 13.35, 'לחיצה אחת.', 'בחשבון הנכון.'],
+];
+function headline(t) {
+  const cur = LINES.find(([a, b]) => t >= a - 0.01 && t < b + 0.35);
+  if (!cur) { $('l1').textContent = ''; $('l2').textContent = ''; return; }
+  const [a, b, one, two] = cur;
+  // the last scene holds line 2 back until the first tap has landed
+  const twoAt = a === 9.1 ? 11.3 : a + 0.14;
+  $('l1').textContent = one; $('l2').textContent = two;
+  const inn = (at) => (1 - p3(seg(t, at, 0.5))) * 130;
+  const out = -p3in(seg(t, b, 0.3)) * 130;
+  $('l1').style.transform = `translateY(${t < b ? inn(a) : out}px)`;
+  $('l2').style.transform = `translateY(${t < b ? inn(twoAt) : out}px)`;
+}
+
+// ---- scene art, built once ----
+const art = $('art');
+art.innerHTML = `
+  <svg id="s1" width="1080" height="1920" viewBox="0 0 1080 1920">
+    <rect x="330" y="820" width="420" height="420" rx="84" fill="none" stroke="#F4F4F5" stroke-width="24"/>
+    <text id="count" x="540" y="1105" font-family="Plex" font-weight="600" font-size="230" fill="#F4F4F5" text-anchor="middle" letter-spacing="-8">1</text>
+    <g id="thumbs"></g>
+  </svg>
+  <svg id="s2" width="1080" height="1920" viewBox="0 0 1080 1920">
+    <g id="card2" transform="translate(96 810)">
+      <rect x="0" y="0" width="888" height="600" rx="32" fill="#141416" stroke="#26262A" stroke-width="2"/>
+      ${T(820, 82, 'בחירת חשבון', 'font-family="Plex" font-weight="500" font-size="34" fill="#F4F4F5" direction="rtl"')}
+      ${T(820, 124, 'כדי להמשיך אל Firebase', 'font-family="Plex" font-size="24" fill="#8A8A90" direction="rtl"')}
+      ${[['D', 'Dana Cohen', 'dana.cohen@gmail.com', '#3A3A3F'], ['D', 'Dana · עבודה', 'dana@nova.dev', '#2C2C30'], ['D', 'Dana', 'dana.c.dev@gmail.com', '#46464B'], ['N', 'Nova Studio', 'hello@novastudio.io', '#323236']].map(([l, n, e, c], i) => {
+        const y = 168 + i * 104;
+        return `<line x1="40" y1="${y}" x2="848" y2="${y}" stroke="#26262A" stroke-width="2"/>
+          <rect id="hl${i}" x="20" y="${y + 6}" width="848" height="92" rx="16" fill="#F4F4F5" opacity="0"/>
+          <circle cx="796" cy="${y + 52}" r="30" fill="${c}"/>${T(796, y + 62, l, 'font-family="Plex" font-weight="500" font-size="28" fill="#8A8A90" text-anchor="middle"')}
+          ${T(740, y + 46, n, 'font-family="Plex" font-weight="500" font-size="27" fill="#C9C9CE" direction="rtl"')}
+          ${T(740, y + 82, e, 'font-family="MonoR" font-size="22" fill="#8A8A90" direction="rtl"')}`;
+      }).join('')}
+      <g id="cursor"><path d="M0,0 L0,58 L14,45 L24,68 L34,64 L24,41 L42,41 Z" fill="#F4F4F5" stroke="#0A0A0B" stroke-width="3" stroke-linejoin="round"/></g>
+      <text id="qm" x="0" y="0" font-family="Plex" font-weight="500" font-size="56" fill="#5EF2C2">?</text>
+    </g>
+  </svg>
+  <svg id="s3" width="1080" height="1920" viewBox="0 0 1080 1920">
+    <g id="card3" transform="translate(96 820)">
+      <rect x="1" y="1" width="886" height="558" rx="32" fill="#141416" stroke="#26262A" stroke-width="2"/>
+      <rect x="32" y="28" width="824" height="60" rx="30" fill="#1C1C1F"/>
+      ${T(72, 67, 'console.firebase.google.com/project/nova', 'font-family="MonoR" font-size="23" fill="#8A8A90" style="direction:ltr"')}
+      <circle cx="822" cy="58" r="20" fill="#3A3A3F"/>${T(822, 66, 'D', 'font-family="Plex" font-weight="500" font-size="20" fill="#C9C9CE" text-anchor="middle"')}
+      <g id="lock">
+        <circle cx="444" cy="236" r="64" fill="none" stroke="#3A3A3F" stroke-width="3"/>
+        <rect x="418" y="232" width="52" height="40" rx="8" fill="none" stroke="#8A8A90" stroke-width="4"/>
+        <path d="M428,232 v-12 a16,16 0 0 1 32,0 v12" fill="none" stroke="#8A8A90" stroke-width="4"/>
+      </g>
+      ${T(444, 360, 'אין לך גישה לפרויקט הזה', 'font-family="Plex" font-weight="500" font-size="32" fill="#C9C9CE" text-anchor="middle" direction="rtl"')}
+      ${T(444, 404, 'מחובר בתור dana.cohen@gmail.com', 'font-family="Plex" font-size="24" fill="#8A8A90" text-anchor="middle" direction="rtl"')}
+      <rect x="334" y="440" width="220" height="60" rx="30" fill="none" stroke="#3A3A3F" stroke-width="2"/>
+      ${T(444, 479, 'החלפת חשבון', 'font-family="Plex" font-weight="500" font-size="24" fill="#8A8A90" text-anchor="middle" direction="rtl"')}
+    </g>
+  </svg>
+  <div class="abs widget" id="widget" style="top:880px">
+    <div class="w-hdr"><div class="w-logo">N</div><div class="w-id"><div class="w-name">Nova</div><div class="w-acct"><span class="w-dot"></span><span>dana</span></div></div>
+    <span class="w-count">1/4</span><span class="w-nav">${svgIcon('ic_chev_right') + svgIcon('ic_chev_left')}</span></div>
+    <div class="w-grid">${[['si_googleplay', 'Play', '#fff', 1], ['si_firebase', 'Firebase', '#DD2C00'], ['si_github', 'GitHub', '#181717'], ['si_vercel', 'Vercel', '#000'],
+      ['si_googleanalytics', 'Analytics', '#E37400'], ['si_supabase', 'Supabase', '#3FCF8E'], ['si_sentry', 'Sentry', '#362D59'], ['ic_s_dots', 'עוד', '#3C3C43']]
+      .map(([n, l, c, p], i) => `<div class="w-slot"><div class="w-sq${p ? ' p' : ''}" id="sq${i}">${svgIcon(n, c)}<span class="ring" id="ring${i}"></span></div><div class="w-lbl">${l}</div></div>`).join('')}</div>
+  </div>
+  <div class="abs finger" id="finger"></div>
+  <div class="abs toast" id="toast"></div>`;
+const thumbs = $('thumbs');
+for (let i = 0; i < 6; i++) thumbs.insertAdjacentHTML('beforeend', `<rect id="th${i}" x="${96 + i * 156}" y="1320" width="128" height="20" rx="10" fill="#1C1C1F"/>`);
+
+// widget square centres, measured once (for the finger)
+let SQ = [];
+function measure() { SQ = [...Array(8)].map((_, i) => { const r = $('sq' + i).getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }); }
+
+const show = (id, on) => { $(id).style.display = on ? '' : 'none'; };
+
+// ---- grain ----
+const g = $('grain'), gx = g.getContext('2d'), gd = gx.createImageData(540, 960);
+function grain(f) { let s = (f * 2654435761) >>> 0; for (let i = 0; i < gd.data.length; i += 4) { s = (s * 1664525 + 1013904223) >>> 0; const c = s >>> 24; gd.data[i] = gd.data[i + 1] = gd.data[i + 2] = c; gd.data[i + 3] = 255; } gx.putImageData(gd, 0, 0); }
+
+window.render = (t, f = Math.round(t * 30)) => {
+  headline(t);
+
+  // 1 · the counter: 1 → 37, fast and accelerating, then a hard stop
+  show('s1', t < 3.15);
+  if (t < 3.15) {
+    const k = seg(t, 0.35, 1.9), n = Math.max(1, Math.round(1 + 36 * Math.pow(k, 1.6)));
+    $('count').textContent = n;
+    const thud = Math.sin(Math.PI * seg(t, 2.25, 0.18));
+    const out = p3in(seg(t, 2.8, 0.35));
+    $('s1').style.transform = `scale(${1 + 0.025 * thud - 0.06 * out})`;
+    $('s1').style.opacity = 1 - out;
+    for (let i = 0; i < 6; i++) $('th' + i).setAttribute('opacity', seg(t, 0.4 + i * 0.28, 0.2));
+  }
+
+  // 2 · the account chooser; the cursor drifts between Dana rows and never clicks
+  show('s2', t > 2.95 && t < 5.9);
+  if (t > 2.95 && t < 5.9) {
+    const inK = p3(seg(t, 3.0, 0.5)), out = p3in(seg(t, 5.4, 0.35));
+    $('card2').setAttribute('transform', `translate(96 ${810 + (1 - inK) * 120 - out * 60})`);
+    $('s2').style.opacity = inK * (1 - out);
+    // the cursor visits rows 0 → 2 → 1 → 2 and hovers
+    const stops = [[560, 250], [470, 460], [520, 355], [450, 470]];
+    const u = seg(t, 3.4, 1.8) * (stops.length - 1), i = Math.min(stops.length - 2, Math.floor(u)), w = p3(u - i);
+    const cx = lerp(stops[i][0], stops[i + 1][0], w), cy = lerp(stops[i][1], stops[i + 1][1], w);
+    $('cursor').setAttribute('transform', `translate(${cx} ${cy})`);
+    for (let r = 0; r < 4; r++) {
+      const top = 168 + r * 104, inside = cy + 20 > top && cy + 20 < top + 104;
+      $('hl' + r).setAttribute('opacity', inside ? 0.05 : 0);
+    }
+    $('qm').setAttribute('x', cx + 52); $('qm').setAttribute('y', cy + 6);
+    $('qm').setAttribute('opacity', seg(t, 4.5, 0.25));
+  }
+
+  // 3 · wrong account: the lock shakes once
+  show('s3', t > 5.55 && t < 8.6);
+  if (t > 5.55 && t < 8.6) {
+    const inK = p3(seg(t, 5.6, 0.5)), out = seg(t, 8.2, 0.4);
+    $('card3').setAttribute('transform', `translate(96 ${820 + (1 - inK) * 120})`);
+    $('s3').style.opacity = inK * (1 - out);
+    const sh = seg(t, 6.45, 0.45), dx = Math.sin(sh * Math.PI * 6) * 14 * (1 - sh);
+    $('lock').setAttribute('transform', `translate(${dx} 0)`);
+  }
+
+  // 4 · indigo rises from the bottom
+  $('indigo').style.height = (1920 * expo(seg(t, 8.15, 0.8))) + 'px';
+
+  // 5 · the widget, the taps, the toasts
+  const wIn = p3(seg(t, 9.15, 0.55)), wOut = p3in(seg(t, 13.35, 0.4));
+  show('widget', t > 9.1);
+  $('widget').style.opacity = wIn * (1 - wOut);
+  $('widget').style.transform = `translateY(${(1 - wIn) * 80}px) scale(${0.94 + 0.06 * wIn - 0.04 * wOut})`;
+  if (t > 9.1 && !SQ.length) measure();
+  // taps: Firebase (slot 1) at 10.6, Vercel (slot 3) at 12.0
+  const taps = [[1, 10.6], [3, 12.0]];
+  let fx = 0, fy = 0, fo = 0;
+  taps.forEach(([slot, at]) => {
+    const press = Math.sin(Math.PI * seg(t, at, 0.22));
+    $('sq' + slot).style.transform = `scale(${1 - 0.08 * press})`;
+    const ring = seg(t, at + 0.05, 0.6);
+    $('ring' + slot).style.opacity = ring > 0 && ring < 1 ? (1 - ring) : 0;
+    $('ring' + slot).style.transform = `scale(${1 + 0.35 * p3(ring)})`;
+    const vis = seg(t, at - 0.35, 0.2) * (1 - seg(t, at + 0.25, 0.25));
+    if (vis > 0 && SQ.length) { fx = SQ[slot][0]; fy = SQ[slot][1] + 14; fo = vis; }
+  });
+  $('finger').style.left = fx + 'px'; $('finger').style.top = fy + 'px'; $('finger').style.opacity = fo;
+  const toast = $('toast');
+  const which = t < 11.85 ? 0 : 1;
+  toast.innerHTML = which === 0
+    ? '<i></i>Firebase נפתח בחשבון <span class="mono">dana@nova.dev</span>'
+    : '<i></i>Vercel נפתח ב־<span class="mono">Chrome Beta</span>';
+  const tk = which === 0 ? seg(t, 10.85, 0.4) * (1 - seg(t, 11.75, 0.15)) : seg(t, 12.25, 0.4);
+  toast.style.top = (1410 + (1 - p3(Math.min(1, tk * 2))) * 30) + 'px';
+  toast.style.opacity = Math.min(1, tk * 2) * (1 - wOut);
+  toast.style.transform = 'translateX(-50%)';
+
+  grain(f);
+};
+window.DURATION = 14.0;
+window.ready = document.fonts.ready.then(() => window.render(0));
+</script>

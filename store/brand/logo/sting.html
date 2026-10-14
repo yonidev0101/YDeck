@@ -1,0 +1,107 @@
+<!doctype html>
+<!--
+  The YDeck logo sting, "thinking" (3.6 s), ending on the mark. window.render(t) draws the frame at t seconds; render.cjs
+  films it. Query: ?w=1080&h=1920&lang=en|he. The same geometry as the mark (make.cjs) and the app's opening (LogoIntro.kt).
+  An agent at work, then everything settles into place:
+    0.00  an indigo arc spins, fast, like something thinking
+    0.95  it slows and opens; 1.25 it turns white
+    1.85  it stops as the mark, and the amber dot lands in the opening
+    2.35  "YDeck" rises; 2.70 the line (sized and spaced as the apps draw them)
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face { font-family: Plex; src: url("../../../app/src/main/res/font/plex_sans_hebrew_medium.ttf"); font-weight: 500; }
+  @font-face { font-family: Plex; src: url("../../../app/src/main/res/font/plex_sans_hebrew_regular.ttf"); font-weight: 400; }
+  html, body { margin: 0; background: #0B0B0D; overflow: hidden; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const q = new URLSearchParams(location.search);
+const W = +(q.get('w') || 1080), H = +(q.get('h') || 1920), LANG = q.get('lang') || 'en';
+const cv = document.getElementById('c'); cv.width = W; cv.height = H;
+const g = cv.getContext('2d');
+
+const NIGHT = '#0B0B0D', PAPER = [244, 244, 245], INDIGO = [61, 53, 224], AMBER = '#F5A524', MUTED = '#8B8B93';
+const LINE = LANG === 'he' ? 'שום דבר לא נשאר פתוח.' : 'Nothing left open.';
+
+const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const seg = (t, a, d) => clamp((t - a) / d);
+const expoOut = p => p >= 1 ? 1 : 1 - Math.pow(2, -10 * p);
+const p3out = p => 1 - Math.pow(1 - p, 3);
+const inOut = p => p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+// a landing with a touch of overshoot, for the dot
+const backOut = p => { const s = 1.7; p -= 1; return p * p * ((s + 1) * p + s) + 1; };
+const mix = (a, b, k) => a.map((v, i) => Math.round(v + (b[i] - v) * k));
+const rgb = c => `rgb(${c[0]},${c[1]},${c[2]})`;
+const rad = d => d * Math.PI / 180;
+
+// The mark: radius 36 of 100, stroke 11, the opening from -70° to -10°, the dot in its middle at -40°.
+function geometry() {
+  const s = Math.min(W, H);
+  const r = s * 0.105;
+  const portrait = H > W * 1.2;
+  return { r, stroke: r * 11 / 36, cx: W / 2, cy: H * (portrait ? 0.42 : 0.40) };
+}
+
+window.render = (t) => {
+  const { r, stroke, cx, cy } = geometry();
+  g.fillStyle = NIGHT; g.fillRect(0, 0, W, H);
+
+  // 1 · thinking: an indigo arc spins fast, slows, opens to the mark's sweep, and turns white as it settles
+  const spin = p3out(seg(t, 0.15, 1.75));
+  const from = -10 - 1080 * (1 - spin);
+  const sweep = 70 + 230 * inOut(seg(t, 0.95, 0.85));
+  g.save();
+  g.globalAlpha = seg(t, 0, 0.18);
+  g.lineWidth = stroke; g.lineCap = 'round';
+  g.strokeStyle = rgb(mix(INDIGO, PAPER, inOut(seg(t, 1.25, 0.6))));
+  g.beginPath(); g.arc(cx, cy, r, rad(from), rad(from + sweep)); g.stroke();
+  g.restore();
+
+  // 2 · it stops, and the amber dot lands in the opening
+  const land = seg(t, 1.85, 0.34);
+  if (land > 0) {
+    const a = rad(-40);
+    g.fillStyle = AMBER;
+    g.beginPath(); g.arc(cx + r * Math.cos(a), cy + r * Math.sin(a), Math.max(0, r * 7.5 / 36 * backOut(land)), 0, Math.PI * 2); g.fill();
+  }
+
+  // 4 · the name rises under the ring, through a mask; then the line
+  const name = p3out(seg(t, 2.35, 0.55));
+  // The words exactly as the apps draw them (app and desktop LogoIntro.kt): the name 0.95 r, a touch tighter (−0.02 em),
+  // its box starting 0.9 of its size below the ring; the line 0.42 of the name, 0.35 of the name under the name's box.
+  const ns = r * 0.95, top = cy + r + stroke + ns * 0.9;
+  g.font = `500 ${ns}px Plex`; g.letterSpacing = `${-0.02 * ns}px`;
+  const m = g.measureText('YDeck'), asc = m.fontBoundingBoxAscent, nameH = asc + m.fontBoundingBoxDescent;
+  if (name > 0) {
+    g.save();
+    g.beginPath(); g.rect(0, top, W, nameH); g.clip();
+    g.fillStyle = rgb(PAPER);
+    g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.direction = 'ltr';
+    g.fillText('YDeck', cx, top + asc + (1 - name) * nameH);
+    g.restore();
+  }
+  g.letterSpacing = '0px';
+  const line = p3out(seg(t, 2.7, 0.5));
+  if (line > 0) {
+    g.save();
+    g.globalAlpha = line;
+    g.fillStyle = MUTED;
+    g.font = `400 ${ns * 0.42}px Plex`;
+    const la = g.measureText(LINE).fontBoundingBoxAscent;
+    g.textAlign = 'center'; g.textBaseline = 'alphabetic';
+    g.direction = LANG === 'he' ? 'rtl' : 'ltr';
+    g.fillText(LINE, cx, top + nameH + ns * 0.35 + la + (1 - line) * 6);
+    g.restore();
+  }
+};
+
+window.ready = document.fonts.load('500 40px Plex').then(() => document.fonts.load('400 40px Plex')).then(() => { window.render(0); return true; });
+</script>
+</body>
+</html>

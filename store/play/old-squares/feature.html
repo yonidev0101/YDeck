@@ -1,0 +1,143 @@
+<!doctype html>
+<!--
+  Google Play feature graphic, 1024x500 (?lang=he|en). Brand book: indigo ground with grain, the live mark,
+  a two-line headline whose second line is mint, and the real widget (same layout, sizes and marks as DeckWidget.kt)
+  showing a demo project, with the moment that sells it under it: a link opening in the right account.
+  Also renders the 512 store icon with ?icon=1.
+-->
+<meta charset="utf-8">
+<script src="icons.js"></script>
+<style>
+  @font-face { font-family: Plex; src: url("../../../app/src/main/res/font/plex_sans_hebrew_regular.ttf"); font-weight: 400; }
+  @font-face { font-family: Plex; src: url("../../../app/src/main/res/font/plex_sans_hebrew_medium.ttf"); font-weight: 500; }
+  @font-face { font-family: Plex; src: url("../../../app/src/main/res/font/plex_sans_hebrew_semibold.ttf"); font-weight: 600; }
+  @font-face { font-family: Noto; src: url("../../../app/src/main/res/font/noto_sans_hebrew.ttf"); font-weight: 100 900; }
+  @font-face { font-family: Mono; src: url("../../../app/src/main/res/font/plex_mono_medium.ttf"); font-weight: 500; }
+  :root {
+    --ground: #3D35E0; --mint: #5EF2C2; --on: #F4F4F5; --on-2: rgba(244,244,245,.72);
+    /* the widget's own palette (DeckWidget.kt, day) */
+    --w-surface: #FFFFFF; --w-chip: #F2F2F7; --w-fg: #1D1D1F; --w-muted: #6E6E73; --w-label: #3C3C43; --w-good: #30A14E;
+    --nova: #0B0B0C;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1024px; height: 500px; overflow: hidden; background: var(--ground); color: var(--on); -webkit-font-smoothing: antialiased; }
+  #grain { position: absolute; inset: 0; width: 1024px; height: 500px; opacity: .05; mix-blend-mode: overlay; }
+
+  .stage { position: absolute; inset: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 72px; gap: 56px; }
+  .copy { display: flex; flex-direction: column; gap: 0; max-width: 430px; }
+  .lockup { display: flex; align-items: center; gap: 14px; margin-bottom: 26px; }
+  .lockup svg { width: 52px; height: auto; }
+  .lockup .name { font: 600 38px/1 Plex, sans-serif; letter-spacing: -0.03em; direction: ltr; }
+  .line { font: 200 56px/1.1 Noto, sans-serif; letter-spacing: -0.02em; }
+  .line b { display: block; font-weight: 300; color: var(--mint); }
+  .sub { font: 400 19px/1.45 Plex, sans-serif; color: var(--on-2); margin-top: 20px; max-width: 430px; }
+  html[lang=en] .line { font-family: Plex, sans-serif; font-weight: 400; letter-spacing: -0.035em; font-size: 52px; }
+  html[lang=en] .line b { font-weight: 500; }
+
+  /* ---- the widget, at 1.22x of its dp size (4x2 "large") ---- */
+  .side { display: flex; flex-direction: column; align-items: center; gap: 18px; }
+  .widget { --k: 1.22; width: calc(316px * var(--k)); background: var(--w-surface); border-radius: calc(28px * var(--k));
+    padding: calc(16px * var(--k)) calc(14px * var(--k)) calc(12px * var(--k)); color: var(--w-fg); font-family: Plex, sans-serif;
+    box-shadow: 0 24px 60px rgba(10, 8, 60, .35); }
+  .hdr { display: flex; align-items: center; height: calc(38px * var(--k)); gap: calc(10px * var(--k)); }
+  .logo { width: calc(34px * var(--k)); height: calc(34px * var(--k)); border-radius: calc(10px * var(--k)); background: var(--nova); color: #fff;
+    display: grid; place-items: center; font: 600 calc(17px * var(--k))/1 Plex, sans-serif; }
+  .id { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .pname { font-size: calc(16px * var(--k)); font-weight: 500; line-height: 1.2; }
+  .acct { display: flex; align-items: center; gap: calc(5px * var(--k)); font-size: calc(12px * var(--k)); color: var(--w-muted); }
+  .dot { width: calc(6px * var(--k)); height: calc(6px * var(--k)); border-radius: 50%; background: var(--w-good); }
+  .count { font-size: calc(12px * var(--k)); color: var(--w-muted); font-variant-numeric: tabular-nums; }
+  .nav { display: flex; }
+  .nav svg { width: calc(16px * var(--k)); height: calc(16px * var(--k)); margin: 0 calc(8px * var(--k)); color: var(--w-muted); }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); row-gap: calc(10px * var(--k)); margin-top: calc(12px * var(--k)); }
+  .slot { display: flex; flex-direction: column; align-items: center; gap: calc(6px * var(--k)); }
+  .sq { width: calc(54px * var(--k)); height: calc(54px * var(--k)); border-radius: calc(54px * .29 * var(--k)); background: var(--w-chip); display: grid; place-items: center; }
+  .sq svg { width: calc(26px * var(--k)); height: calc(26px * var(--k)); }
+  .sq.primary { background: var(--nova); }
+  .lbl { font-size: calc(11px * var(--k)); font-weight: 500; color: var(--w-label); line-height: 1; }
+
+  /* the routing moment: a link that opened in the project's account */
+  .toast { display: flex; align-items: center; gap: 10px; padding: 9px 16px 9px 14px; border-radius: 999px;
+    background: rgba(11, 11, 12, .28); font: 500 15px/1 Plex, sans-serif; color: var(--on); }
+  .toast i { width: 8px; height: 8px; border-radius: 50%; background: var(--mint); }
+  .toast .mono { font-family: Mono, monospace; font-size: 14px; color: var(--mint); direction: ltr; }
+
+  /* store icon mode */
+  .icon { position: absolute; inset: 0; display: none; }
+</style>
+
+<div class="stage" id="stage">
+  <div class="copy">
+    <div class="lockup"><span id="mark"></span><span class="name">YDeck</span></div>
+    <div class="line" id="line"></div>
+    <div class="sub" id="sub"></div>
+  </div>
+  <div class="side">
+    <div class="widget" id="widget"></div>
+    <div class="toast" id="toast"></div>
+  </div>
+</div>
+<canvas id="grain" width="512" height="250"></canvas>
+
+<script>
+const q = new URLSearchParams(location.search);
+const en = q.get('lang') === 'en';
+document.documentElement.lang = en ? 'en' : 'he';
+document.documentElement.dir = en ? 'ltr' : 'rtl';
+
+// ---- the mark (exact geometry of the app icon) ----
+const Y = ['M296.4,364.4L113.1,181.3Q95.4,163.6 113.1,145.9L144.9,114.1Q162.6,96.4 180.3,114.1L363.6,297.4Z',
+  'M262,513L262,330C262,310 276,295.8 290,281.8L457.7,114.1Q475.4,96.4 493.1,114.1L524.9,145.9Q542.6,163.6 524.9,181.3L376,330.2L376,513Q376,545 344,545L294,545Q262,545 262,513Z',
+  'M262,455L376,341L376,513Q376,545 344,545L294,545Q262,545 262,513Z'];
+const TILES = [[68, 312], [150, 312], [68, 394], [150, 394], [422, 312], [504, 312], [422, 394], [504, 394]];
+const markInner = (fg, hi) => TILES.map(([x, y], i) => `<rect x="${x}" y="${y}" width="66" height="66" rx="16" fill="${i === 5 && hi ? hi : fg}"/>`).join('')
+  + Y.map(d => `<path d="${d}" fill="${fg}"/>`).join('');
+const markSvg = (fg, hi) => `<svg viewBox="48 76 542 489">${markInner(fg, hi)}</svg>`;
+document.getElementById('mark').innerHTML = markSvg('#F4F4F5', '#5EF2C2');
+
+// ---- copy ----
+document.getElementById('line').innerHTML = en ? 'Your whole project.<b>One place.</b>' : 'כל הפרויקט.<b>במקום אחד.</b>';
+document.getElementById('sub').innerHTML = en
+  ? 'A home-screen widget for every project.<br>Each link opens in the right account.'
+  : 'ווידג׳ט אחד לכל פרויקט, על מסך הבית.<br>כל קישור נפתח בחשבון הנכון.';
+document.getElementById('toast').innerHTML = en
+  ? '<i></i>Firebase opened as <span class="mono">dana@nova.dev</span>'
+  : '<i></i>Firebase נפתח בחשבון <span class="mono">dana@nova.dev</span>';
+
+// ---- the widget ----
+const ic = (name, color) => {
+  const v = ICONS[name];
+  return `<svg viewBox="0 0 ${v.vb[0]} ${v.vb[1]}">${v.paths.map(p => p.stroke
+    ? `<path d="${p.d}" fill="none" stroke="currentColor" stroke-width="${p.sw}" stroke-linecap="round" stroke-linejoin="round"/>`
+    : `<path d="${p.d}" fill="${color}"/>`).join('')}</svg>`;
+};
+// demo project "Nova": the first action is the primary square in the project's colour (white mark)
+const slots = [
+  ['si_googleplay', 'Play', '#FFFFFF', true], ['si_firebase', 'Firebase', '#DD2C00'], ['si_github', 'GitHub', '#181717'], ['si_vercel', 'Vercel', '#000000'],
+  ['si_googleanalytics', 'Analytics', '#E37400'], ['si_supabase', 'Supabase', '#3FCF8E'], ['si_sentry', 'Sentry', '#362D59'], ['ic_s_dots', en ? 'More' : 'עוד', '#3C3C43'],
+];
+document.getElementById('widget').innerHTML = `
+  <div class="hdr">
+    <div class="logo">N</div>
+    <div class="id"><div class="pname">Nova</div><div class="acct"><span class="dot"></span><span>dana</span></div></div>
+    <span class="count">1/4</span>
+    <span class="nav">${en ? ic('ic_chev_left') + ic('ic_chev_right') : ic('ic_chev_right') + ic('ic_chev_left')}</span>
+  </div>
+  <div class="grid">${slots.map(([n, l, c, p]) => `<div class="slot"><div class="sq${p ? ' primary' : ''}">${ic(n, c)}</div><div class="lbl">${l}</div></div>`).join('')}</div>`;
+
+// ---- grain ----
+const g = document.getElementById('grain'), gx = g.getContext('2d'), im = gx.createImageData(512, 250);
+let s = 12345; for (let i = 0; i < im.data.length; i += 4) { s = (s * 1664525 + 1013904223) >>> 0; const v = s >>> 24; im.data[i] = im.data[i + 1] = im.data[i + 2] = v; im.data[i + 3] = 255; }
+gx.putImageData(im, 0, 0);
+
+// ---- store icon (512): the live mark on indigo, sized like the YVoice store icon (~70% wide) ----
+if (q.get('icon')) {
+  document.documentElement.style.cssText = 'width:512px;height:512px';
+  document.body.style.cssText = 'width:512px;height:512px';
+  document.getElementById('stage').style.display = 'none';
+  document.getElementById('grain').style.display = 'none';
+  document.body.insertAdjacentHTML('beforeend',
+    `<svg style="position:absolute;inset:0" width="512" height="512" viewBox="9 9 90 90"><rect x="0" y="0" width="108" height="108" fill="#3D35E0"/><g transform="translate(14.13 13.94) scale(0.125)">${markInner('#FFFFFF', '#5EF2C2')}</g></svg>`);
+}
+window.ready = document.fonts.ready;
+</script>
