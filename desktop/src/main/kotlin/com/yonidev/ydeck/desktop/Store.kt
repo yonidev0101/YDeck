@@ -125,6 +125,8 @@ object Settings {
         val folderStatus: Boolean = true,
         /** A tagged folder's icon shows a small amber dot while it has changes not yet committed, see [FolderBadges]. */
         val folderGit: Boolean = true,
+        /** Links without a brand mark show their site's icon, fetched by the domain name alone (see [Favicons]). */
+        val siteIcons: Boolean = true,
         /** "system", "en" or "he" (see [I18n]). */
         val language: String = "system",
         /** "system", "light" or "dark". */
@@ -156,6 +158,7 @@ object Settings {
                 put("handoffs", s.handoffs)
                 put("folderStatus", s.folderStatus)
                 put("folderGit", s.folderGit)
+                put("siteIcons", s.siteIcons)
                 put("language", s.language)
                 put("appearance", s.appearance)
                 put("appearanceV2", true)
@@ -193,6 +196,7 @@ object Settings {
             handoffs = o.optBoolean("handoffs", true),
             folderStatus = o.optBoolean("folderStatus", true),
             folderGit = o.optBoolean("folderGit", true),
+            siteIcons = o.optBoolean("siteIcons", true),
             language = o.optString("language", "system"),
             // 1.11: dark became the default; a "system" saved before then was the old default, not a choice.
             appearance = if (!o.has("appearanceV2") && o.optString("appearance", "system") == "system") "dark" else o.optString("appearance", "dark"),

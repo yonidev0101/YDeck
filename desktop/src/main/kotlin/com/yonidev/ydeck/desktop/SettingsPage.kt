@@ -96,6 +96,9 @@ private fun General() {
             val current = Shells.available.firstOrNull { it.id == s.shell } ?: Shell.CMD
             Segmented(Shells.available.map { it to it.label }, current) { sh -> Settings.update { it.copy(shell = sh.id) } }
         }
+        Setting(tr("Website icons", "סמלים של אתרים"), hint = tr("For a link without a built-in mark, only the site's name is sent to Google's and DuckDuckGo's icon services.", "לקישור בלי סמל מובנה, רק שם האתר נשלח לשירות הסמלים של Google ושל DuckDuckGo.")) {
+            Toggle(s.siteIcons) { on -> Settings.update { it.copy(siteIcons = on) } }
+        }
         Setting(tr("Check for new commits on the server", "בדיקת קומיטים חדשים בשרת"), hint = tr("Every 10 minutes, quietly (git fetch). Nothing in your folders changes.", "כל 10 דקות, בשקט (git fetch). שום דבר בתיקיות לא משתנה.")) { Toggle(s.gitFetch) { on -> Settings.update { it.copy(gitFetch = on) } } }
     }
     }

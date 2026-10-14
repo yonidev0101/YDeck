@@ -52,8 +52,24 @@ the machine they were written on, so adjust those before running them.
 
 ## Downloads
 
-Installers and APKs are published on the [Releases](../../releases) page. The Windows builds are not code-signed yet, so
-SmartScreen will warn on first run.
+The Windows installer is published on the [Releases](../../releases) page. Each release is built by GitHub Actions on a
+clean Windows machine from the tagged commit ([.github/workflows/windows.yml](.github/workflows/windows.yml)); to make
+one, bump `desktopVersion` in `desktop/build.gradle.kts`, commit, and push a matching tag (`git tag v1.15.4 && git push --tags`).
+The builds are not code-signed yet, so SmartScreen warns on first run (More info → Run anyway).
+
+### Uninstalling
+
+Windows Settings → Apps → YDeck → Uninstall. YDeck changes a few things outside its own folder, each one only when you
+turn it on, and each one off again from its Settings: the project logo on folders (a `desktop.ini` in the folder),
+"Open in YDeck" on File Explorer's right-click menu, and starting with Windows. To leave nothing behind, turn those off
+before uninstalling. Your projects and settings stay in `%APPDATA%\YDeck` and `%LOCALAPPDATA%\YDeck` until you delete them.
+
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org)
+(being set up). Only the Windows installer built from this repository by GitHub Actions is signed, and every signing
+request is approved by hand. Committer, reviewer and approver: [Yoni (yonidev0101)](https://github.com/yonidev0101).
+The full policy: <https://ydeck-app.pages.dev/code-signing>. Privacy: <https://ydeck-app.pages.dev/privacy>.
 
 ## License
 

@@ -334,7 +334,7 @@ ${RING(72)}
 </main>
 <footer><div class="wrap">
 <a class="brand" href="${c.home}">${RING(18)}YDeck</a>
-<a href="${privacy}">${c.foot[0]}</a><a href="${android}">${c.foot[1]}</a><a href="${c.other}">${c.otherLabel}</a><a href="mailto:${email}">${email}</a>
+<a href="${privacy}">${c.foot[0]}</a><a href="${android}">${c.foot[1]}</a><a href="/download">${c.foot[0] === 'פרטיות' ? 'הורדה' : 'Download'}</a><a href="/code-signing">Code signing policy</a><a href="${c.other}">${c.otherLabel}</a><a href="mailto:${email}">${email}</a>
 </div></footer>
 ${SCRIPT}
 </body></html>`;

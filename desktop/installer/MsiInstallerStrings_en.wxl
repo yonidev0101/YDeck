@@ -17,7 +17,7 @@
   <String Id="YdOpenNow">Open YDeck now</String>
   <String Id="WelcomeDlg_Title" Overridable="yes">YDeck</String>
   <String Id="WelcomeDlgTitle" Overridable="yes">{\WixUI_Font_Bigger}Nothing left open.</String>
-  <String Id="WelcomeDlgDescription" Overridable="yes">Your agents work. YDeck keeps track of what they did, what changed, and what still needs you, across every project.&#13;&#10;&#13;&#10;Click Install. It takes a few seconds.</String>
+  <String Id="WelcomeDlgDescription" Overridable="yes">Your agents work. YDeck keeps track of what they did, what changed, and what still needs you, across every project.&#13;&#10;&#13;&#10;Privacy: no accounts, no ads, no analytics. What YDeck sends and what it never does: ydeck-app.pages.dev/privacy&#13;&#10;&#13;&#10;Click Install. It takes a few seconds.</String>
   <String Id="WixUINext" Overridable="yes">&amp;Install</String>
   <String Id="ProgressDlg_Title" Overridable="yes">YDeck</String>
   <String Id="ProgressDlgTitleInstalling" Overridable="yes">{\WixUI_Font_Title}Installing YDeck</String>

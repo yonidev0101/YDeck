@@ -229,7 +229,8 @@ object Favicons {
         mem[host]?.let { return it }
         val f = File(dir, "$host.png")
         if (f.exists()) runCatching { SkiaImage.makeFromEncoded(f.readBytes()).toComposeImageBitmap() }.getOrNull()?.let { mem[host] = it; return it }
-        fetch(host)
+        // Off in Settings: nothing new is asked of the icon services (the ones already fetched still show).
+        if (Settings.state.value.siteIcons) fetch(host)
         return null
     }
 
