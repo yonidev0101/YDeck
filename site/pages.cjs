@@ -141,6 +141,7 @@ function download(apk) {
 <p class="lead">YDeck ל־Windows בבטא סגורה. YDeck לאנדרואיד זמין כאן להורדה.</p>
 <div class="part"><h2>YDeck ל־Windows</h2><p class="sub">קוד פתוח (MIT). כל גרסה נבנית ב־GitHub Actions מהקוד שבריפו, ועולה לדף ה־Releases.</p>
 <div class="dl"><a class="pill big" href="https://github.com/yonidev0101/YDeck/releases/latest">הורדת הגרסה האחרונה</a><span class="size">MSI · Windows 10 ומעלה</span></div>
+<p class="sub" dir="ltr" lang="en">Free code signing provided by <a href="https://about.signpath.io">SignPath.io</a>, certificate by <a href="https://signpath.org">SignPath Foundation</a>. See the <a href="/code-signing">Code signing policy</a>.</p>
 ${sec('למה Windows מזהיר?', '<p>הקובץ עוד לא חתום דיגיטלית, אז SmartScreen מציג אזהרה בפעם הראשונה: לוחצים "מידע נוסף" ואז "הפעל בכל זאת". ראו <a href="/code-signing">Code signing policy</a>.</p>')}
 ${sec('הסרה', '<p>הגדרות Windows ← אפליקציות ← YDeck ← הסרה. כדי שלא יישאר כלום, לפני ההסרה מכבים בהגדרות של YDeck את הלוגו על התיקיות, את ״פתיחה ב־YDeck״ ואת ההפעלה עם Windows.</p>')}</div>
 <div class="part"><h2>YDeck לאנדרואיד</h2><p class="sub">גרסה ${apk.version} · לאנדרואיד 12 ומעלה · חינם, בלי חשבון.</p>
