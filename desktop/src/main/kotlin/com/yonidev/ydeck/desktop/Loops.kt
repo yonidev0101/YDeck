@@ -94,23 +94,6 @@ object Loops {
     }
 }
 
-/** The last row of a project's loops: Claude Code opens in its folder with all of them, to settle them together. */
-@Composable
-fun GroupScope.DecideRow(p: Project, local: Local, loops: List<Loop>) {
-    val c = LocalDeck.current
-    val claude = Tools.claude ?: return
-    val dir = local.dir ?: return
-    Item {
-        GlyphIcon(Glyph.CLAUDE, 16.dp, c.muted)
-        Column(Modifier.weight(1f)) {
-            Text(tr("Go over it with Claude Code", "לעבור על זה עם Claude Code"), color = c.fg, fontSize = 14.sp, fontFamily = PlexSans, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(tr("It gets everything open here, and you decide together what to commit, push or leave.", "הוא מקבל את כל מה שפתוח כאן, ומחליטים יחד מה לשמור, לדחוף או להשאיר."),
-                color = c.muted, fontSize = 12.sp, lineHeight = 17.sp, fontFamily = PlexSans, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        Pill(tr("Open", "פתיחה"), Tone.TINT, small = true) { goOver(p, local, loops) }
-    }
-}
-
 /** Opens Claude Code in the project's folder with everything open there, to settle it together. */
 fun goOver(p: Project, local: Local, loops: List<Loop>) {
     val claude = Tools.claude ?: return
@@ -220,17 +203,23 @@ fun LoopsPage(deck: Deck) {
                 val loops = loopsOf(local)
                 if (loops.isEmpty()) return@forEach
                 any = true
-                val next = local.note.ifBlank { Pulses.state.value[local.folder]?.handoff?.next.orEmpty() }
+                val next = local.note.ifBlank { Pulses.state.value[local.folder]?.suggestion.orEmpty() }
                 Column {
-                    Row(Modifier.clip(RoundedCornerShape(10.dp)).clickable { Nav.set(Screen.Project(p.id)) }.padding(start = 4.dp, end = 8.dp, top = 2.dp, bottom = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically) {
-                        Logo(p, 24.dp)
-                        Spacer(Modifier.width(10.dp))
-                        Text(p.name, color = c.fg, fontSize = 15.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans)
+                    // The project (it opens), its next step under its name, and settling it all with Claude.
+                    Row(Modifier.padding(bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).clickable { Nav.set(Screen.Project(p.id)) }.padding(start = 4.dp, end = 8.dp, top = 2.dp, bottom = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Logo(p, 28.dp)
+                            Spacer(Modifier.width(12.dp))
+                            Column {
+                                Text(p.name, color = c.fg, fontSize = 15.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans)
+                                if (next.isNotBlank()) Text(tr("Next: ", "הבא: ") + next, color = c.faint, fontSize = 12.sp, fontFamily = PlexSans, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                    style = TextStyle(textDirection = TextDirection.Content))
+                            }
+                        }
+                        if (Tools.claude != null && local.dir != null) TextAction(tr("Go over it with Claude", "לעבור על זה עם Claude"), accent = true) { goOver(p, local, loops) }
                     }
-                    Group { loops.forEach { LoopRow(p, local, it) }; DecideRow(p, local, loops) }
-                    if (next.isNotBlank()) Text(tr("Next: ", "הבא: ") + next, color = c.faint, fontSize = 12.sp, fontFamily = PlexSans, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(start = 6.dp, top = 8.dp), style = TextStyle(textDirection = TextDirection.Content))
+                    Group { loops.forEach { LoopRow(p, local, it) } }
                 }
             }
             if (!any) Column(Modifier.fillMaxWidth().padding(vertical = 60.dp), horizontalAlignment = Alignment.CenterHorizontally) {

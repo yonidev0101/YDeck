@@ -180,12 +180,15 @@ class GroupScope(private val column: ColumnScope) : ColumnScope by column {
     }
 }
 
-/** A settings row: a title (and a quiet value), then its control. */
+/** A settings row: a title (and under it, quietly, what it does), a quiet value, then its control. */
 @Composable
-fun GroupScope.Setting(title: String, value: String? = null, onClick: (() -> Unit)? = null, control: @Composable RowScope.() -> Unit = {}) {
+fun GroupScope.Setting(title: String, value: String? = null, onClick: (() -> Unit)? = null, hint: String? = null, control: @Composable RowScope.() -> Unit = {}) {
     val c = LocalDeck.current
     Item(onClick) {
-        Text(title, color = c.fg, fontSize = 14.sp, fontFamily = PlexSans, modifier = Modifier.weight(1f))
+        Column(Modifier.weight(1f)) {
+            Text(title, color = c.fg, fontSize = 14.sp, fontFamily = PlexSans)
+            if (hint != null) Text(hint, color = c.faint, fontSize = 12.sp, lineHeight = 17.sp, fontFamily = PlexSans, modifier = Modifier.padding(top = 2.dp))
+        }
         if (value != null) Text(value, color = c.muted, fontSize = 13.sp, fontFamily = PlexSans, maxLines = 1, overflow = TextOverflow.Ellipsis)
         control()
         if (onClick != null) GlyphIcon(Glyph.NEXT, 16.dp, c.faint)

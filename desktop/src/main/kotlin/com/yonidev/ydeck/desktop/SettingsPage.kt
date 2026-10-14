@@ -56,8 +56,7 @@ fun SettingsPage(section: SettingsSection, deck: Deck, dark: Boolean, actions: A
                 SettingsSection.EXPLORER -> Explorer()
                 SettingsSection.CLAUDE -> ClaudeSettings()
                 SettingsSection.PHONE -> PhoneSettings()
-                SettingsSection.BACKUP -> Backup(actions)
-                SettingsSection.STORAGE -> StorageSection(deck)
+                SettingsSection.DATA -> { Backup(actions); StorageSection(deck) }
                 SettingsSection.ABOUT -> About()
             }
         }
@@ -84,23 +83,21 @@ private fun General() {
         Setting(tr("Appearance", "מראה")) {
             Segmented(listOf("system" to "Windows", "light" to tr("Light", "בהיר"), "dark" to tr("Dark", "כהה")), s.appearance) { a -> Settings.update { it.copy(appearance = a) } }
         }
-        if (Autostart.available) Setting(tr("Start with Windows", "הפעלה עם Windows")) { Toggle(autostart) { autostart = it; Autostart.set(it) } }
+        if (Autostart.available) Setting(tr("Start with Windows", "הפעלה עם Windows"), hint = tr("YDeck opens quietly in the background when the PC starts.", "YDeck נפתח ברקע, בשקט, כשהמחשב עולה.")) { Toggle(autostart) { autostart = it; Autostart.set(it) } }
     }
     Column { Group(tr("Work", "עבודה")) {
-        Setting(tr("Search, from anywhere", "חיפוש, מכל מקום")) {
+        Setting(tr("Search, from anywhere", "חיפוש, מכל מקום"), hint = tr("Opens a project or a link from any window.", "פותח פרויקט או קישור מכל חלון.")) {
             // Keys read left to right in every language.
             androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Ltr) {
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { Hotkey.LABEL.split("+").forEach { Key(it) } }
             }
         }
-        Setting(tr("Terminal", "טרמינל")) {
+        Setting(tr("Terminal", "טרמינל"), hint = tr("Where the projects' commands run.", "איפה רצות הפקודות של הפרויקטים.")) {
             val current = Shells.available.firstOrNull { it.id == s.shell } ?: Shell.CMD
             Segmented(Shells.available.map { it to it.label }, current) { sh -> Settings.update { it.copy(shell = sh.id) } }
         }
-        Setting(tr("Check for new commits on the server", "בדיקת קומיטים חדשים בשרת")) { Toggle(s.gitFetch) { on -> Settings.update { it.copy(gitFetch = on) } } }
+        Setting(tr("Check for new commits on the server", "בדיקת קומיטים חדשים בשרת"), hint = tr("Every 10 minutes, quietly (git fetch). Nothing in your folders changes.", "כל 10 דקות, בשקט (git fetch). שום דבר בתיקיות לא משתנה.")) { Toggle(s.gitFetch) { on -> Settings.update { it.copy(gitFetch = on) } } }
     }
-    Note(tr("Every 10 minutes, quietly (git fetch): nothing in your folders changes, and \"to pull\" stays true.",
-        "כל 10 דקות, בשקט (git fetch): שום דבר בתיקיות לא משתנה, ו״חדשים בשרת״ נשאר מדויק."))
     }
 }
 
@@ -147,15 +144,14 @@ private fun Explorer() {
     val s by Settings.state.collectAsState()
     Column {
         Group {
-            Setting(tr("The project's strip in its folder", "פס הפרויקט בתוך התיקייה")) { Toggle(s.companion) { on -> Settings.update { it.copy(companion = on) } } }
-            Setting(tr("Agents at work, on the folder's icon", "סוכן בעבודה, על אייקון התיקייה")) { Toggle(s.folderStatus) { on -> Settings.update { it.copy(folderStatus = on) } } }
-            Setting(tr("Uncommitted changes, on the folder's icon", "שינויים שעוד לא בקומיט, על אייקון התיקייה")) { Toggle(s.folderGit) { on -> Settings.update { it.copy(folderGit = on) } } }
-            if (ExplorerMenu.available) Setting(tr("“Open in YDeck” on right-click", "״פתיחה ב־YDeck״ בלחיצה ימנית")) {
+            Setting(tr("The project's strip in its folder", "פס הפרויקט בתוך התיקייה"), hint = tr("A strip at the bottom of File Explorer while it shows a project's folder.", "פס בתחתית הסייר כשהוא מציג תיקיית פרויקט.")) { Toggle(s.companion) { on -> Settings.update { it.copy(companion = on) } } }
+            Setting(tr("Agents at work, on the folder's icon", "סוכן בעבודה, על אייקון התיקייה"), hint = tr("A dot on the project's folder: indigo while an agent works, amber while it waits for you.", "נקודה על תיקיית הפרויקט: אינדיגו כשסוכן עובד, כתומה כשהוא מחכה לך.")) { Toggle(s.folderStatus) { on -> Settings.update { it.copy(folderStatus = on) } } }
+            Setting(tr("Uncommitted changes, on the folder's icon", "שינויים שעוד לא בקומיט, על אייקון התיקייה"), hint = tr("A small amber dot in the icon's upper corner.", "נקודה כתומה קטנה בפינה העליונה של האייקון.")) { Toggle(s.folderGit) { on -> Settings.update { it.copy(folderGit = on) } } }
+            if (ExplorerMenu.available) Setting(tr("“Open in YDeck” on right-click", "״פתיחה ב־YDeck״ בלחיצה ימנית"), hint = tr("On any folder in File Explorer.", "על כל תיקייה בסייר הקבצים.")) {
                 Toggle(s.explorerMenu) { on -> Settings.update { it.copy(explorerMenu = on) }; Thread { ExplorerMenu.set(on) }.start() }
             }
         }
-        Note(tr("The strip sits at the bottom of a File Explorer window while it shows a project's folder. A folder with its project's logo shows a dot while an agent works in it (indigo) or waits for you (amber); the logo is set in each project's details.",
-            "הפס יושב בתחתית חלון הסייר כשהוא מציג תיקיית פרויקט. תיקייה עם הלוגו של הפרויקט מראה נקודה כשסוכן עובד בה (אינדיגו) או מחכה לך (כתום). הלוגו נקבע בפרטים של כל פרויקט."))
+        Note(tr("The dots show on folders that carry their project's logo; the logo is set in each project's details.", "הנקודות מופיעות על תיקיות שיש להן את הלוגו של הפרויקט. הלוגו נקבע בפרטים של כל פרויקט."))
     }
 }
 
@@ -170,7 +166,7 @@ private fun ClaudeSettings() {
     val found = Tools.claude != null
     Column {
         Group {
-            Setting(tr("Connect to Claude Code", "חיבור ל־Claude Code"), value = when {
+            Setting(tr("Connect to Claude Code", "חיבור ל־Claude Code"), hint = tr("YDeck sees when Claude works, needs you or is done, and each conversation starts knowing the project.", "YDeck רואה מתי Claude עובד, מחכה לך או סיים, וכל שיחה מתחילה כשהוא מכיר את הפרויקט."), value = when {
                 !found -> tr("Not installed", "לא מותקן")
                 busy == true -> tr("Connecting…", "מתחבר…")
                 busy == false -> tr("Disconnecting…", "מנתק…")
@@ -182,24 +178,21 @@ private fun ClaudeSettings() {
                     scope.launch(Dispatchers.IO) { error = ClaudePlugin.set(on); installed = ClaudePlugin.installed; busy = null }
                 }
             }
-            if (installed) Setting(tr("Notify me when Claude needs me", "התראה כש־Claude מחכה לי")) { Toggle(s.claudeAlerts) { on -> Settings.update { it.copy(claudeAlerts = on) } } }
-            if (installed) Setting(tr("Write a handoff when a session ends", "סיכום מעבר בסוף כל סשן")) { Toggle(s.handoffs) { on -> Settings.update { it.copy(handoffs = on) } } }
+            if (installed) Setting(tr("Notify me when Claude needs me", "התראה כש־Claude מחכה לי"), hint = tr("A Windows notification when it waits for an answer, or ends a long task.", "התראה של Windows כשהוא מחכה לתשובה, או מסיים משימה ארוכה.")) { Toggle(s.claudeAlerts) { on -> Settings.update { it.copy(claudeAlerts = on) } } }
+            if (installed) Setting(tr("Sum up each session when it ends", "סיכום בסוף כל סשן"), hint = tr("What was done and the next step, on the project's overview.", "מה נעשה ומה הצעד הבא, במסך הסקירה של הפרויקט.")) { Toggle(s.handoffs) { on -> Settings.update { it.copy(handoffs = on) } } }
         }
         error?.let { Text(it, color = c.danger, fontSize = 12.sp, fontFamily = PlexSans, modifier = Modifier.padding(start = 4.dp, top = 8.dp)) }
-        Note(tr("Connected, YDeck shows when Claude works, needs you or is done, and each new conversation starts knowing the project. Claude keeps its summary, next step, links and releases in .ydeck.json. Set up through Claude Code's own plugin commands.",
-            "כשמחוברים, YDeck מראה מתי Claude עובד, מחכה לך או סיים, וכל שיחה חדשה מתחילה כשהוא מכיר את הפרויקט. Claude שומר את התקציר, הצעד הבא, הקישורים והגרסאות ב־.ydeck.json. ההתקנה דרך הפקודות של Claude Code עצמו."))
+        Note(tr("Claude keeps the project's summary, decisions, links and releases in .ydeck.json, shared through the repository.", "Claude שומר את התקציר, ההחלטות, הקישורים והגרסאות של הפרויקט ב־.ydeck.json, שמשותף דרך הריפו."))
     }
 }
 
 @Composable
 private fun Backup(actions: AppActions) {
     Column {
-        Group {
-            Setting(tr("Export to a file", "ייצוא לקובץ"), onClick = actions.export)
-            Setting(tr("Import from a file", "ייבוא מקובץ"), onClick = actions.import)
+        Group(tr("Backup", "גיבוי")) {
+            Setting(tr("Export to a file", "ייצוא לקובץ"), onClick = actions.export, hint = tr("Every project and logo in one file.", "כל הפרויקטים והלוגואים בקובץ אחד."))
+            Setting(tr("Import from a file", "ייבוא מקובץ"), onClick = actions.import, hint = tr("Replaces the projects here.", "מחליף את הפרויקטים שכאן."))
         }
-        Note(tr("Every project and logo in one file, the same one YDeck for Android reads. An import replaces the projects here.",
-            "כל הפרויקטים והלוגואים בקובץ אחד, אותו קובץ ש־YDeck לאנדרואיד קורא. ייבוא מחליף את הפרויקטים שכאן."))
     }
 }
 

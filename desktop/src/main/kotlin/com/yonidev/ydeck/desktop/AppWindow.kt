@@ -62,7 +62,7 @@ import java.time.LocalDate
 
 enum class Tab { OVERVIEW, GIT, LINKS, FILES, COMMANDS }
 
-enum class SettingsSection { GENERAL, WIDGETS, EXPLORER, CLAUDE, PHONE, BACKUP, STORAGE, ABOUT }
+enum class SettingsSection { GENERAL, WIDGETS, EXPLORER, CLAUDE, PHONE, DATA, ABOUT }
 
 sealed class Screen {
     data class Project(val id: String, val tab: Tab = Tab.OVERVIEW) : Screen()
@@ -303,8 +303,7 @@ val SettingsSection.title: String
         SettingsSection.EXPLORER -> tr("File Explorer", "סייר הקבצים")
         SettingsSection.CLAUDE -> "Claude Code"
         SettingsSection.PHONE -> tr("Phone", "טלפון")
-        SettingsSection.BACKUP -> tr("Backup", "גיבוי")
-        SettingsSection.STORAGE -> tr("Storage", "אחסון")
+        SettingsSection.DATA -> tr("Data", "נתונים")
         SettingsSection.ABOUT -> tr("About YDeck", "אודות YDeck")
     }
 
@@ -315,8 +314,7 @@ val SettingsSection.glyph: Glyph
         SettingsSection.EXPLORER -> Glyph.FOLDER
         SettingsSection.CLAUDE -> Glyph.CLAUDE
         SettingsSection.PHONE -> Glyph.PHONE
-        SettingsSection.BACKUP -> Glyph.DOWNLOAD
-        SettingsSection.STORAGE -> Glyph.DISK
+        SettingsSection.DATA -> Glyph.DISK
         SettingsSection.ABOUT -> Glyph.INFO
     }
 
