@@ -7,7 +7,7 @@ const COPY = {
     lang: 'en', dir: 'ltr', locale: 'en_US', home: '/', other: '/he', otherLabel: 'עברית',
     title: 'YDeck · Nothing left open.',
     desc: 'For developers who work with AI agents. YDeck keeps track of what your agents did, what changed, and what still needs you, across every project.',
-    nav: ['How it works', 'Privacy'], beta: 'Join the beta', betaSubject: 'YDeck beta',
+    nav: ['How it works', 'Privacy'], beta: 'Download for Windows', betaSubject: 'YDeck beta',
     eyebrow: 'For developers who work with AI agents',
     h1: 'Nothing left open.',
     lead: 'Your agents work. YDeck keeps track of what they did, what changed, and what still needs you, across every project.',
@@ -20,7 +20,7 @@ const COPY = {
     m3k: 'The ritual', m3h: 'Close the day.', m3p: 'Commit what’s left, push it, stop the servers, and leave yourself the next step. One click, then nothing is open.',
     m4h: 'And tomorrow starts\nwhere today ended.', m4p: 'Decisions you made, where each session left off, what comes next. Every new session, by any agent, starts from it.',
     pr: [['On your machine.', 'Your code never leaves it. No account, no server of ours.'], ['No AI of its own.', 'It works with the agents you already use: Claude Code and Codex.'], ['Never destructive.', 'Nothing it does throws work away. Everything can be undone.'], ['Free.', 'For every developer, on Windows. Mac is next.']],
-    endA: 'Nothing left open.', endB: 'YDeck for Windows is in closed beta.',
+    endA: 'Nothing left open.', endB: 'Free and open source, for Windows.',
     foot: ['Privacy', 'YDeck for Android'],
     ui: {
       loops: 'Open loops', waiting: 'Claude needs you', waitingD: 'Nova · Allow editing src/auth.ts?', session: 'Claude’s session: 3 files not committed', sessionD: 'Orbit · “Add the Stripe webhook for deposits”',
@@ -36,7 +36,7 @@ const COPY = {
     lang: 'he', dir: 'rtl', locale: 'he_IL', home: '/he/', other: '/', otherLabel: 'English',
     title: 'YDeck · שום דבר לא נשאר פתוח.',
     desc: 'למפתחים שעובדים עם סוכני AI. YDeck זוכר מה הסוכנים עשו, מה השתנה ומה עוד מחכה לך, בכל הפרויקטים.',
-    nav: ['איך זה עובד', 'פרטיות'], beta: 'הצטרפות לבטא', betaSubject: 'בטא של YDeck',
+    nav: ['איך זה עובד', 'פרטיות'], beta: 'הורדה ל־Windows', betaSubject: 'בטא של YDeck',
     eyebrow: 'למפתחים שעובדים עם סוכני AI',
     h1: 'שום דבר לא נשאר פתוח.',
     lead: 'הסוכנים עובדים. YDeck זוכר מה הם עשו, מה השתנה ומה עוד מחכה לך, בכל הפרויקטים.',
@@ -49,7 +49,7 @@ const COPY = {
     m3k: 'הטקס', m3h: 'סוגרים את היום.', m3p: 'קומיט למה שנשאר, דחיפה, עצירת השרתים, וצעד הבא למחר. לחיצה אחת, ושום דבר לא נשאר פתוח.',
     m4h: 'ומחר מתחיל\nאיפה שהיום נגמר.', m4p: 'ההחלטות שקיבלת, איפה כל סשן עצר, ומה הלאה. כל סשן חדש, של כל סוכן, מתחיל משם.',
     pr: [['על המחשב שלך.', 'הקוד לא יוצא ממנו. בלי חשבון, בלי שרת שלנו.'], ['בלי AI משלו.', 'עובד עם הסוכנים שכבר יש לך: Claude Code ו־Codex.'], ['אף פעם לא הורס.', 'שום דבר שהוא עושה לא זורק עבודה. הכול אפשר לבטל.'], ['חינם.', 'לכל מפתח, ב־Windows. Mac בדרך.']],
-    endA: 'שום דבר לא נשאר פתוח.', endB: 'YDeck ל־Windows בבטא סגורה.',
+    endA: 'שום דבר לא נשאר פתוח.', endB: 'חינם וקוד פתוח, ל־Windows.',
     foot: ['פרטיות', 'YDeck לאנדרואיד'],
     ui: {
       loops: 'מה פתוח', waiting: 'Claude מחכה לך', waitingD: 'Nova · לאשר עריכה של src/auth.ts?', session: '3 קבצים מהסשן של Claude לא נשמרו', sessionD: 'Orbit · “Add the Stripe webhook for deposits”',
@@ -257,7 +257,8 @@ const SCRIPT = `<script>
 
 function html(c, siteUrl, email, fonts) {
   const u = c.ui;
-  const beta = `mailto:${email}?subject=${encodeURIComponent(c.betaSubject)}`;
+  // The download page: the installer on GitHub Releases, and why Windows warns.
+  const beta = '/download';
   const privacy = '/privacy', android = '/android';
   return `<!doctype html><html lang="${c.lang}" dir="${c.dir}"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">

@@ -53,7 +53,7 @@ function shell({ lang, dir, title, desc, siteUrl, email, body, alt }) {
 <header class="nav"><div class="wrap">
 <a class="brand" href="${he ? '/he/' : '/'}">${RING(22)}YDeck</a>
 <nav><a href="/privacy">${he ? 'פרטיות' : 'Privacy'}</a><a href="/android">${he ? 'אנדרואיד' : 'Android'}</a>${alt ? `<a href="${alt.href}">${alt.label}</a>` : ''}</nav>
-<a class="pill" href="mailto:${email}?subject=${encodeURIComponent(he ? 'בטא של YDeck' : 'YDeck beta')}">${he ? 'הצטרפות לבטא' : 'Join the beta'}</a>
+<a class="pill" href="/download">${he ? 'הורדה' : 'Download'}</a>
 </div></header>
 <main>${body}</main>
 <footer><div class="wrap">
@@ -138,7 +138,7 @@ ${part('General', '', en.end)}
 function download(apk) {
   return `<div class="doc"><div class="wrap">
 <h1>הורדה</h1>
-<p class="lead">YDeck ל־Windows בבטא סגורה. YDeck לאנדרואיד זמין כאן להורדה.</p>
+<p class="lead">YDeck ל־Windows ו־YDeck לאנדרואיד, חינם.</p>
 <div class="part"><h2>YDeck ל־Windows</h2><p class="sub">קוד פתוח (MIT). כל גרסה נבנית ב־GitHub Actions מהקוד שבריפו, ועולה לדף ה־Releases.</p>
 <div class="dl"><a class="pill big" href="https://github.com/yonidev0101/YDeck/releases/latest">הורדת הגרסה האחרונה</a><span class="size">MSI · Windows 10 ומעלה</span></div>
 <p class="sub" dir="ltr" lang="en">Free code signing provided by <a href="https://about.signpath.io">SignPath.io</a>, certificate by <a href="https://signpath.org">SignPath Foundation</a>. See the <a href="/code-signing">Code signing policy</a>.</p>
@@ -187,7 +187,7 @@ function build({ DIST, EMAIL, SITE_URL, apk }) {
   const write = (file, html) => { const out = path.join(DIST, file); fs.mkdirSync(path.dirname(out), { recursive: true }); fs.writeFileSync(out, html); };
   const he = (file, title, desc, body) => write(file, shell({ lang: 'he', dir: 'rtl', title, desc, siteUrl: SITE_URL, email: EMAIL, body }));
   he('privacy/index.html', 'מדיניות פרטיות · YDeck', 'מה YDeck שומר, מה יוצא מהמחשב ומהטלפון, ומה לא. בעברית ובאנגלית.', privacy(EMAIL));
-  he('download/index.html', 'הורדה · YDeck', `YDeck ${apk.version} לאנדרואיד, והבטא של YDeck ל־Windows.`, download({ ...apk, email: EMAIL }));
+  he('download/index.html', 'הורדה · YDeck', `YDeck ל־Windows (קוד פתוח) ו־YDeck ${apk.version} לאנדרואיד.`, download({ ...apk, email: EMAIL }));
   write('code-signing/index.html', shell({ lang: 'en', dir: 'ltr', title: 'Code signing policy · YDeck', desc: 'How YDeck for Windows is built and signed, and who approves each release.', siteUrl: SITE_URL, email: EMAIL, body: codeSigning(EMAIL) }));
   he('android/index.html', 'YDeck לאנדרואיד', 'ווידג\'ט לאנדרואיד שמחזיק את הקישורים של כל פרויקט, וכל נגיעה פותחת בחשבון הנכון.', android());
   he('404.html', 'לא נמצא · YDeck', 'העמוד לא נמצא.', `<div class="center">${RING(64)}<h1 style="font-size:clamp(36px,6vw,64px)">אין כאן כלום.</h1><a class="text-link" href="/he/">לעמוד הבית</a></div>`);
