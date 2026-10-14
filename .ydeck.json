@@ -3,6 +3,10 @@
   "summaryAt": "2026-10-13T17:58:51Z",
   "decisions": [
     {
+      "text": "חתימה דיגיטלית דרך SignPath Foundation (בקשה הוגשה 2026-10-14); ה־MSI נבנה רק ב־GitHub Actions מה־tag, וכל חתימה מאושרת ידנית",
+      "date": "2026-10-14"
+    },
+    {
       "text": "YDeck בקוד פתוח ב־github.com/yonidev0101/YDeck ברישיון MIT, היסטוריה ציבורית נקייה (המלאה בענף המקומי private-history); בניות עולות ל־GitHub Releases, וסרטונים, אודיו ו־projects.json האישי נשארים מחוץ לגיט",
       "date": "2026-10-14"
     },
