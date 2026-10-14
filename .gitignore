@@ -36,3 +36,6 @@ store/**/*.mp3
 # a folder's icon (Windows) and YDeck's personal state
 desktop.ini
 .ydeck.local.json
+
+# early drafts kept on disk, out of git
+store/ads/archive/
