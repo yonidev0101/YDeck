@@ -4,6 +4,10 @@ import androidx.compose.foundation.ContextMenuArea
 import androidx.compose.foundation.ContextMenuItem
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -57,17 +62,13 @@ private fun MarkBox(content: @Composable () -> Unit) {
     Box(Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(LocalDeck.current.surface2), contentAlignment = Alignment.Center) { content() }
 }
 
-@Composable
-private fun GroupScope.AddRow(text: String, onClick: () -> Unit) {
-    val c = LocalDeck.current
-    Item(onClick) {
-        Box(Modifier.size(36.dp), contentAlignment = Alignment.Center) { GlyphIcon(Glyph.PLUS, 18.dp, c.accentText) }
-        Text(text, color = c.accentText, fontSize = 14.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans)
-    }
-}
-
 // ── links ──
 
+/*
+ * The project's links as tiles (one click opens, editing on hover or a right-click), the browser they open in as one
+ * line above them, and the values to copy as chips below. Claude can read the project and find the links it lacks.
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun LinksTab(p: Project, dark: Boolean) {
     val c = LocalDeck.current
@@ -82,34 +83,106 @@ fun LinksTab(p: Project, dark: Boolean) {
         onDelete = if (i >= 0) ({ saveProject(p.copy(copies = p.copies.filterIndexed { k, _ -> k != i })); copy = null }) else null,
         onClose = { copy = null }); return }
 
+    val dir = Settings.state.collectAsState().value.localOf(p.id).dir
     TabColumn {
-        Account(p)
-        Group(tr("Links", "קישורים")) {
-            p.actions.forEachIndexed { i, a ->
-                ContextMenuArea(items = {
-                    buildList {
-                        add(ContextMenuItem(tr("Edit", "עריכה")) { link = i })
-                        if (i > 0) add(ContextMenuItem(tr("Move up", "הזזה למעלה")) { saveProject(p.copy(actions = p.actions.toMutableList().apply { add(i - 1, removeAt(i)) })) })
-                        if (i < p.actions.lastIndex) add(ContextMenuItem(tr("Move down", "הזזה למטה")) { saveProject(p.copy(actions = p.actions.toMutableList().apply { add(i + 1, removeAt(i)) })) })
-                        add(ContextMenuItem(tr("Remove", "הסרה")) { saveProject(p.copy(actions = p.actions.filterIndexed { k, _ -> k != i })) })
-                    }
-                }) {
-                    Item({ Chrome.open(p, a) }) {
-                        MarkBox { ServiceMark(a.service, a.faviconHost, 20.dp, dark) }
-                        Column(Modifier.weight(1f)) {
-                            Text(a.label, color = c.fg, fontSize = 14.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans)
-                            Mono(Links.display(a.url))
-                        }
-                        IconButton(Glyph.EDIT, tr("Edit", "עריכה"), 32.dp, c.muted, filled = false) { link = i }
+        OpensIn(p)
+        Column {
+            Section(tr("Links", "קישורים") + (if (p.actions.isEmpty()) "" else "  ${p.actions.size}")) {
+                if (dir != null && Tools.claude != null) {
+                    val busy = p.id in ClaudeFill.busy.collectAsState().value
+                    TextAction(if (busy) tr("Claude is reading…", "Claude קורא…") else tr("Find links with Claude", "למצוא קישורים עם Claude"), accent = true, enabled = !busy) {
+                        ClaudeFill.start(p, dir); Nav.set(Screen.Details(p.id))
                     }
                 }
             }
-            AddRow(tr("Add a link", "הוספת קישור")) { link = -1 }
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val gap = 12.dp
+                val columns = ((maxWidth + gap) / (210.dp + gap)).toInt().coerceIn(2, 4)
+                val width = (maxWidth - gap * (columns - 1)) / columns
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(gap), verticalArrangement = Arrangement.spacedBy(gap)) {
+                    p.actions.forEachIndexed { i, a ->
+                        ContextMenuArea(items = {
+                            buildList {
+                                add(ContextMenuItem(tr("Edit", "עריכה")) { link = i })
+                                if (i > 0) add(ContextMenuItem(tr("Move earlier", "הזזה אחורה")) { saveProject(p.copy(actions = p.actions.toMutableList().apply { add(i - 1, removeAt(i)) })) })
+                                if (i < p.actions.lastIndex) add(ContextMenuItem(tr("Move later", "הזזה קדימה")) { saveProject(p.copy(actions = p.actions.toMutableList().apply { add(i + 1, removeAt(i)) })) })
+                                add(ContextMenuItem(tr("Remove", "הסרה")) { saveProject(p.copy(actions = p.actions.filterIndexed { k, _ -> k != i })) })
+                            }
+                        }) { LinkTile(a, dark, Modifier.width(width), onEdit = { link = i }) { Chrome.open(p, a) } }
+                    }
+                    AddTile(tr("Link", "קישור"), Modifier.width(width)) { link = -1 }
+                }
+            }
         }
-        Group(tr("Values to copy", "ערכים להעתקה")) {
-            p.copies.forEachIndexed { i, item -> CopyRow(item) { copy = i } }
-            AddRow(tr("Add a value", "הוספת ערך")) { copy = -1 }
+        Column {
+            Section(tr("Values to copy", "ערכים להעתקה"))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                p.copies.forEachIndexed { i, item ->
+                    ContextMenuArea(items = {
+                        listOf(
+                            ContextMenuItem(tr("Edit", "עריכה")) { copy = i },
+                            ContextMenuItem(tr("Remove", "הסרה")) { saveProject(p.copy(copies = p.copies.filterIndexed { k, _ -> k != i })) },
+                        )
+                    }) { CopyChip(item) }
+                }
+                Row(Modifier.clip(RoundedCornerShape(99.dp)).border(1.dp, c.line, RoundedCornerShape(99.dp)).clickable { copy = -1 }.padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    GlyphIcon(Glyph.PLUS, 14.dp, c.accentText)
+                    Spacer(Modifier.width(6.dp))
+                    Text(tr("Value", "ערך"), color = c.accentText, fontSize = 13.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans)
+                }
+            }
+            if (p.copies.isEmpty()) Text(tr("A package name, a project id, a repo: one click copies it.", "שם חבילה, מזהה פרויקט, ריפו: לחיצה אחת מעתיקה."),
+                color = c.faint, fontSize = 12.sp, fontFamily = PlexSans, modifier = Modifier.padding(start = 4.dp, top = 8.dp))
         }
+    }
+}
+
+/** A link: its service's mark, its name, the site. Opens on a click; the pencil shows on hover. */
+@Composable
+private fun LinkTile(a: DeckAction, dark: Boolean, modifier: Modifier, onEdit: () -> Unit, onOpen: () -> Unit) {
+    val c = LocalDeck.current
+    val hover = remember { MutableInteractionSource() }
+    val hovered by hover.collectIsHoveredAsState()
+    val shape = RoundedCornerShape(16.dp)
+    Row(modifier.clip(shape).border(1.dp, c.line, shape).background(if (hovered) c.surface2 else Color.Transparent).hoverable(hover).clickable(onClick = onOpen)
+        .padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        MarkBox { ServiceMark(a.service, a.faviconHost, 20.dp, dark) }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(a.label, color = c.fg, fontSize = 14.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Mono(Links.host(a.url) ?: Links.display(a.url), c.faint, 11)
+        }
+        if (hovered) IconButton(Glyph.EDIT, tr("Edit", "עריכה"), 28.dp, c.muted, filled = false, onClick = onEdit)
+    }
+}
+
+@Composable
+private fun AddTile(text: String, modifier: Modifier, onClick: () -> Unit) {
+    val c = LocalDeck.current
+    val shape = RoundedCornerShape(16.dp)
+    Row(modifier.clip(shape).border(1.dp, c.line, shape).clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(36.dp), contentAlignment = Alignment.Center) { GlyphIcon(Glyph.PLUS, 18.dp, c.accentText) }
+        Spacer(Modifier.width(12.dp))
+        Text(text, color = c.accentText, fontSize = 14.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans)
+    }
+}
+
+/** Where the links open: the Chrome profile (by the project's Google account, or chosen); changed in place. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun OpensIn(p: Project) {
+    val c = LocalDeck.current
+    var open by remember(p.id) { mutableStateOf(false) }
+    Column {
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.paper).padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            GlyphIcon(Glyph.GLOBE, 16.dp, c.muted)
+            Spacer(Modifier.width(10.dp))
+            Text(tr("Opens in Chrome · ", "נפתחים ב־Chrome · ") + Chrome.describe(p), color = c.muted, fontSize = 13.sp, fontFamily = PlexSans, maxLines = 1,
+                overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            TextAction(if (open) tr("Done", "סיום") else tr("Change", "שינוי"), accent = true) { open = !open }
+        }
+        if (open) Box(Modifier.padding(top = 10.dp)) { Account(p) }
     }
 }
 
@@ -121,17 +194,14 @@ private fun Account(p: Project) {
     val profiles = remember { Chrome.profiles() }
     val chosen = Settings.state.collectAsState().value.profiles[p.id]
     var email by remember(p.id) { mutableStateOf(p.googleEmail.orEmpty()) }
-    Column {
-        GroupLabel(tr("Account", "חשבון"))
-        Card {
-            Field(tr("Google account", "חשבון גוגל"), email, { email = it; saveProject(p.copy(googleEmail = it.trim().ifBlank { null })) }, "name@gmail.com", ltr = true)
-            Spacer(Modifier.height(16.dp))
-            Text(tr("Opens in the Chrome profile", "נפתח בפרופיל Chrome"), color = c.muted, fontSize = 13.sp, fontFamily = PlexSans, modifier = Modifier.padding(bottom = 8.dp))
-            val auto = profiles.firstOrNull { it.email != null && it.email.equals(email.trim(), true) }
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Chip(if (auto != null) tr("Automatic: ${auto.name}", "אוטומטי: ${auto.name}") else tr("Automatic (by the account)", "אוטומטי (לפי החשבון)"), chosen == null) { Settings.setProfile(p.id, null) }
-                profiles.forEach { pr -> Chip(pr.email ?: pr.name, chosen == pr.dir) { Settings.setProfile(p.id, pr.dir) } }
-            }
+    Card {
+        Field(tr("Google account", "חשבון גוגל"), email, { email = it; saveProject(p.copy(googleEmail = it.trim().ifBlank { null })) }, "name@gmail.com", ltr = true)
+        Spacer(Modifier.height(16.dp))
+        Text(tr("Opens in the Chrome profile", "נפתח בפרופיל Chrome"), color = c.muted, fontSize = 13.sp, fontFamily = PlexSans, modifier = Modifier.padding(bottom = 8.dp))
+        val auto = profiles.firstOrNull { it.email != null && it.email.equals(email.trim(), true) }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Chip(if (auto != null) tr("Automatic: ${auto.name}", "אוטומטי: ${auto.name}") else tr("Automatic (by the account)", "אוטומטי (לפי החשבון)"), chosen == null) { Settings.setProfile(p.id, null) }
+            profiles.forEach { pr -> Chip(pr.email ?: pr.name, chosen == pr.dir) { Settings.setProfile(p.id, pr.dir) } }
         }
     }
 }
@@ -145,19 +215,20 @@ fun Chip(text: String, selected: Boolean, onClick: () -> Unit) {
             .clickable(onClick = onClick).padding(horizontal = 13.dp, vertical = 7.dp))
 }
 
+/** A value to copy: its name, the value, and a click copies it (editing on a right-click). */
 @Composable
-private fun GroupScope.CopyRow(item: CopyItem, onEdit: () -> Unit) {
+private fun CopyChip(item: CopyItem) {
     val c = LocalDeck.current
     var copied by remember { mutableStateOf(false) }
     if (copied) LaunchedEffect(Unit) { delay(1400); copied = false }
-    Item({ Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(item.value), null); copied = true }) {
-        MarkBox { GlyphIcon(Glyph.COPY, 18.dp, c.fg) }
-        Column(Modifier.weight(1f)) {
-            Text(item.label.ifBlank { tr("Value", "ערך") }, color = c.muted, fontSize = 12.sp, fontFamily = PlexSans)
-            Mono(item.value, c.fg, 13)
-        }
-        Text(if (copied) tr("Copied", "הועתק") else tr("Copy", "העתקה"), color = if (copied) CLEAN_DOT else c.accentText, fontSize = 13.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans)
-        IconButton(Glyph.EDIT, tr("Edit", "עריכה"), 32.dp, c.muted, filled = false, onClick = onEdit)
+    Row(Modifier.clip(RoundedCornerShape(99.dp)).background(c.surface2)
+        .clickable { Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(item.value), null); copied = true }
+        .padding(horizontal = 13.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (item.label.isNotBlank()) { Text(item.label, color = c.muted, fontSize = 12.sp, fontFamily = PlexSans); Spacer(Modifier.width(8.dp)) }
+        Mono(item.value, c.fg, 12)
+        Spacer(Modifier.width(8.dp))
+        if (copied) Text(tr("Copied", "הועתק"), color = CLEAN_DOT, fontSize = 12.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans)
+        else GlyphIcon(Glyph.COPY, 13.dp, c.faint)
     }
 }
 
@@ -237,6 +308,9 @@ private fun CopyForm(initial: CopyItem?, onSave: (CopyItem) -> Unit, onDelete: (
 
 // ── files ──
 
+/** The files agents read at the start of a session: Claude Code's memory, and the one Codex, Cursor and others share. */
+private val AGENT_DOCS = setOf("claude.md", "agents.md")
+
 /** The project's documents worth reading: the README first, then the other Markdown at the top and in docs/. */
 fun docsOf(dir: File): List<File> {
     val top = dir.listFiles { f -> f.isFile && f.extension.equals("md", true) }.orEmpty()
@@ -245,40 +319,54 @@ fun docsOf(dir: File): List<File> {
     return (top + docs).take(24)
 }
 
+/*
+ * The project's documents, read here: its own (the README, docs/), the ones its agents read, and the files pinned to
+ * it. A pinned Markdown file reads here too; anything else opens in its app.
+ */
 @Composable
 fun FilesTab(p: Project, local: Local, actions: AppActions) {
     val c = LocalDeck.current
     val dir = local.dir
     val docs = remember(dir) { dir?.let(::docsOf).orEmpty() }
+    val (agentDocs, projectDocs) = docs.partition { it.parentFile == dir && it.name.lowercase() in AGENT_DOCS }
+    // A pinned file already listed above isn't listed twice.
+    val listed = docs.map { it.path.lowercase() }.toSet()
+    val pinned = local.files.filter { File(it).path.lowercase() !in listed }
     var open by remember(p.id) { mutableStateOf(docs.firstOrNull()?.path ?: local.files.firstOrNull { it.endsWith(".md", true) }) }
     Row(Modifier.fillMaxSize().padding(start = 44.dp, end = 44.dp, top = 22.dp)) {
-        Column(Modifier.width(230.dp).fillMaxHeight().verticalScroll(rememberScrollState())) {
-            if (docs.isNotEmpty()) {
-                GroupLabel(tr("Read", "לקריאה"))
-                docs.forEach { f -> FileRow(Glyph.DOC, f.relativeTo(dir!!).path.replace('\\', '/'), f.path == open) { open = f.path } }
-                Spacer(Modifier.height(18.dp))
-            }
-            GroupLabel(tr("Pinned", "נעוצים"))
-            local.files.forEach { f ->
-                ContextMenuArea(items = {
-                    listOf(
-                        ContextMenuItem(tr("Show in the folder", "הצגה בתיקייה")) { Tools.reveal(f) },
-                        ContextMenuItem(tr("Unpin", "ביטול הנעיצה")) { saveLocal(p, local.copy(files = local.files - f)) },
-                    )
-                }) {
-                    FileRow(if (File(f).isDirectory) Glyph.FOLDER else Glyph.PIN, File(f).name, f == open) {
-                        if (f.endsWith(".md", true)) open = f else Tools.openFile(f)
-                    }
+        Column(Modifier.width(240.dp).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            @Composable fun group(label: String, files: List<File>) {
+                if (files.isEmpty()) return
+                Column {
+                    GroupLabel(label)
+                    files.forEach { f -> FileRow(Glyph.DOC, f.relativeTo(dir!!).path.replace('\\', '/'), f.path == open) { open = f.path } }
                 }
             }
-            Row(Modifier.clip(RoundedCornerShape(10.dp)).clickable { actions.chooseFile()?.let { saveLocal(p, local.copy(files = (local.files + it.path).distinct())) } }
-                .padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                GlyphIcon(Glyph.PLUS, 16.dp, c.accentText)
-                Spacer(Modifier.width(10.dp))
-                Text(tr("Pin a file", "נעיצת קובץ"), color = c.accentText, fontSize = 14.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans)
+            group(tr("The project", "הפרויקט"), projectDocs)
+            group(tr("For agents", "לסוכנים"), agentDocs)
+            Column {
+                GroupLabel(tr("Pinned", "נעוצים"))
+                pinned.forEach { f ->
+                    ContextMenuArea(items = {
+                        listOf(
+                            ContextMenuItem(tr("Show in the folder", "הצגה בתיקייה")) { Tools.reveal(f) },
+                            ContextMenuItem(tr("Unpin", "ביטול הנעיצה")) { saveLocal(p, local.copy(files = local.files - f)) },
+                        )
+                    }) {
+                        FileRow(if (File(f).isDirectory) Glyph.FOLDER else Glyph.PIN, File(f).name, f == open) {
+                            if (f.endsWith(".md", true)) open = f else Tools.openFile(f)
+                        }
+                    }
+                }
+                Row(Modifier.clip(RoundedCornerShape(10.dp)).clickable { actions.chooseFile()?.let { saveLocal(p, local.copy(files = (local.files + it.path).distinct())) } }
+                    .padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    GlyphIcon(Glyph.PLUS, 16.dp, c.accentText)
+                    Spacer(Modifier.width(10.dp))
+                    Text(tr("Pin a file", "נעיצת קובץ"), color = c.accentText, fontSize = 14.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans)
+                }
+                Text(tr("Or drag files here, or onto the widget.", "או גוררים קבצים לכאן, או לווידג'ט."), color = c.faint, fontSize = 12.sp, lineHeight = 17.sp, fontFamily = PlexSans,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
             }
-            Text(tr("Or drag files here, or onto the widget.", "או גוררים קבצים לכאן, או לווידג'ט."), color = c.faint, fontSize = 12.sp, lineHeight = 17.sp, fontFamily = PlexSans,
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
         }
         Spacer(Modifier.width(28.dp))
         val file = open?.let(::File)?.takeIf { it.isFile }
@@ -322,6 +410,11 @@ private fun FileRow(glyph: Glyph, name: String, selected: Boolean, onClick: () -
 
 // ── commands ──
 
+/*
+ * The project's commands as tiles (a click runs it in a new terminal tab, editing on hover or a right-click), what's
+ * running now, and the tools that open the folder, as one row.
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CommandsTab(p: Project, local: Local, dark: Boolean) {
     val c = LocalDeck.current
@@ -336,39 +429,76 @@ fun CommandsTab(p: Project, local: Local, dark: Boolean) {
             Text(tr("Connect the project's folder to run its commands.", "מחברים את תיקיית הפרויקט כדי להריץ את הפקודות שלו."), color = c.faint, fontSize = 14.sp, fontFamily = PlexSans)
             return@TabColumn
         }
+        Pulses.state.collectAsState().value[dir.path]?.port?.let { port ->
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.paper).clickable { Chrome.open(p, DeckAction(Catalog.LINK, "http://localhost:$port", "localhost")) }
+                .padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Dot(LIVE_DOT)
+                Spacer(Modifier.width(10.dp))
+                Text(tr("A dev server is running", "שרת פיתוח רץ"), color = c.fg, fontSize = 13.sp, fontFamily = PlexSans, modifier = Modifier.weight(1f))
+                Mono("localhost:$port", c.accentText, 12)
+            }
+        }
         Column {
-            Group(tr("Commands", "פקודות")) {
-                local.commands.forEachIndexed { i, cmd ->
-                    Item({ Tools.run(cmd, dir) }) {
-                        Box(Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(c.accentTint), contentAlignment = Alignment.Center) { GlyphIcon(Glyph.PLAY, 16.dp, c.accentText) }
-                        Column(Modifier.weight(1f)) {
-                            Text(cmd.label.ifBlank { cmd.line }, color = c.fg, fontSize = 14.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans)
-                            Mono(cmd.line)
-                        }
-                        IconButton(Glyph.EDIT, tr("Edit", "עריכה"), 32.dp, c.muted, filled = false) { editing = i }
+            Section(tr("Commands", "פקודות") + (if (local.commands.isEmpty()) "" else "  ${local.commands.size}")) {
+                if (Tools.claude != null) {
+                    val busy = p.id in ClaudeFill.busy.collectAsState().value
+                    TextAction(if (busy) tr("Claude is reading…", "Claude קורא…") else tr("Find commands with Claude", "למצוא פקודות עם Claude"), accent = true, enabled = !busy) {
+                        ClaudeFill.start(p, dir); Nav.set(Screen.Details(p.id))
                     }
                 }
-                AddRow(tr("Add a command", "הוספת פקודה")) { editing = -1 }
+            }
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val gap = 12.dp
+                val columns = ((maxWidth + gap) / (240.dp + gap)).toInt().coerceIn(2, 3)
+                val width = (maxWidth - gap * (columns - 1)) / columns
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(gap), verticalArrangement = Arrangement.spacedBy(gap)) {
+                    local.commands.forEachIndexed { i, cmd ->
+                        ContextMenuArea(items = {
+                            listOf(
+                                ContextMenuItem(tr("Edit", "עריכה")) { editing = i },
+                                ContextMenuItem(tr("Remove", "הסרה")) { saveLocal(p, local.copy(commands = local.commands.filterIndexed { k, _ -> k != i })) },
+                            )
+                        }) { CommandTile(cmd, Modifier.width(width), onEdit = { editing = i }) { Tools.run(cmd, dir) } }
+                    }
+                    AddTile(tr("Command", "פקודה"), Modifier.width(width)) { editing = -1 }
+                }
             }
             Text(tr("Each runs in ${Shells.current.label}, in the project's folder, in a new terminal tab.", "כל פקודה רצה ב־${Shells.current.label}, בתיקיית הפרויקט, בלשונית חדשה של הטרמינל."),
-                color = c.faint, fontSize = 12.sp, fontFamily = PlexSans, modifier = Modifier.padding(start = 4.dp, top = 8.dp))
+                color = c.faint, fontSize = 12.sp, fontFamily = PlexSans, modifier = Modifier.padding(start = 4.dp, top = 10.dp))
         }
-        Pulses.state.collectAsState().value[dir.path]?.port?.let { port ->
-            Group(tr("Running", "רץ עכשיו")) {
-                StateRow(LIVE_DOT, tr("Dev server", "שרת פיתוח"), "localhost:$port", c.accentText, mono = true) {
-                    Chrome.open(p, DeckAction(Catalog.LINK, "http://localhost:$port", "localhost"))
+        Column {
+            Section(tr("Open the folder in", "פתיחת התיקייה ב־"))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Tools.forFolder(dir).forEach { t ->
+                    Row(Modifier.clip(RoundedCornerShape(99.dp)).background(c.surface2).clickable { Tools.launch(t, dir, p.name) }.padding(start = 8.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        ToolMark(t, 18.dp, dark)
+                        Spacer(Modifier.width(8.dp))
+                        Text(t.label, color = c.fg, fontSize = 13.sp, fontFamily = PlexSans)
+                    }
                 }
             }
+            Mono(dir.path, c.faint, 11, Modifier.padding(start = 4.dp, top = 10.dp))
         }
-        Group(tr("Open the folder in", "פתיחת התיקייה ב־")) {
-            Tools.forFolder(dir).forEach { t ->
-                Item({ Tools.launch(t, dir, p.name) }) {
-                    MarkBox { ToolMark(t, 20.dp, dark) }
-                    Text(t.label, color = c.fg, fontSize = 14.sp, fontFamily = PlexSans, modifier = Modifier.weight(1f))
-                }
-            }
+    }
+}
+
+/** A command: its name and its line; a click runs it, the pencil shows on hover. */
+@Composable
+private fun CommandTile(cmd: Command, modifier: Modifier, onEdit: () -> Unit, onRun: () -> Unit) {
+    val c = LocalDeck.current
+    val hover = remember { MutableInteractionSource() }
+    val hovered by hover.collectIsHoveredAsState()
+    val shape = RoundedCornerShape(16.dp)
+    Row(modifier.clip(shape).border(1.dp, c.line, shape).background(if (hovered) c.surface2 else Color.Transparent).hoverable(hover).clickable(onClick = onRun)
+        .padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(c.accentTint), contentAlignment = Alignment.Center) { GlyphIcon(Glyph.PLAY, 16.dp, c.accentText) }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(cmd.label.ifBlank { cmd.line }, color = c.fg, fontSize = 14.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Mono(cmd.line, c.faint, 11)
         }
-        Mono(dir.path, c.faint)
+        if (hovered) IconButton(Glyph.EDIT, tr("Edit", "עריכה"), 28.dp, c.muted, filled = false, onClick = onEdit)
     }
 }
 
