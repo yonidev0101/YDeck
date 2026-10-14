@@ -494,19 +494,17 @@ private fun ReceiptRow(r: Receipt, git: GitInfo?, selected: Boolean, onClick: ()
     }
 }
 
-/** The project's latest agent sessions, on its overview. */
+/** The project's latest agent sessions that changed files, newest first (the overview shows a few). */
 @Composable
-fun SessionsCard(p: Project, local: Local) {
-    val c = LocalDeck.current
+fun recentSessions(folder: String?, n: Int = 3): List<Receipt> =
+    folder?.let { Receipts.state.collectAsState().value[it] }.orEmpty().filter { it.files.isNotEmpty() }.take(n)
+
+/** The body of the overview's "Recent sessions": each opens its receipt on the Git tab. */
+@Composable
+fun SessionsList(p: Project, local: Local) {
     val folder = local.folder ?: return
     val git = Git.state.collectAsState().value[folder]
-    val receipts = Receipts.state.collectAsState().value[folder].orEmpty().filter { it.files.isNotEmpty() }.take(3)
-    if (receipts.isEmpty()) return
-    Card(padding = 14.dp) {
-        Text(tr("Agent sessions", "סשנים של סוכנים"), color = c.fg, fontSize = 15.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans,
-            modifier = Modifier.padding(start = 8.dp, top = 6.dp, bottom = 8.dp))
-        receipts.forEach { r -> ReceiptRow(r, git, false) { GitFocus.open(p, r.id) } }
-    }
+    Column { recentSessions(folder).forEach { r -> ReceiptRow(r, git, false) { GitFocus.open(p, r.id) } } }
 }
 
 /** A session's receipt: what it was asked, the files it changed and their diffs; commit them, or put them back. */

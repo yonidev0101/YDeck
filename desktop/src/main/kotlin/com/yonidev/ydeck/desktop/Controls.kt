@@ -123,6 +123,15 @@ fun PageTitle(text: String, size: Int = 34) {
     Text(text, color = LocalDeck.current.fg, fontSize = size.sp, lineHeight = (size + 6).sp, fontFamily = Display, fontWeight = FontWeight.Light)
 }
 
+/** A section's heading on a page, and its one action at the end. */
+@Composable
+fun Section(title: String, action: @Composable () -> Unit = {}) {
+    Row(Modifier.fillMaxWidth().padding(start = 4.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(title, color = LocalDeck.current.fg, fontSize = 15.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans, modifier = Modifier.weight(1f))
+        action()
+    }
+}
+
 /** A small grey label over a group. */
 @Composable
 fun GroupLabel(text: String, modifier: Modifier = Modifier) {

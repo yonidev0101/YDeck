@@ -175,19 +175,17 @@ object AgentsFile {
 
 // ── on the overview ──
 
-/** Decisions the project keeps to: every session starts from them. */
+/** Decisions the project keeps to: every session starts from them (the body of the overview's "Decisions"). */
 @Composable
-fun DecisionsCard(dir: File) {
+fun DecisionsBody(dir: File) {
     val c = LocalDeck.current
     val pulse = Pulses.state.collectAsState().value[dir.path] ?: Pulse()
     val scope = rememberCoroutineScope()
     var draft by remember(dir) { mutableStateOf("") }
     fun refresh() = scope.launch { Pulses.refresh(Settings.state.value.local.values.mapNotNull { it.folder }) }
-    Card {
-        Text(tr("Decisions", "החלטות"), color = c.fg, fontSize = 15.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans)
-        Spacer(Modifier.height(4.dp))
+    Column {
         Text(tr("What every session keeps to. Claude adds to it too.", "מה שכל סשן שומר עליו. גם Claude מוסיף לכאן."), color = c.faint, fontSize = 12.sp, fontFamily = PlexSans)
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(10.dp))
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             pulse.decisions.take(12).forEachIndexed { i, d ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -210,10 +208,8 @@ fun DecisionsCard(dir: File) {
                 AgentsFile.sync(dir); refresh()
             }
         }
-        Spacer(Modifier.height(12.dp))
-        val agents = File(dir, AgentsFile.NAME).isFile
-        if (agents) Text(tr("Kept in AGENTS.md too, for Codex, Cursor and other agents.", "נשמר גם ב־AGENTS.md, בשביל Codex, Cursor וסוכנים אחרים."), color = c.faint, fontSize = 12.sp, fontFamily = PlexSans)
-        else Row(verticalAlignment = Alignment.CenterVertically) {
+        // Other agents read AGENTS.md; once it's there, it stays in step by itself.
+        if (!File(dir, AgentsFile.NAME).isFile) Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(tr("Using Codex or Cursor too?", "עובדים גם עם Codex או Cursor?"), color = c.faint, fontSize = 12.sp, fontFamily = PlexSans)
             TextAction(tr("Write AGENTS.md", "יצירת AGENTS.md"), accent = true) { AgentsFile.create(dir); refresh() }
         }

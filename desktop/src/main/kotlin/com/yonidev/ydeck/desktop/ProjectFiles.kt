@@ -30,7 +30,13 @@ data class SharedFile(
     val summary: String = "", val summaryAt: Long = 0,
     val decisions: List<Decision> = emptyList(),
 )
-data class LocalFile(val now: String, val next: String, val handoff: Handoff? = null)
+data class LocalFile(val now: String, val next: String, val handoff: Handoff? = null, val modifiedAt: Long = 0) {
+    /**
+     * The handoff's next step as a suggestion: only while the handoff is the newest thing in the file. Once the next
+     * step was written after it (by the developer or an agent), it has been answered.
+     */
+    val suggestion: String get() = handoff?.takeIf { it.at <= 0 || modifiedAt - it.at < 60_000 }?.next.orEmpty()
+}
 
 object ProjectFiles {
     const val SHARED = ".ydeck.json"
@@ -51,11 +57,12 @@ object ProjectFiles {
     }.getOrNull()
 
     fun readLocal(dir: File): LocalFile? = runCatching {
-        val o = JSONObject(File(dir, LOCAL).takeIf { it.isFile }?.readText() ?: return null)
+        val f = File(dir, LOCAL).takeIf { it.isFile } ?: return null
+        val o = JSONObject(f.readText())
         val h = o.optJSONObject("handoff")
         LocalFile(o.optString("now").trim(), o.optString("next").trim(), h?.let {
             Handoff(it.optString("done").trim(), it.optString("next").trim(), runCatching { java.time.Instant.parse(it.optString("at")).toEpochMilli() }.getOrDefault(0L), it.optString("agent"))
-        }?.takeIf { it.done.isNotEmpty() || it.next.isNotEmpty() })
+        }?.takeIf { it.done.isNotEmpty() || it.next.isNotEmpty() }, f.lastModified())
     }.getOrNull()
 
     /** The next step written from YDeck's panel; whatever else the file holds stays. */

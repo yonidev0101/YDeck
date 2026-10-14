@@ -31,6 +31,10 @@ class BrainTest {
             val local = ProjectFiles.readLocal(dir)!!
             assertEquals("Ship deposits", local.next)
             assertEquals("Test it in production", local.handoff!!.next)
+            // An old handoff's next step was answered by what was written since: it's no longer suggested.
+            assertEquals("", local.suggestion)
+            ProjectFiles.writeHandoff(dir, Handoff("Added the deposit webhook", "Test it in production", System.currentTimeMillis(), "Claude"))
+            assertEquals("Test it in production", ProjectFiles.readLocal(dir)!!.suggestion)
 
             val brief = ProjectFiles.briefing(Project.sample(), dir)
             assertTrue(brief.contains("Payments go through Stripe only"))

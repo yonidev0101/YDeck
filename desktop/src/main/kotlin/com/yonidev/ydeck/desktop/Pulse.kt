@@ -32,6 +32,8 @@ data class Pulse(
     /** The project's memory: decisions (.ydeck.json) and the last session's handoff (.ydeck.local.json). */
     val decisions: List<Decision> = emptyList(),
     val handoff: Handoff? = null,
+    /** The handoff's next step while it's still a suggestion, see [LocalFile.suggestion]. */
+    val suggestion: String = "",
 ) {
     val port: Int? get() = ports.firstOrNull()
 }
@@ -50,7 +52,7 @@ object Pulses {
             d.path to Pulse(
                 Claude.lastSession(d), ports[d.path].orEmpty(), runCatching { Env.missing(d) }.getOrDefault(emptyList()), runCatching { Versions.of(d) }.getOrNull(),
                 local?.now.orEmpty(), shared[d]?.releases?.firstOrNull(), shared[d]?.summary.orEmpty(), shared[d]?.summaryAt ?: 0,
-                shared[d]?.decisions.orEmpty(), local?.handoff,
+                shared[d]?.decisions.orEmpty(), local?.handoff, local?.suggestion.orEmpty(),
             )
         }
     }

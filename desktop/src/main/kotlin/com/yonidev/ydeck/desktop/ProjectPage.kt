@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -31,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -93,6 +93,10 @@ private fun Header(p: Project, local: Local, actions: AppActions) {
         Box {
             IconButton(Glyph.MORE, tr("More", "עוד")) { menu = true }
             DropdownMenu(menu, { menu = false }) {
+                // The Claude button picks up the last conversation; a fresh one is here.
+                if (dir != null) Tools.claude?.let { claude ->
+                    MenuItem(Glyph.CLAUDE, tr("New Claude conversation", "שיחה חדשה עם Claude")) { menu = false; Tools.launch(claude, dir, p.name, fresh = true) }
+                }
                 MenuItem(Glyph.EDIT, tr("Details", "פרטים")) { menu = false; Nav.set(Screen.Details(p.id)) }
                 // Claude reads the folder and suggests what's missing; the details page shows what it found.
                 if (dir != null && Tools.claude != null) MenuItem(Glyph.SPARKLE, tr("Fill in with Claude", "מילוי פרטים עם Claude")) {
@@ -177,19 +181,21 @@ private fun Tabs(p: Project, tab: Tab, local: Local) {
 
 // ── overview ──
 
+/*
+ * One column, read top to bottom, each thing once: an agent at work (only while it is), the next step, what's open,
+ * and the project's memory (summary, decisions, recent sessions) folded below. The header already says where git
+ * stands and opens Claude, so the page doesn't say it again.
+ */
 @Composable
 private fun Overview(p: Project, local: Local, dark: Boolean, actions: AppActions) {
     val dir = local.dir
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val wide = maxWidth >= 820.dp
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 44.dp, vertical = 24.dp)) {
-            if (dir == null) { ConnectFolder(p, actions); return@Column }
-            if (wide) Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                Column(Modifier.weight(1.55f), verticalArrangement = Arrangement.spacedBy(20.dp)) { LoopsCard(p, local); LeftOff(p, local, dir); Summary(p, dir); DecisionsCard(dir) }
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(20.dp)) { ClaudeCard(p, local, dir, dark); SessionsCard(p, local); StateCard(p, local) }
-            } else Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                LoopsCard(p, local); ClaudeCard(p, local, dir, dark); LeftOff(p, local, dir); Summary(p, dir); DecisionsCard(dir); SessionsCard(p, local); StateCard(p, local)
-            }
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 44.dp, vertical = 24.dp)) {
+        if (dir == null) { ConnectFolder(p, actions); return@Column }
+        Column(Modifier.widthIn(max = 860.dp), verticalArrangement = Arrangement.spacedBy(32.dp)) {
+            LiveAgent(local, dark)
+            NextStep(p, local, dir)
+            LoopsCard(p, local)
+            Memory(p, local, dir)
         }
     }
 }
@@ -199,59 +205,42 @@ private fun CardTitle(text: String, modifier: Modifier = Modifier) {
     Text(text, color = LocalDeck.current.fg, fontSize = 15.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans, modifier = modifier)
 }
 
-/** What the project is: written by Claude on request, kept in .ydeck.json. */
+/** Claude Code at work or waiting here, and on what; nothing at all otherwise. */
 @Composable
-private fun Summary(p: Project, dir: File) {
+private fun LiveAgent(local: Local, dark: Boolean) {
     val c = LocalDeck.current
-    val pulse = Pulses.state.collectAsState().value[dir.path] ?: Pulse()
-    val busy = dir.path in ClaudeSummary.busy.collectAsState().value
-    val scope = rememberCoroutineScope()
-    var error by remember(p.id) { mutableStateOf<String?>(null) }
-    Card {
+    val session = claudeIn(local.folder)?.takeIf { it.mode != ClaudeMode.DONE } ?: return
+    val waiting = session.mode == ClaudeMode.WAITING
+    Card(fill = if (waiting) CHANGED_DOT.copy(alpha = if (dark) 0.14f else 0.12f) else c.accentTint, padding = 18.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            CardTitle(tr("Summary", "תקציר"), Modifier.weight(1f))
-            if (pulse.summaryAt > 0 && !busy) {
-                Text(tr("by Claude · ${ago(pulse.summaryAt)}", "נכתב ע״י Claude · ${ago(pulse.summaryAt)}"), color = c.faint, fontSize = 12.sp, fontFamily = PlexSans)
-                Spacer(Modifier.width(10.dp))
-            }
-            if (Tools.claude != null) Pill(
-                if (busy) tr("Claude is reading…", "Claude קורא…") else if (pulse.summary.isBlank()) tr("Write with Claude", "כתיבה עם Claude") else tr("Update with Claude", "עדכון עם Claude"),
-                Tone.TINT, Glyph.SPARKLE, enabled = !busy, small = true,
-            ) {
-                error = null
-                scope.launch {
-                    error = withContext(Dispatchers.IO) { ClaudeSummary.run(dir) }
-                    val all = Settings.state.value.local.values.mapNotNull { it.folder }
-                    Pulses.refresh(all)
-                }
-            }
+            ClaudeDot(session.mode, dark, 8.dp)
+            Spacer(Modifier.width(10.dp))
+            Text(claudeText(session), color = if (waiting) c.amberText else claudeColor(session.mode, dark), fontSize = 14.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans,
+                modifier = Modifier.weight(1f))
+            Text(ago(session.workStart), color = c.muted, fontSize = 12.sp, fontFamily = PlexSans)
         }
-        Spacer(Modifier.height(12.dp))
-        Text(
-            pulse.summary.ifBlank { tr("No summary yet. Claude can read the project and write one, in a few seconds.", "עוד אין תקציר. Claude יכול לקרוא את הפרויקט ולכתוב אחד, בכמה שניות.") },
-            color = if (pulse.summary.isBlank()) c.faint else c.fg, fontSize = 15.sp, lineHeight = 24.sp, fontFamily = PlexSans,
-            style = TextStyle(textDirection = dirOf(pulse.summary)),
+        if (session.detail.isNotBlank()) Text(
+            if (session.mode == ClaudeMode.WORKING) "“${session.detail}”" else session.detail, color = c.fg, fontSize = 14.sp, lineHeight = 21.sp, fontFamily = PlexSans,
+            maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 18.dp, top = 6.dp), style = TextStyle(textDirection = TextDirection.Content),
         )
-        error?.let { Text(it, color = c.danger, fontSize = 12.sp, fontFamily = PlexSans, modifier = Modifier.padding(top = 8.dp)) }
     }
 }
 
-/** Now, next, last: what's in progress (Claude's), the next step (both ways with .ydeck.local.json), the last commit. */
+/** The next step (both ways with .ydeck.local.json), Claude's suggestion for it, and where the last session ended. */
 @Composable
-private fun LeftOff(p: Project, local: Local, dir: File) {
+private fun NextStep(p: Project, local: Local, dir: File) {
     val c = LocalDeck.current
     val pulse = Pulses.state.collectAsState().value[dir.path] ?: Pulse()
-    val git = Git.state.collectAsState().value[dir.path]
     var note by remember(p.id) { mutableStateOf(local.note) }
     LaunchedEffect(local.note) { if (local.note != note) note = local.note }
     val busy = dir.path in Handoffs.busy.collectAsState().value
     val scope = rememberCoroutineScope()
     var error by remember(p.id) { mutableStateOf<String?>(null) }
     val handoff = pulse.handoff
-    Card {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            CardTitle(tr("Where you left off", "איפה עצרת"), Modifier.weight(1f))
-            if (Tools.claude != null) Pill(if (busy) tr("Claude is summing up…", "Claude מסכם…") else tr("Sum up with Claude", "סיכום עם Claude"), Tone.TINT, Glyph.SPARKLE, enabled = !busy, small = true) {
+    fun use(next: String) { note = next; Settings.setNote(p.id, next); ProjectFiles.writeNext(dir, next) }
+    Column {
+        Section(tr("Next step", "הצעד הבא")) {
+            if (Tools.claude != null) TextAction(if (busy) tr("Claude is summing up…", "Claude מסכם…") else tr("Sum up with Claude", "סיכום עם Claude"), accent = true, enabled = !busy) {
                 error = null
                 scope.launch {
                     error = withContext(Dispatchers.IO) { Handoffs.write(dir) }
@@ -259,109 +248,82 @@ private fun LeftOff(p: Project, local: Local, dir: File) {
                 }
             }
         }
-        Spacer(Modifier.height(14.dp))
-        @Composable fun line(label: String, content: @Composable () -> Unit) {
-            Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(label, color = c.faint, fontSize = 13.sp, fontFamily = PlexSans, modifier = Modifier.width(64.dp))
-                Box(Modifier.weight(1f)) { content() }
-            }
-        }
-        line(tr("Now", "עכשיו")) {
-            Text(pulse.now.ifBlank { "—" }, color = if (pulse.now.isBlank()) c.faint else c.fg, fontSize = 15.sp, fontFamily = PlexSans, style = TextStyle(textDirection = TextDirection.Content))
-        }
-        if (handoff != null && handoff.done.isNotBlank()) line(tr("Done", "נעשה")) {
-            Text(handoff.done + " · " + ago(handoff.at), color = c.fg, fontSize = 14.sp, lineHeight = 21.sp, fontFamily = PlexSans, style = TextStyle(textDirection = TextDirection.Content))
-        }
-        line(tr("Next", "הבא")) {
-            Field(null, note, { note = it; Settings.setNote(p.id, it); ProjectFiles.writeNext(dir, it) }, placeholder = tr("The next step, so you come back without thinking", "הצעד הבא, כדי לחזור בלי לחשוב"))
-        }
-        // Claude's suggestion for the next step, one click from being it.
-        if (handoff != null && handoff.next.isNotBlank() && handoff.next != note) Row(Modifier.padding(start = 64.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Field(null, note, { use(it) }, placeholder = tr("The next step, so you come back without thinking", "הצעד הבא, כדי לחזור בלי לחשוב"))
+        // Claude's suggestion, one click from being the next step.
+        val suggestion = pulse.suggestion
+        if (suggestion.isNotBlank() && suggestion != note) Row(Modifier.padding(start = 4.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             GlyphIcon(Glyph.SPARKLE, 13.dp, c.accentText)
-            Spacer(Modifier.width(6.dp))
-            Text(handoff.next, color = c.muted, fontSize = 13.sp, fontFamily = PlexSans, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false),
-                style = TextStyle(textDirection = TextDirection.Content))
-            TextAction(tr("Use", "לקחת"), accent = true) { note = handoff.next; Settings.setNote(p.id, handoff.next); ProjectFiles.writeNext(dir, handoff.next) }
+            Spacer(Modifier.width(8.dp))
+            Text(tr("Claude suggests: ", "Claude מציע: ") + suggestion, color = c.muted, fontSize = 13.sp, fontFamily = PlexSans, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false), style = TextStyle(textDirection = TextDirection.Content))
+            TextAction(tr("Use this", "להשתמש בזה"), accent = true) { use(suggestion) }
         }
-        error?.let { Text(it, color = c.danger, fontSize = 12.sp, fontFamily = PlexSans, modifier = Modifier.padding(top = 6.dp)) }
-        if (git != null && git.lastAt > 0) line(tr("Last", "אחרון")) {
-            Text("“${git.lastSubject}” · ${ago(git.lastAt)}", color = c.muted, fontSize = 14.sp, fontFamily = PlexSans, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                style = TextStyle(textDirection = TextDirection.Content))
-        }
+        val before = handoff?.done?.takeIf { it.isNotBlank() }?.let { tr("Last time: ", "בפעם הקודמת: ") + it + " · " + ago(handoff.at) }
+            ?: pulse.now.takeIf { it.isNotBlank() }?.let { tr("In progress: ", "בעבודה: ") + it }
+        if (before != null) Text(before, color = c.faint, fontSize = 13.sp, lineHeight = 19.sp, fontFamily = PlexSans, maxLines = 2, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 4.dp, top = 8.dp), style = TextStyle(textDirection = TextDirection.Content))
+        error?.let { Text(it, color = c.danger, fontSize = 12.sp, fontFamily = PlexSans, modifier = Modifier.padding(start = 4.dp, top = 6.dp)) }
     }
 }
 
-/** Claude Code here: what it's doing now, or a way in (continue the last conversation, or a new one). */
+/** What the project remembers, folded: what it is, what it keeps to, the agents' latest sessions. */
 @Composable
-private fun ClaudeCard(p: Project, local: Local, dir: File, dark: Boolean) {
-    val c = LocalDeck.current
-    val claude = Tools.claude ?: return
-    val session = claudeIn(local.folder)
+private fun Memory(p: Project, local: Local, dir: File) {
     val pulse = Pulses.state.collectAsState().value[dir.path] ?: Pulse()
-    if (session != null && session.mode != ClaudeMode.DONE) {
-        val color = claudeColor(session.mode, dark)
-        Card(fill = if (session.mode == ClaudeMode.WAITING) CHANGED_DOT.copy(alpha = if (dark) 0.14f else 0.12f) else c.accentTint) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                ClaudeDot(session.mode, dark, 8.dp)
-                Spacer(Modifier.width(8.dp))
-                Text(claudeText(session), color = if (session.mode == ClaudeMode.WAITING) c.amberText else color, fontSize = 14.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans, modifier = Modifier.weight(1f))
-                Text(ago(session.workStart), color = c.muted, fontSize = 12.sp, fontFamily = PlexSans)
-            }
-            if (session.detail.isNotBlank()) {
-                Spacer(Modifier.height(10.dp))
-                Text(if (session.mode == ClaudeMode.WORKING) "“${session.detail}”" else session.detail, color = c.fg, fontSize = 14.sp, lineHeight = 21.sp, fontFamily = PlexSans,
-                    maxLines = 3, overflow = TextOverflow.Ellipsis, style = TextStyle(textDirection = TextDirection.Content))
-            }
-        }
-        return
-    }
-    Card {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            GlyphIcon(Glyph.CLAUDE, 18.dp, CLAUDE_ORANGE)
-            Spacer(Modifier.width(10.dp))
-            CardTitle("Claude Code", Modifier.weight(1f))
-        }
-        Spacer(Modifier.height(8.dp))
-        Text(
-            session?.let { claudeText(it) } ?: pulse.claudeAt?.let { tr("Last conversation ${ago(it)}", "שיחה אחרונה ${ago(it)}") } ?: tr("No conversations here yet", "עוד אין כאן שיחות"),
-            color = c.muted, fontSize = 13.sp, fontFamily = PlexSans,
-        )
-        session?.detail?.takeIf { it.isNotBlank() }?.let {
-            Text(it, color = c.fg, fontSize = 13.sp, lineHeight = 19.sp, fontFamily = PlexSans, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp),
-                style = TextStyle(textDirection = TextDirection.Content))
-        }
-        Spacer(Modifier.height(14.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (pulse.claudeAt != null) {
-                Pill(tr("Continue", "המשך"), Tone.DARK, small = true) { Tools.launch(claude, dir, p.name) }
-                Pill(tr("New conversation", "שיחה חדשה"), Tone.SOFT, small = true) { Tools.launch(claude, dir, p.name, fresh = true) }
-            } else Pill(tr("Start", "פתיחה"), Tone.DARK, small = true) { Tools.launch(claude, dir, p.name, fresh = true) }
+    val sessions = recentSessions(local.folder)
+    var open by remember(p.id) { mutableStateOf(setOf("summary")) }
+    @Composable fun GroupScope.fold(key: String, title: String, count: Int?, body: @Composable () -> Unit) =
+        Fold(title, count, key in open, { open = if (key in open) open - key else open + key }, body)
+    Column {
+        Section(tr("Memory", "זיכרון"))
+        Group {
+            fold("summary", tr("Summary", "תקציר"), null) { SummaryBody(dir, pulse) }
+            fold("decisions", tr("Decisions", "החלטות"), pulse.decisions.size) { DecisionsBody(dir) }
+            if (sessions.isNotEmpty()) fold("sessions", tr("Recent sessions", "סשנים אחרונים"), sessions.size) { SessionsList(p, local) }
         }
     }
 }
 
-/** The project's state, one row each: git, the dev server, .env, the version. */
+/** A row of a group that opens to show more: its title, how many there are, and a chevron. */
 @Composable
-private fun StateCard(p: Project, local: Local) {
+private fun GroupScope.Fold(title: String, count: Int?, expanded: Boolean, onToggle: () -> Unit, body: @Composable () -> Unit) {
     val c = LocalDeck.current
-    val folder = local.folder ?: return
-    val git = Git.state.collectAsState().value[folder]
-    val pulse = Pulses.state.collectAsState().value[folder] ?: Pulse()
-    Group {
-        val toGit = { Nav.set(Screen.Project(p.id, Tab.GIT)) }
-        if (git != null) StateRow(if (git.changes > 0 || git.ahead > 0 || git.behind > 0) CHANGED_DOT else CLEAN_DOT, gitWords(git), git.branch, mono = true, onClick = toGit)
-        else StateRow(c.line, tr("Not a git repository", "התיקייה לא ב־git"), tr("Start", "הפעלה"), c.accentText, onClick = toGit)
-        pulse.port?.let { port ->
-            StateRow(LIVE_DOT, tr("Dev server", "שרת פיתוח"), "localhost:$port", c.accentText, mono = true) {
-                Chrome.open(p, DeckAction(Catalog.LINK, "http://localhost:$port", "localhost"))
+    Item(onToggle) {
+        Text(title, color = c.fg, fontSize = 14.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans, modifier = Modifier.weight(1f))
+        if (count != null && count > 0) Text("$count", color = c.faint, fontSize = 13.sp, fontFamily = PlexSans)
+        Box(Modifier.rotate(if (expanded) 180f else 0f)) { GlyphIcon(Glyph.CHEVRON, 16.dp, c.faint) }
+    }
+    if (expanded) Box(Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, bottom = 16.dp)) { body() }
+}
+
+/** What the project is: written by Claude on request, kept in .ydeck.json. */
+@Composable
+private fun SummaryBody(dir: File, pulse: Pulse) {
+    val c = LocalDeck.current
+    val busy = dir.path in ClaudeSummary.busy.collectAsState().value
+    val scope = rememberCoroutineScope()
+    var error by remember(dir) { mutableStateOf<String?>(null) }
+    Column {
+        Text(
+            pulse.summary.ifBlank { tr("No summary yet. Claude can read the project and write one, in a few seconds.", "עוד אין תקציר. Claude יכול לקרוא את הפרויקט ולכתוב אחד, בכמה שניות.") },
+            color = if (pulse.summary.isBlank()) c.faint else c.fg, fontSize = 14.sp, lineHeight = 22.sp, fontFamily = PlexSans,
+            style = TextStyle(textDirection = dirOf(pulse.summary)),
+        )
+        Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (pulse.summaryAt > 0 && !busy) Text(tr("By Claude · ${ago(pulse.summaryAt)}", "נכתב ע״י Claude · ${ago(pulse.summaryAt)}"), color = c.faint, fontSize = 12.sp, fontFamily = PlexSans,
+                modifier = Modifier.weight(1f)) else Spacer(Modifier.weight(1f))
+            if (Tools.claude != null) TextAction(
+                if (busy) tr("Claude is reading…", "Claude קורא…") else if (pulse.summary.isBlank()) tr("Write with Claude", "כתיבה עם Claude") else tr("Update", "עדכון"),
+                accent = true, enabled = !busy,
+            ) {
+                error = null
+                scope.launch {
+                    error = withContext(Dispatchers.IO) { ClaudeSummary.run(dir) }
+                    Pulses.refresh(Settings.state.value.local.values.mapNotNull { it.folder })
+                }
             }
         }
-        if (pulse.missingEnv.isNotEmpty()) {
-            StateRow(CHANGED_DOT, count(pulse.missingEnv.size, "key missing in .env", "keys missing in .env", "חסר מפתח אחד ב־.env", "מפתחות חסרים ב־.env"),
-                pulse.missingEnv.first(), c.amberText, mono = true)
-        }
-        val version = pulse.release?.version ?: pulse.version
-        if (version != null) StateRow(c.line, tr("Version $version", "גרסה ⁦$version⁩"), pulse.release?.let { r -> listOf(r.date, r.note).filter { it.isNotBlank() }.joinToString(" · ") })
+        error?.let { Text(it, color = c.danger, fontSize = 12.sp, fontFamily = PlexSans) }
     }
 }
 

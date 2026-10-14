@@ -107,11 +107,16 @@ fun GroupScope.DecideRow(p: Project, local: Local, loops: List<Loop>) {
             Text(tr("It gets everything open here, and you decide together what to commit, push or leave.", "הוא מקבל את כל מה שפתוח כאן, ומחליטים יחד מה לשמור, לדחוף או להשאיר."),
                 color = c.muted, fontSize = 12.sp, lineHeight = 17.sp, fontFamily = PlexSans, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        Pill(tr("Open", "פתיחה"), Tone.TINT, small = true) {
-            val next = local.note.ifBlank { Pulses.state.value[local.folder]?.handoff?.next.orEmpty() }
-            Tools.launch(claude, dir, p.name, prompt = Loops.brief(p, loops, next))
-        }
+        Pill(tr("Open", "פתיחה"), Tone.TINT, small = true) { goOver(p, local, loops) }
     }
+}
+
+/** Opens Claude Code in the project's folder with everything open there, to settle it together. */
+fun goOver(p: Project, local: Local, loops: List<Loop>) {
+    val claude = Tools.claude ?: return
+    val dir = local.dir ?: return
+    val next = local.note.ifBlank { Pulses.state.value[local.folder]?.handoff?.next.orEmpty() }
+    Tools.launch(claude, dir, p.name, prompt = Loops.brief(p, loops, next))
 }
 
 /** The project's open loops, kept fresh. */
@@ -184,7 +189,12 @@ fun LoopsCard(p: Project, local: Local) {
         }
         return
     }
-    Group(tr("Open loops", "פתוח") + "  ${loops.size}") { loops.forEach { LoopRow(p, local, it) }; DecideRow(p, local, loops) }
+    Column {
+        Section(tr("Open", "פתוח") + "  ${loops.size}") {
+            if (Tools.claude != null && local.dir != null) TextAction(tr("Go over it with Claude", "לעבור על זה עם Claude"), accent = true) { goOver(p, local, loops) }
+        }
+        Group { loops.forEach { LoopRow(p, local, it) } }
+    }
 }
 
 /** Every project's open loops on one page: the end of the day is closing them. */
