@@ -55,9 +55,12 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 /*
- * Git in the app: the project page's Git tab (the branch and its server, what changed, a commit, each file's diff,
- * the history), and the same essentials in a sheet over the strip in File Explorer.
+ * Git in the app: the project page's Git tab, and the same essentials in a sheet over the strip in File Explorer.
+ * The tab reads top to bottom: where the branch stands against its server (and the one thing to do about it), then
+ * one of three views: the changes (pick, commit, each file's diff), the history, the agents' sessions.
  */
+
+private enum class GitView { CHANGES, HISTORY, SESSIONS }
 
 @Composable
 fun GitTab(p: Project, local: Local) {
@@ -69,67 +72,112 @@ fun GitTab(p: Project, local: Local) {
     }
     val git = Git.state.collectAsState().value[dir.path]
     if (git == null) { TabColumn { NoRepo(dir) }; return }
-    // Every change goes in the commit unless taken out; the file shown on the right (none: the history).
+    var view by remember(p.id) { mutableStateOf(GitView.CHANGES) }
+    // Every change goes in the commit unless taken out.
     var excluded by remember(p.id) { mutableStateOf(setOf<String>()) }
-    var shown by remember(p.id) { mutableStateOf(git.files.firstOrNull()?.path) }
-    // Or an agent session's receipt (opened from a loop or the overview).
+    // An agent session's receipt, opened from a loop or the overview, or picked here.
     var session by remember(p.id) { mutableStateOf<String?>(null) }
     val focus by GitFocus.receipt.collectAsState()
-    LaunchedEffect(focus) { focus?.let { session = it; GitFocus.receipt.value = null } }
+    LaunchedEffect(focus) { focus?.let { session = it; view = GitView.SESSIONS; GitFocus.receipt.value = null } }
     val receipts = Receipts.state.collectAsState().value[dir.path].orEmpty().filter { it.files.isNotEmpty() }
-    val receipt = receipts.firstOrNull { it.id == session }
-    val change = git.files.firstOrNull { it.path == shown }.takeIf { receipt == null }
+    Column(Modifier.fillMaxSize().padding(start = 44.dp, end = 44.dp, top = 22.dp)) {
+        SyncBar(p, dir, git)
+        PhaseNote(git, Modifier.padding(top = 14.dp))
+        Spacer(Modifier.height(18.dp))
+        Segmented(
+            listOfNotNull(
+                GitView.CHANGES to tr("Changes", "שינויים") + (if (git.files.isEmpty()) "" else "  ${git.files.size}"),
+                GitView.HISTORY to tr("History", "היסטוריה"),
+                (GitView.SESSIONS to tr("Sessions", "סשנים") + "  ${receipts.size}").takeIf { receipts.isNotEmpty() },
+            ),
+            view,
+        ) { view = it }
+        Spacer(Modifier.height(16.dp))
+        when (view) {
+            GitView.CHANGES -> ChangesView(p, local, dir, git, receipts, excluded) { excluded = it }
+            GitView.HISTORY -> Panel(Modifier.fillMaxSize()) { History(p, dir, git) }
+            GitView.SESSIONS -> SessionsView(git, receipts, session, { session = it }) { r ->
+                // Commit only what the session changed: everything else comes out of the commit.
+                excluded = git.files.map { it.path }.toSet() - r.files.map { it.path }.toSet()
+                view = GitView.CHANGES
+            }
+        }
+    }
+}
+
+/** A tall pane with a hairline, open at the bottom (it runs to the window's edge). */
+@Composable
+private fun Panel(modifier: Modifier, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+    val shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+    Column(modifier.fillMaxHeight().clip(shape).border(1.dp, LocalDeck.current.line, shape), content = content)
+}
+
+/** A pane's top line: what it shows, and its actions at the end. */
+@Composable
+private fun PanelHead(content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 50.dp).padding(horizontal = 22.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, content = content)
+    Box(Modifier.fillMaxWidth().height(1.dp).background(LocalDeck.current.surface2))
+}
+
+/** The changes: the files (each in the commit or out) and the commit under them; the chosen file's diff beside. */
+@Composable
+private fun ChangesView(p: Project, local: Local, dir: File, git: GitInfo, receipts: List<Receipt>, excluded: Set<String>, setExcluded: (Set<String>) -> Unit) {
+    val c = LocalDeck.current
+    if (git.files.isEmpty()) { AllSaved(git); return }
+    val loops = loopsOf(local)
+    // Which agent left each file as it is: the latest session that changed it and wasn't put back.
+    val byAgent = remember(receipts) { receipts.filter { it.rewound == null }.reversed().flatMap { r -> r.files.map { it.path to r.agent } }.toMap() }
+    var shown by remember(p.id) { mutableStateOf(git.files.first().path) }
+    val change = git.files.firstOrNull { it.path == shown } ?: git.files.first()
     val chosen = git.files.filter { it.path !in excluded }
-    Row(Modifier.fillMaxSize().padding(start = 44.dp, end = 44.dp, top = 22.dp)) {
-        Column(Modifier.width(340.dp).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-            BranchCard(p, dir, git)
-            PhaseNote(git)
-            Column {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    GroupLabel(tr("Changes", "שינויים") + (if (git.files.isEmpty()) "" else "  ${git.files.size}"), Modifier.weight(1f))
-                    if (git.files.size > 1) Text(if (excluded.isEmpty()) tr("Clear all", "ניקוי הכול") else tr("Select all", "בחירת הכול"), color = c.accentText, fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium, fontFamily = PlexSans, modifier = Modifier.padding(bottom = 8.dp).clip(RoundedCornerShape(6.dp))
-                            .clickable { excluded = if (excluded.isEmpty()) git.files.map { it.path }.toSet() else emptySet() }.padding(horizontal = 4.dp))
+    Row(Modifier.fillMaxSize()) {
+        Column(Modifier.width(360.dp).fillMaxHeight()) {
+            // With Claude Code: it gets everything open and proposes the commits; nothing happens until you say so.
+            if (Tools.claude != null) Row(Modifier.fillMaxWidth().padding(bottom = 12.dp).clip(RoundedCornerShape(12.dp)).background(c.accentTint)
+                .clickable { goOver(p, local, loops) }.padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
+                GlyphIcon(Glyph.CLAUDE, 16.dp, Color(0xFFD97757))
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(tr("Sort it out with Claude Code", "לסדר עם Claude Code"), color = c.accentText, fontSize = 13.5.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans)
+                    Text(tr("It proposes the commits and their messages; you approve.", "הוא מציע את הקומיטים וההודעות, ואתה מאשר."), color = c.muted, fontSize = 12.sp, fontFamily = PlexSans)
                 }
-                if (git.files.isEmpty()) AllSaved()
-                else git.files.take(300).forEach { ch ->
-                    ChangeRow(ch, selected = receipt == null && ch.path == shown, included = ch.path !in excluded,
-                        onInclude = { on -> excluded = if (on) excluded - ch.path else excluded + ch.path }) { shown = ch.path; session = null }
+            }
+            // One box for all: on when every file is in, off when none is.
+            Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                CheckBox(chosen.size == git.files.size) { on -> setExcluded(if (on) emptySet() else git.files.map { it.path }.toSet()) }
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    if (chosen.size == git.files.size) count(git.files.size, "file in the commit", "files in the commit", "קובץ אחד בקומיט", "קבצים בקומיט")
+                    else tr("${chosen.size} of ${git.files.size} files in the commit", "${chosen.size} מתוך ${git.files.size} קבצים בקומיט"),
+                    color = c.muted, fontSize = 13.sp, fontFamily = PlexSans,
+                )
+            }
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                git.files.take(300).forEach { ch ->
+                    ChangeRow(ch, byAgent[ch.path], selected = ch.path == change.path, included = ch.path !in excluded,
+                        onInclude = { on -> setExcluded(if (on) excluded - ch.path else excluded + ch.path) }) { shown = ch.path }
                 }
                 if (git.files.size > 300) Text(tr("and ${git.files.size - 300} more", "ועוד ${git.files.size - 300}"), color = c.faint, fontSize = 12.sp, fontFamily = PlexSans, modifier = Modifier.padding(10.dp))
             }
-            if (git.files.isNotEmpty()) CommitBox(p.id, dir, if (excluded.none { e -> git.files.any { it.path == e } }) null else chosen)
-            if (receipts.isNotEmpty()) Column {
-                GroupLabel(tr("Agent sessions", "סשנים של סוכנים"))
-                receipts.take(8).forEach { r -> ReceiptRow(r, git, selected = r.id == session) { session = r.id } }
+            Box(Modifier.padding(top = 12.dp, bottom = 20.dp)) {
+                CommitBox(p.id, dir, if (excluded.none { e -> git.files.any { it.path == e } }) null else chosen)
             }
-            Spacer(Modifier.height(12.dp))
         }
         Spacer(Modifier.width(28.dp))
-        val shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
-        Column(Modifier.weight(1f).fillMaxHeight().clip(shape).border(1.dp, c.line, shape)) {
-            if (receipt != null) {
-                SessionView(receipt, git, onCommitThese = { excluded = git.files.map { it.path }.toSet() - receipt.files.map { it.path }.toSet() }) { session = null }
-                return@Column
-            }
-            Row(Modifier.fillMaxWidth().heightIn(min = 50.dp).padding(horizontal = 22.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (change != null) {
-                    Mono(change.path, c.fg, 13, Modifier.weight(1f))
-                    Spacer(Modifier.width(10.dp))
-                    val editor = Tools.quick(dir).getOrNull(1)?.takeIf { it.kind == ToolKind.EDITOR || it.kind == ToolKind.IDE }
-                    val file = File(dir, change.path)
-                    if (file.isFile) TextAction(if (editor != null) tr("Open in ${editor.label}", "פתיחה ב־${editor.label}") else tr("Open", "פתיחה"), accent = true) {
-                        if (editor != null) Tools.openIn(editor, file) else Tools.openFile(file.path)
-                    }
-                    TextAction(tr("History", "היסטוריה")) { shown = null }
-                } else {
-                    Text(tr("History", "היסטוריה"), color = c.fg, fontSize = 14.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans, modifier = Modifier.weight(1f))
-                    git.web?.let { web -> TextAction(tr("Open on ${hostName(web)}", "פתיחה ב־${hostName(web)}"), accent = true) { Chrome.open(p, DeckAction(Catalog.LINK, web, hostName(web))) } }
-                }
-            }
-            Box(Modifier.fillMaxWidth().height(1.dp).background(c.surface2))
-            if (change != null) DiffView(dir, change) else History(p, dir, git)
+        Panel(Modifier.weight(1f)) { DiffPane(dir, change) }
+    }
+}
+
+/** The agents' sessions that changed files; the chosen one's receipt beside. */
+@Composable
+private fun SessionsView(git: GitInfo, receipts: List<Receipt>, session: String?, onPick: (String) -> Unit, onCommitThese: (Receipt) -> Unit) {
+    val receipt = receipts.firstOrNull { it.id == session } ?: receipts.firstOrNull() ?: return
+    Row(Modifier.fillMaxSize()) {
+        Column(Modifier.width(360.dp).fillMaxHeight().verticalScroll(rememberScrollState())) {
+            receipts.take(20).forEach { r -> ReceiptRow(r, git, selected = r.id == receipt.id) { onPick(r.id) } }
         }
+        Spacer(Modifier.width(28.dp))
+        Panel(Modifier.weight(1f)) { SessionView(receipt, git, onCommitThese = { onCommitThese(receipt) }) }
     }
 }
 
@@ -168,14 +216,18 @@ private fun NoRepo(dir: File) {
     }
 }
 
-/** Nothing to commit. */
+/** Nothing to commit (and, given [git], the last commit). */
 @Composable
-private fun AllSaved() {
+private fun AllSaved(git: GitInfo? = null) {
     val c = LocalDeck.current
     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.paper).padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
         GlyphIcon(Glyph.CHECK, 16.dp, c.liveText)
         Spacer(Modifier.width(10.dp))
-        Text(tr("Nothing to commit. Everything is saved.", "אין מה לשמור. הכול שמור."), color = c.muted, fontSize = 14.sp, fontFamily = PlexSans)
+        Column {
+            Text(tr("Nothing to commit. Everything is saved.", "אין מה לשמור. הכול שמור."), color = c.muted, fontSize = 14.sp, fontFamily = PlexSans)
+            if (git != null && git.lastAt > 0) Text(tr("Last commit: ", "הקומיט האחרון: ") + "“${git.lastSubject}” · ${ago(git.lastAt)}", color = c.faint, fontSize = 12.sp,
+                fontFamily = PlexSans, maxLines = 1, overflow = TextOverflow.Ellipsis, style = TextStyle(textDirection = TextDirection.Content))
+        }
     }
 }
 
@@ -195,21 +247,23 @@ fun syncWords(g: GitInfo): String = buildList {
     if (g.hasRemote && g.fetchedAt > 0) add(tr("checked ${ago(g.fetchedAt)}", "נבדק ${ago(g.fetchedAt)}"))
 }.joinToString(" · ")
 
+/** The branch (another one from its menu), where it stands against its server, and what to do about it. */
 @Composable
-private fun BranchCard(p: Project, dir: File, git: GitInfo) {
+private fun SyncBar(p: Project, dir: File, git: GitInfo) {
     val c = LocalDeck.current
     val scope = rememberCoroutineScope()
     var menu by remember { mutableStateOf(false) }
     var error by remember(p.id) { mutableStateOf<String?>(null) }
     val branches by produceState(emptyList<String>(), menu) { if (menu) value = withContext(Dispatchers.IO) { GitOps.branches(dir) } }
-    Card(padding = 18.dp) {
+    Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            GlyphIcon(Glyph.BRANCH, 17.dp, c.muted)
-            Spacer(Modifier.width(8.dp))
-            Box(Modifier.weight(1f)) {
-                Row(Modifier.clip(RoundedCornerShape(8.dp)).clickable { menu = true }.padding(horizontal = 4.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Mono(git.branch, c.fg, 15)
-                    Spacer(Modifier.width(4.dp))
+            Box {
+                Row(Modifier.clip(RoundedCornerShape(10.dp)).background(c.surface2).clickable { menu = true }.padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    GlyphIcon(Glyph.BRANCH, 15.dp, c.muted)
+                    Spacer(Modifier.width(8.dp))
+                    Mono(git.branch, c.fg, 14)
+                    Spacer(Modifier.width(6.dp))
                     GlyphIcon(Glyph.CHEVRON, 14.dp, c.faint)
                 }
                 DropdownMenu(menu, { menu = false }) {
@@ -222,15 +276,13 @@ private fun BranchCard(p: Project, dir: File, git: GitInfo) {
                     if (branches.isEmpty()) MenuItem(Glyph.BRANCH, git.branch) { menu = false }
                 }
             }
+            Spacer(Modifier.width(14.dp))
+            Text(syncWords(git), color = c.muted, fontSize = 13.sp, lineHeight = 18.sp, fontFamily = PlexSans, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Spacer(Modifier.width(12.dp))
+            if (git.hasRemote) SyncButtons(dir, git, onError = { error = it })
             git.web?.let { web -> WebMenu(p, web) }
         }
-        Spacer(Modifier.height(6.dp))
-        Text(syncWords(git), color = c.muted, fontSize = 13.sp, lineHeight = 18.sp, fontFamily = PlexSans)
-        if (git.hasRemote) {
-            Spacer(Modifier.height(14.dp))
-            SyncButtons(dir, git, onError = { error = it })
-        }
-        error?.let { Text(it, color = c.danger, fontSize = 12.sp, lineHeight = 17.sp, fontFamily = PlexSans, modifier = Modifier.padding(top = 10.dp)) }
+        error?.let { Text(it, color = c.danger, fontSize = 12.sp, lineHeight = 17.sp, fontFamily = PlexSans, modifier = Modifier.padding(top = 8.dp)) }
     }
 }
 
@@ -258,7 +310,7 @@ private fun WebMenu(p: Project, web: String) {
     }
 }
 
-/** Pull and push (and ask the server now); the one with something to do stands out. */
+/** Pull and push, each only when there's something to bring or send, and asking the server now. */
 @Composable
 fun SyncButtons(dir: File, git: GitInfo, small: Boolean = true, onError: (String?) -> Unit) {
     val scope = rememberCoroutineScope()
@@ -266,19 +318,19 @@ fun SyncButtons(dir: File, git: GitInfo, small: Boolean = true, onError: (String
     fun go(op: (File) -> String?) { onError(null); scope.launch { onError(withContext(Dispatchers.IO) { op(dir) }) } }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         val publish = git.upstream == null
-        Pill(
+        // What's new on the server comes first: pushing over it would be refused.
+        if (git.behind > 0 && !publish) Pill(
+            if (busy == GitOps.Op.PULL) tr("Pulling…", "מושך…") else tr("Pull ${git.behind}", "למשוך ${git.behind}"),
+            Tone.PRIMARY, Glyph.DOWN, enabled = busy == null, small = small,
+        ) { go(GitOps::pull) }
+        if (git.ahead > 0 || (publish && git.lastAt > 0)) Pill(
             when {
                 busy == GitOps.Op.PUSH -> tr("Pushing…", "דוחף…")
-                publish -> tr("Publish branch", "העלאת הענף")
-                else -> tr("Push", "דחיפה") + (if (git.ahead > 0) "  ${git.ahead}" else "")
+                publish -> tr("Put on the server", "להעלות לשרת")
+                else -> tr("Push ${git.ahead}", "לדחוף ${git.ahead}")
             },
-            if (git.ahead > 0 || (publish && git.lastAt > 0)) Tone.PRIMARY else Tone.SOFT, Glyph.UP,
-            enabled = busy == null && (git.ahead > 0 || (publish && git.lastAt > 0)), small = small,
+            if (git.behind > 0) Tone.SOFT else Tone.PRIMARY, Glyph.UP, enabled = busy == null, small = small,
         ) { go(GitOps::push) }
-        Pill(
-            if (busy == GitOps.Op.PULL) tr("Pulling…", "מושך…") else tr("Pull", "משיכה") + (if (git.behind > 0) "  ${git.behind}" else ""),
-            if (git.behind > 0) Tone.PRIMARY else Tone.SOFT, Glyph.DOWN, enabled = busy == null && !publish && git.behind > 0, small = small,
-        ) { go(GitOps::pull) }
         IconButton(Glyph.REFRESH, if (busy == GitOps.Op.FETCH) tr("Checking…", "בודק…") else tr("Check the server now", "בדיקה בשרת עכשיו"), 32.dp,
             LocalDeck.current.muted, filled = false) { if (busy == null) go(GitOps::fetch) }
     }
@@ -286,11 +338,11 @@ fun SyncButtons(dir: File, git: GitInfo, small: Boolean = true, onError: (String
 
 /** A merge or a rebase in the middle, or conflicts: what to do. */
 @Composable
-private fun PhaseNote(git: GitInfo) {
+private fun PhaseNote(git: GitInfo, modifier: Modifier = Modifier) {
     val c = LocalDeck.current
     if (git.phase == GitPhase.NONE && git.conflicts == 0) return
     val dark = c == Dark
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(CHANGED_DOT.copy(alpha = if (dark) 0.14f else 0.12f)).padding(16.dp),
+    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(CHANGED_DOT.copy(alpha = if (dark) 0.14f else 0.12f)).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(when (git.phase) {
             GitPhase.MERGING -> tr("A merge is in progress", "מיזוג באמצע")
@@ -326,16 +378,37 @@ fun KindBadge(kind: Char) {
     }
 }
 
+/** What happened to a file, in a word, in the badge's colour. */
 @Composable
-private fun ChangeRow(ch: GitChange, selected: Boolean, included: Boolean, onInclude: (Boolean) -> Unit, onClick: () -> Unit) {
+private fun KindWord(kind: Char) {
+    val c = LocalDeck.current
+    val (word, color) = when (kind) {
+        'A' -> tr("new", "חדש") to c.liveText
+        'D' -> tr("deleted", "נמחק") to c.danger
+        'U' -> tr("conflict", "התנגשות") to c.danger
+        'R' -> tr("renamed", "שם חדש") to c.accentText
+        else -> tr("changed", "שונה") to c.amberText
+    }
+    Text(word, color = color, fontSize = 12.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans)
+}
+
+/** A changed file: in the commit or not, its name over its folder, and what happened to it. */
+@Composable
+private fun ChangeRow(ch: GitChange, agent: Agent?, selected: Boolean, included: Boolean, onInclude: (Boolean) -> Unit, onClick: () -> Unit) {
     val c = LocalDeck.current
     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).then(if (selected) Modifier.background(c.surface2) else Modifier).clickable(onClick = onClick)
         .padding(horizontal = 8.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
         CheckBox(included, onInclude)
         Spacer(Modifier.width(10.dp))
-        KindBadge(ch.kind)
+        Column(Modifier.weight(1f)) {
+            Text(ch.name, color = if (included) c.fg else c.muted, fontSize = 13.5.sp, fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal, fontFamily = PlexSans,
+                maxLines = 1, overflow = TextOverflow.Ellipsis, style = TextStyle(textDirection = TextDirection.Ltr))
+            if (ch.folder.isNotBlank()) Mono(ch.folder, c.faint, 11)
+        }
         Spacer(Modifier.width(10.dp))
-        FileName(ch, Modifier.weight(1f), selected)
+        // Changed by an agent's session (see the Sessions view).
+        if (agent != null) { AgentMark(agent, 13.dp); Spacer(Modifier.width(8.dp)) }
+        KindWord(ch.kind)
     }
 }
 
@@ -378,8 +451,8 @@ fun CommitBox(key: String, dir: File, chosen: List<GitChange>?, compact: Boolean
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         MessageField(message, { message = it; error = null; done = null }, tr("What changed, in a line", "מה השתנה, בשורה"), if (compact) 3 else 6)
         Row(verticalAlignment = Alignment.CenterVertically) {
-            if (Tools.claude != null) Pill(if (busy == GitOps.Op.MESSAGE) tr("Claude is writing…", "Claude כותב…") else tr("Write with Claude", "כתיבה עם Claude"),
-                Tone.TINT, Glyph.SPARKLE, enabled = busy == null && files.isNotEmpty(), small = true) {
+            if (Tools.claude != null) Pill(if (busy == GitOps.Op.MESSAGE) tr("Claude is writing…", "Claude כותב…") else tr("Claude writes it", "Claude יכתוב"),
+                Tone.PLAIN, Glyph.SPARKLE, enabled = busy == null && files.isNotEmpty(), small = true) {
                 error = null; done = null
                 scope.launch {
                     val (m, e) = withContext(Dispatchers.IO) { GitOps.suggestMessage(dir, paths) }
@@ -399,8 +472,20 @@ fun CommitBox(key: String, dir: File, chosen: List<GitChange>?, compact: Boolean
             }
         }
         error?.let { Text(it, color = c.danger, fontSize = 12.sp, lineHeight = 17.sp, fontFamily = PlexSans) }
-        done?.let { Text(tr("Committed: “$it”", "נשמר: “$it”"), color = c.muted, fontSize = 12.sp, fontFamily = PlexSans, maxLines = 1, overflow = TextOverflow.Ellipsis,
-            style = TextStyle(textDirection = TextDirection.Content)) }
+        done?.let { subject ->
+            // Committed: the next thing is usually to push it.
+            val git = Git.state.collectAsState().value[dir.path]
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                GlyphIcon(Glyph.CHECK, 14.dp, c.liveText)
+                Spacer(Modifier.width(6.dp))
+                Text(tr("Committed: “$subject”", "נשמר: “$subject”"), color = c.muted, fontSize = 12.sp, fontFamily = PlexSans, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false), style = TextStyle(textDirection = TextDirection.Content))
+                if (git != null && git.hasRemote && git.ahead > 0 && git.behind == 0 && git.upstream != null) TextAction(tr("Push now", "לדחוף עכשיו"), accent = true, enabled = busy == null) {
+                    error = null
+                    scope.launch { error = withContext(Dispatchers.IO) { GitOps.push(dir) }; if (error == null) done = null }
+                }
+            }
+        }
     }
 }
 
@@ -418,13 +503,33 @@ private fun MessageField(value: String, onChange: (String) -> Unit, placeholder:
 
 // ── the diff and the history ──
 
+/** A changed file: its path, how many lines came and went, opening it, and its diff. */
 @Composable
-private fun DiffView(dir: File, change: GitChange) {
+private fun DiffPane(dir: File, change: GitChange) {
     val c = LocalDeck.current
-    val dark = c == Dark
     val stamp = File(dir, change.path).lastModified()
     val lines by produceState<List<DiffLine>?>(null, change, stamp) { value = withContext(Dispatchers.IO) { GitOps.diff(dir, change) } }
-    val shown = lines ?: return
+    PanelHead {
+        Mono(change.path, c.fg, 13, Modifier.weight(1f))
+        lines?.let { l ->
+            val added = l.count { it.kind == '+' }
+            val removed = l.count { it.kind == '-' }
+            if (added > 0) Mono("+$added", c.liveText, 12, Modifier.padding(start = 10.dp))
+            if (removed > 0) Mono("−$removed", c.danger, 12, Modifier.padding(start = 6.dp))
+        }
+        Spacer(Modifier.width(10.dp))
+        val editor = Tools.quick(dir).getOrNull(1)?.takeIf { it.kind == ToolKind.EDITOR || it.kind == ToolKind.IDE }
+        val file = File(dir, change.path)
+        if (file.isFile) TextAction(if (editor != null) tr("Open in ${editor.label}", "פתיחה ב־${editor.label}") else tr("Open", "פתיחה"), accent = true) {
+            if (editor != null) Tools.openIn(editor, file) else Tools.openFile(file.path)
+        }
+    }
+    DiffView(lines ?: return)
+}
+
+@Composable
+private fun DiffView(shown: List<DiffLine>) {
+    val c = LocalDeck.current
     if (shown.isEmpty()) {
         Box(Modifier.fillMaxSize().padding(40.dp), contentAlignment = Alignment.Center) {
             Text(tr("No changes to show in this file.", "אין שינויים להציג בקובץ הזה."), color = c.faint, fontSize = 14.sp, fontFamily = PlexSans)
@@ -509,7 +614,7 @@ fun SessionsList(p: Project, local: Local) {
 
 /** A session's receipt: what it was asked, the files it changed and their diffs; commit them, or put them back. */
 @Composable
-private fun SessionView(r: Receipt, git: GitInfo, onCommitThese: () -> Unit, onClose: () -> Unit) {
+private fun SessionView(r: Receipt, git: GitInfo, onCommitThese: () -> Unit) {
     val c = LocalDeck.current
     val scope = rememberCoroutineScope()
     var confirm by remember(r.id) { mutableStateOf(false) }
@@ -523,7 +628,6 @@ private fun SessionView(r: Receipt, git: GitInfo, onCommitThese: () -> Unit, onC
             Spacer(Modifier.width(10.dp))
             Text(r.title, color = c.fg, fontSize = 15.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans, maxLines = 2, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f), style = TextStyle(textDirection = TextDirection.Content))
-            TextAction(tr("Close", "סגירה")) { onClose() }
         }
         Text(listOf(r.agent.label, ago(r.startAt), count(r.files.size, "file changed", "files changed", "קובץ אחד השתנה", "קבצים השתנו"), receiptState(r, git)).joinToString(" · "),
             color = c.muted, fontSize = 13.sp, fontFamily = PlexSans)
@@ -576,6 +680,10 @@ private fun SessionView(r: Receipt, git: GitInfo, onCommitThese: () -> Unit, onC
 private fun History(p: Project, dir: File, git: GitInfo) {
     val c = LocalDeck.current
     val commits by produceState<List<GitCommit>?>(null, git.branch, git.lastAt) { value = withContext(Dispatchers.IO) { GitOps.log(dir, 40) } }
+    PanelHead {
+        Text(tr("Latest commits on ${git.branch}", "הקומיטים האחרונים ב־${git.branch}"), color = c.fg, fontSize = 14.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans, modifier = Modifier.weight(1f))
+        git.web?.let { web -> TextAction(tr("Open on ${hostName(web)}", "פתיחה ב־${hostName(web)}"), accent = true) { Chrome.open(p, DeckAction(Catalog.LINK, web, hostName(web))) } }
+    }
     val list = commits ?: return
     if (list.isEmpty()) {
         Box(Modifier.fillMaxSize().padding(40.dp), contentAlignment = Alignment.Center) {
@@ -583,9 +691,13 @@ private fun History(p: Project, dir: File, git: GitInfo) {
         }
         return
     }
+    // The newest ones the server doesn't have yet: all of them while the branch isn't there at all.
+    val local = when { !git.hasRemote -> 0; git.upstream == null -> list.size; else -> git.ahead }
     LazyColumn(Modifier.fillMaxSize().padding(vertical = 8.dp)) {
-        items(list, key = { it.hash }) { cm ->
-            val url = git.web?.let { w -> if (hostName(w) == "GitLab") "$w/-/commit/${cm.hash}" else "$w/commit/${cm.hash}" }
+        itemsIndexed(list, key = { _, cm -> cm.hash }) { i, cm ->
+            val pushed = i >= local
+            // A commit's page on the server exists once it's there.
+            val url = git.web?.takeIf { pushed }?.let { w -> if (hostName(w) == "GitLab") "$w/-/commit/${cm.hash}" else "$w/commit/${cm.hash}" }
             Column(Modifier.fillMaxWidth().then(if (url != null) Modifier.clickable { Chrome.open(p, DeckAction(Catalog.LINK, url, hostName(url))) } else Modifier)
                 .padding(horizontal = 22.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(cm.subject, color = c.fg, fontSize = 14.sp, fontFamily = PlexSans, maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -593,6 +705,12 @@ private fun History(p: Project, dir: File, git: GitInfo) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Mono(cm.hash, c.accentText, 11)
                     Text("  ·  ${cm.author}  ·  ${ago(cm.at)}", color = c.faint, fontSize = 12.sp, fontFamily = PlexSans, maxLines = 1)
+                    if (!pushed) {
+                        Spacer(Modifier.width(10.dp))
+                        Dot(CHANGED_DOT, 6.dp)
+                        Spacer(Modifier.width(5.dp))
+                        Text(tr("not on the server yet", "עוד לא בשרת"), color = c.amberText, fontSize = 12.sp, fontFamily = PlexSans)
+                    }
                 }
             }
         }
