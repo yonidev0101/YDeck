@@ -258,7 +258,7 @@ const SCRIPT = `<script>
 function html(c, siteUrl, email, fonts) {
   const u = c.ui;
   // The download page: the installer on GitHub Releases, and why Windows warns.
-  const beta = '/download';
+  const beta = c.foot[0] === 'פרטיות' ? '/he/download' : '/download';
   const privacy = '/privacy', android = '/android';
   return `<!doctype html><html lang="${c.lang}" dir="${c.dir}"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -335,7 +335,7 @@ ${RING(72)}
 </main>
 <footer><div class="wrap">
 <a class="brand" href="${c.home}">${RING(18)}YDeck</a>
-<a href="${privacy}">${c.foot[0]}</a><a href="${android}">${c.foot[1]}</a><a href="/download">${c.foot[0] === 'פרטיות' ? 'הורדה' : 'Download'}</a><a href="/code-signing">Code signing policy</a><a href="${c.other}">${c.otherLabel}</a><a href="mailto:${email}">${email}</a>
+<a href="${privacy}">${c.foot[0]}</a><a href="${android}">${c.foot[1]}</a><a href="${beta}">${c.foot[0] === 'פרטיות' ? 'הורדה' : 'Download'}</a><a href="/code-signing">Code signing policy</a><a href="${c.other}">${c.otherLabel}</a><a href="mailto:${email}">${email}</a>
 </div></footer>
 ${SCRIPT}
 </body></html>`;

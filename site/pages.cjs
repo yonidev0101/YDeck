@@ -53,12 +53,12 @@ function shell({ lang, dir, title, desc, siteUrl, email, body, alt }) {
 <header class="nav"><div class="wrap">
 <a class="brand" href="${he ? '/he/' : '/'}">${RING(22)}YDeck</a>
 <nav><a href="/privacy">${he ? 'פרטיות' : 'Privacy'}</a><a href="/android">${he ? 'אנדרואיד' : 'Android'}</a>${alt ? `<a href="${alt.href}">${alt.label}</a>` : ''}</nav>
-<a class="pill" href="/download">${he ? 'הורדה' : 'Download'}</a>
+<a class="pill" href="${he ? '/he/download' : '/download'}">${he ? 'הורדה' : 'Download'}</a>
 </div></header>
 <main>${body}</main>
 <footer><div class="wrap">
 <a class="brand" href="${he ? '/he/' : '/'}">${RING(18)}YDeck</a>
-<a href="/privacy">${he ? 'פרטיות' : 'Privacy'}</a><a href="/download">${he ? 'הורדה' : 'Download'}</a><a href="/code-signing">Code signing policy</a><a href="https://github.com/yonidev0101/YDeck">GitHub</a><a href="mailto:${email}">${email}</a>
+<a href="/privacy">${he ? 'פרטיות' : 'Privacy'}</a><a href="${he ? '/he/download' : '/download'}">${he ? 'הורדה' : 'Download'}</a><a href="/code-signing">Code signing policy</a><a href="https://github.com/yonidev0101/YDeck">GitHub</a><a href="mailto:${email}">${email}</a>
 </div></footer>
 </body></html>`;
 }
@@ -152,6 +152,24 @@ ${sec('איך יודעים שהקובץ אמיתי?', `<p>טביעת האצבע 
 </div></div></div>`;
 }
 
+function downloadEn(apk) {
+  return `<div class="doc"><div class="wrap">
+<h1>Download</h1>
+<p class="lead">YDeck for Windows and YDeck for Android, free.</p>
+<div class="part"><h2>YDeck for Windows</h2><p class="sub">Open source (MIT). Every release is built by GitHub Actions from the code in the repository, and published on its Releases page.</p>
+<div class="dl"><a class="pill big" href="https://github.com/yonidev0101/YDeck/releases/latest">Download the latest version</a><span class="size">MSI · Windows 10 and later</span></div>
+<p class="sub">Free code signing provided by <a href="https://about.signpath.io">SignPath.io</a>, certificate by <a href="https://signpath.org">SignPath Foundation</a>. See the <a href="/code-signing">Code signing policy</a>.</p>
+${sec('Why does Windows warn?', '<p>The installer isn’t digitally signed yet, so SmartScreen warns the first time: click "More info", then "Run anyway". See the <a href="/code-signing">Code signing policy</a>.</p>')}
+${sec('Uninstalling', '<p>Windows Settings → Apps → YDeck → Uninstall. To leave nothing behind, first turn off in YDeck’s Settings the logo on folders, "Open in YDeck" and starting with Windows.</p>')}
+${sec('The source', '<p><a href="https://github.com/yonidev0101/YDeck">github.com/yonidev0101/YDeck</a></p>')}</div>
+<div class="part"><h2>YDeck for Android</h2><p class="sub">Version ${apk.version} · Android 12 and later · free, no account.</p>
+<div class="dl"><a class="pill big" href="/download/${apk.name}" download>Download YDeck ${apk.version}</a><span class="size">APK · ${apk.mb} MB · ${apk.released}</span></div>
+${sec('Installing', `<p>Open the downloaded file and allow the install. The first time, Android asks to allow installs from your browser:</p>${steps('Open the file', 'Settings', 'Allow from this source', 'Install')}<p>Add the widget from the app, or with a long press on the home screen:</p>${steps('Long press on the home screen', 'Widgets', 'YDeck')}`)}
+${sec('Why is there a warning?', '<p>Android warns about every app that doesn’t come from Google Play. It doesn’t mean anything is wrong. YDeck is on its way to the store.</p>')}
+${sec('Is the file genuine?', `<p>The file’s fingerprint (SHA-256), to compare:</p><div class="hash">${apk.sha256}</div>`)}
+</div></div></div>`;
+}
+
 // ── the Android app ──
 function android() {
   return `<section class="hero" style="min-height:auto;padding-top:160px;padding-bottom:40px">
@@ -187,7 +205,8 @@ function build({ DIST, EMAIL, SITE_URL, apk }) {
   const write = (file, html) => { const out = path.join(DIST, file); fs.mkdirSync(path.dirname(out), { recursive: true }); fs.writeFileSync(out, html); };
   const he = (file, title, desc, body) => write(file, shell({ lang: 'he', dir: 'rtl', title, desc, siteUrl: SITE_URL, email: EMAIL, body }));
   he('privacy/index.html', 'מדיניות פרטיות · YDeck', 'מה YDeck שומר, מה יוצא מהמחשב ומהטלפון, ומה לא. בעברית ובאנגלית.', privacy(EMAIL));
-  he('download/index.html', 'הורדה · YDeck', `YDeck ל־Windows (קוד פתוח) ו־YDeck ${apk.version} לאנדרואיד.`, download({ ...apk, email: EMAIL }));
+  write('download/index.html', shell({ lang: 'en', dir: 'ltr', title: 'Download · YDeck', desc: `YDeck for Windows (open source) and YDeck ${apk.version} for Android.`, siteUrl: SITE_URL, email: EMAIL, body: downloadEn({ ...apk, email: EMAIL }), alt: { href: '/he/download', label: 'עברית' } }));
+  write('he/download/index.html', shell({ lang: 'he', dir: 'rtl', title: 'הורדה · YDeck', desc: `YDeck ל־Windows (קוד פתוח) ו־YDeck ${apk.version} לאנדרואיד.`, siteUrl: SITE_URL, email: EMAIL, body: download({ ...apk, email: EMAIL }), alt: { href: '/download', label: 'English' } }));
   write('code-signing/index.html', shell({ lang: 'en', dir: 'ltr', title: 'Code signing policy · YDeck', desc: 'How YDeck for Windows is built and signed, and who approves each release.', siteUrl: SITE_URL, email: EMAIL, body: codeSigning(EMAIL) }));
   he('android/index.html', 'YDeck לאנדרואיד', 'ווידג\'ט לאנדרואיד שמחזיק את הקישורים של כל פרויקט, וכל נגיעה פותחת בחשבון הנכון.', android());
   he('404.html', 'לא נמצא · YDeck', 'העמוד לא נמצא.', `<div class="center">${RING(64)}<h1 style="font-size:clamp(36px,6vw,64px)">אין כאן כלום.</h1><a class="text-link" href="/he/">לעמוד הבית</a></div>`);
