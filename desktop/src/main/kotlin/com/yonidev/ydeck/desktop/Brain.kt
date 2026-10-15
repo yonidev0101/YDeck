@@ -156,6 +156,7 @@ object AgentsFile {
 
     /** Keeps the block current in a project that has AGENTS.md. */
     fun sync(dir: File) {
+        if (!Settings.state.value.repoFiles) return
         val f = File(dir, NAME).takeIf { it.isFile } ?: return
         val block = block(dir) ?: return
         runCatching {

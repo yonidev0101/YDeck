@@ -54,7 +54,7 @@ fun SettingsPage(section: SettingsSection, deck: Deck, dark: Boolean, actions: A
                 SettingsSection.GENERAL -> General()
                 SettingsSection.WIDGETS -> Widgets(deck, actions)
                 SettingsSection.EXPLORER -> Explorer()
-                SettingsSection.CLAUDE -> ClaudeSettings()
+                SettingsSection.CLAUDE -> ClaudeSettings(deck)
                 SettingsSection.PHONE -> PhoneSettings()
                 SettingsSection.DATA -> { Backup(actions); StorageSection(deck) }
                 SettingsSection.ABOUT -> About()
@@ -159,7 +159,7 @@ private fun Explorer() {
 }
 
 @Composable
-private fun ClaudeSettings() {
+private fun ClaudeSettings(deck: Deck) {
     val c = LocalDeck.current
     val s by Settings.state.collectAsState()
     val scope = rememberCoroutineScope()
@@ -183,9 +183,41 @@ private fun ClaudeSettings() {
             }
             if (installed) Setting(tr("Notify me when Claude needs me", "התראה כש־Claude מחכה לי"), hint = tr("A Windows notification when it waits for an answer, or ends a long task.", "התראה של Windows כשהוא מחכה לתשובה, או מסיים משימה ארוכה.")) { Toggle(s.claudeAlerts) { on -> Settings.update { it.copy(claudeAlerts = on) } } }
             if (installed) Setting(tr("Sum up each session when it ends", "סיכום בסוף כל סשן"), hint = tr("What was done and the next step, on the project's overview.", "מה נעשה ומה הצעד הבא, במסך הסקירה של הפרויקט.")) { Toggle(s.handoffs) { on -> Settings.update { it.copy(handoffs = on) } } }
+            if (installed) Setting(tr("Claude updates files in the repository", "Claude מעדכן קבצים בריפו"), hint = tr("The project's .ydeck.json (summary, decisions, links, releases), committed with the code, and YDeck's block in an AGENTS.md that's already there. Off for work and team repositories: only the personal .ydeck.local.json is written, kept out of git.",
+                "‏.ydeck.json של הפרויקט (תקציר, החלטות, קישורים, גרסאות), שנכנס ל־git עם הקוד, והבלוק של YDeck בקובץ AGENTS.md אם כבר קיים. כבוי לריפו של עבודה או צוות: נכתב רק .ydeck.local.json האישי, שלא נכנס ל־git.")) { Toggle(s.repoFiles) { on -> Settings.update { it.copy(repoFiles = on) } } }
         }
+        Note(tr("What's installed: a plugin named “ydeck” in Claude Code, added with Claude Code's own commands. Its hooks tell YDeck on this computer (127.0.0.1 only, with a key) when a prompt is sent, when Claude waits or is done, and when a session ends; at a session's start they hand Claude the project's context below. Nothing goes to the internet. Turning this off removes it.",
+            "מה מותקן: פלאגין בשם ‏“ydeck” ב־Claude Code, שמותקן בפקודות של Claude Code עצמו. ה־hooks שלו מודיעים ל־YDeck במחשב הזה בלבד (127.0.0.1, עם מפתח) כשנשלחת בקשה, כש־Claude מחכה או מסיים, וכשסשן נגמר; בתחילת סשן הם נותנים ל־Claude את ההקשר של הפרויקט שלמטה. שום דבר לא יוצא לאינטרנט. כיבוי מסיר אותו."))
+        if (installed) Briefing(deck)
         error?.let { Text(it, color = c.danger, fontSize = 12.sp, fontFamily = PlexSans, modifier = Modifier.padding(start = 4.dp, top = 8.dp)) }
         Note(tr("Claude keeps the project's summary, decisions, links and releases in .ydeck.json, shared through the repository.", "Claude שומר את התקציר, ההחלטות, הקישורים והגרסאות של הפרויקט ב־.ydeck.json, שמשותף דרך הריפו."))
+    }
+}
+
+/** "What Claude is told": the exact text a session gets at its start, for any project with a folder. */
+@Composable
+private fun Briefing(deck: Deck) {
+    val c = LocalDeck.current
+    val s by Settings.state.collectAsState()
+    val projects = deck.projects.filter { s.localOf(it.id).dir != null }
+    if (projects.isEmpty()) return
+    var open by remember { mutableStateOf(false) }
+    var pick by remember { mutableStateOf(projects.first().id) }
+    Column(Modifier.padding(top = 18.dp)) {
+        Group {
+            Setting(tr("What Claude is told at a session's start", "מה Claude מקבל בתחילת סשן"), value = if (open) tr("Hide", "הסתרה") else tr("Show", "הצגה"), onClick = { open = !open })
+        }
+        if (open) {
+            Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                projects.take(8).forEach { p -> Chip(p.name, p.id == pick) { pick = p.id } }
+            }
+            val p = projects.firstOrNull { it.id == pick } ?: projects.first()
+            val text = remember(p, s) { ProjectFiles.briefing(p, s.localOf(p.id).dir!!) }
+            androidx.compose.foundation.text.selection.SelectionContainer {
+                Text(text, color = c.muted, fontSize = 12.sp, lineHeight = 18.sp, fontFamily = PlexMono,
+                    modifier = Modifier.padding(top = 12.dp).clip(RoundedCornerShape(14.dp)).border(1.dp, c.line, RoundedCornerShape(14.dp)).padding(16.dp))
+            }
+        }
     }
 }
 

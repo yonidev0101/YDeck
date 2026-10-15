@@ -160,8 +160,13 @@ object ProjectFiles {
                 decisions.take(15).forEach { appendLine("- ${it.text}" + (if (it.date.isNotBlank()) " (${it.date})" else "")) }
             }
             appendLine()
-            appendLine("Keep YDeck current as you work, briefly and without making a point of it:")
+            val repo = Settings.state.value.repoFiles
+            appendLine("The user asked YDeck to have these files kept up to date. Do it as part of the work, and mention it in a few words when you do:")
             appendLine("- When you finish a meaningful piece of work, or the user is about to stop, write $LOCAL in the project root: {\"now\": \"what is in progress, one short line\", \"next\": \"the next concrete step\"}, in the language the user writes in. It is personal and kept out of git.")
+            if (!repo) {
+                append("The user turned off changes to files in the repository: leave $SHARED and AGENTS.md as they are.")
+                return@buildString
+            }
             appendLine("- When you connect the project to a new service or console (a Supabase project, a Stripe account, a new Vercel project...), add {\"label\": \"...\", \"url\": \"https://...\"} to \"links\" in $SHARED.")
             appendLine("- When you release a version, add {\"version\": \"...\", \"date\": \"YYYY-MM-DD\", \"note\": \"one line\"} at the start of \"releases\" in $SHARED.")
             appendLine("- When the user and you settle something future sessions must keep to (a library or service chosen, an approach dropped, a convention), add {\"text\": \"the decision and why, one line\", \"date\": \"YYYY-MM-DD\"} at the start of \"decisions\" in $SHARED, in the user's language.")

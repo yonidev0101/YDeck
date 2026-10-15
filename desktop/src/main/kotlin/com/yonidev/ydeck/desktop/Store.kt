@@ -119,6 +119,9 @@ object Settings {
         val claudeAlerts: Boolean = true,
         /** Asks each project's server for new commits every 10 minutes (git fetch), so "to pull" is true (see [Git]). */
         val gitFetch: Boolean = true,
+        /** Claude keeps .ydeck.json up to date in the project's repository, and YDeck its block in an existing AGENTS.md.
+         *  Off: only the personal .ydeck.local.json (kept out of git) is written. See [ProjectFiles.briefing]. */
+        val repoFiles: Boolean = true,
         /** When a Claude session that changed files ends, Claude writes where the work stands (see [Handoffs]). */
         val handoffs: Boolean = true,
         /** A tagged folder's icon shows an agent at work (indigo dot) or waiting (amber), see [FolderBadges]. */
@@ -159,6 +162,7 @@ object Settings {
                 put("claudeAlerts", s.claudeAlerts)
                 put("gitFetch", s.gitFetch)
                 put("handoffs", s.handoffs)
+                put("repoFiles", s.repoFiles)
                 put("folderStatus", s.folderStatus)
                 put("folderGit", s.folderGit)
                 put("siteIcons", s.siteIcons)
@@ -198,6 +202,7 @@ object Settings {
             claudeAlerts = o.optBoolean("claudeAlerts", true),
             gitFetch = o.optBoolean("gitFetch", true),
             handoffs = o.optBoolean("handoffs", true),
+            repoFiles = o.optBoolean("repoFiles", true),
             folderStatus = o.optBoolean("folderStatus", true),
             folderGit = o.optBoolean("folderGit", true),
             siteIcons = o.optBoolean("siteIcons", true),

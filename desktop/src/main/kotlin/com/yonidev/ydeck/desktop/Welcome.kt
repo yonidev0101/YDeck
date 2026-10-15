@@ -230,7 +230,8 @@ private fun Surfaces(project: Project?, actions: AppActions, onDone: () -> Unit)
                         }
                     }
                 }
-                SurfaceCard(Modifier.weight(1f), tr("With Claude Code", "עם Claude Code"), tr("See when Claude works or needs you. Claude gets the project and keeps it current.", "רואים מתי Claude עובד או מחכה לך. Claude מכיר את הפרויקט ומעדכן אותו."),
+                SurfaceCard(Modifier.weight(1f), tr("With Claude Code", "עם Claude Code"), tr("See when Claude works or needs you. Claude gets the project and keeps it current. Adds a plugin named “ydeck” to Claude Code; it talks only to YDeck on this computer, and Settings removes it.",
+                    "רואים מתי Claude עובד או מחכה לך. Claude מכיר את הפרויקט ומעדכן אותו. מוסיף ל־Claude Code פלאגין בשם ‏“ydeck” שמדבר רק עם YDeck במחשב הזה, ואפשר להסיר אותו בהגדרות."),
                     claude, { claude = it }, enabled = Tools.claude != null) {
                     Column(Modifier.fillMaxSize().background(Color(0xFF0B0B0C)).padding(horizontal = 24.dp), verticalArrangement = Arrangement.spacedBy(9.dp, Alignment.CenterVertically)) {
                         Mono("> claude", Color(0xFF8A8A90), 11)
