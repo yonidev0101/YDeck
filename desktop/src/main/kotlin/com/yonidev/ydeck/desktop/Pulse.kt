@@ -89,6 +89,52 @@ object Claude {
 
     fun lastSession(dir: File): Long? =
         sessionsDir(dir).listFiles { f -> f.isFile && f.extension == "jsonl" }?.maxOfOrNull { it.lastModified() }?.takeIf { it > 0 }
+
+    /** A conversation to pick up again: its id (the file's name), its title, when it last moved. */
+    data class Conversation(val id: String, val title: String, val at: Long)
+
+    /**
+     * The folder's latest conversations, newest first: the ones a person had, not YDeck's own `claude -p` calls (the
+     * handoffs). The title is the one Claude Code shows in /resume (set by hand, or its own), else the first prompt.
+     */
+    fun conversations(dir: File, limit: Int = 8): List<Conversation> {
+        val files = sessionsDir(dir).listFiles { f -> f.isFile && f.extension == "jsonl" }?.sortedByDescending { it.lastModified() } ?: return emptyList()
+        return files.asSequence().mapNotNull { f ->
+            val at = f.lastModified()
+            val title = titles[f.path]?.takeIf { it.first == at }?.second ?: titleOf(f).also { titles[f.path] = at to it }
+            title.takeIf { it.isNotEmpty() }?.let { Conversation(f.nameWithoutExtension, it, at) }
+        }.take(limit).toList()
+    }
+
+    /** By file: its time when read, and its title ("" for a file that isn't a person's conversation). */
+    private val titles = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, String>>()
+
+    /** The first prompt from the file's start, the latest title from its end (Claude Code writes it again as it goes),
+     *  so a long conversation is never read whole. "" when it's a `claude -p` call or has no prompt. */
+    private fun titleOf(f: File): String = runCatching {
+        val (head, tail) = java.io.RandomAccessFile(f, "r").use { r ->
+            fun read(from: Long, n: Int): String { val b = ByteArray(minOf(n.toLong(), r.length() - from).toInt()); r.seek(from); r.readFully(b); return String(b, Charsets.UTF_8) }
+            val len = r.length()
+            read(0, 64 * 1024) to read(maxOf(0, len - 256 * 1024), 256 * 1024)
+        }
+        var prompt: String? = null
+        for (line in head.lines()) {
+            if (!line.contains("\"type\":\"user\"")) continue
+            val o = runCatching { org.json.JSONObject(line) }.getOrNull() ?: continue
+            if (o.optString("entrypoint").startsWith("sdk") || o.optBoolean("isSidechain")) return ""
+            val content = o.optJSONObject("message")?.opt("content")
+            val text = when (content) {
+                is String -> content
+                is org.json.JSONArray -> (0 until content.length()).mapNotNull { content.optJSONObject(it) }.firstOrNull { it.optString("type") == "text" }?.optString("text")
+                else -> null
+            }?.trim()
+            // Command echoes and caveats come wrapped in tags: not the person's words.
+            if (!text.isNullOrBlank() && !text.startsWith("<")) { prompt = text; break }
+        }
+        fun lastOf(type: String, field: String) = tail.lines().lastOrNull { it.contains("\"type\":\"$type\"") }
+            ?.let { runCatching { org.json.JSONObject(it).optString(field) }.getOrNull() }?.takeIf { it.isNotBlank() }
+        (lastOf("custom-title", "customTitle") ?: lastOf("ai-title", "aiTitle") ?: prompt ?: "").replace(Regex("\\s+"), " ").trim().take(160)
+    }.getOrDefault("")
 }
 
 // ── dev servers ──

@@ -38,6 +38,7 @@ import kotlinx.coroutines.delay
 fun PhoneSettings() {
     val c = LocalDeck.current
     val s by PhoneLink.state.collectAsState()
+    val settings by Settings.state.collectAsState()
     var showQr by remember { mutableStateOf(false) }
     var confirm by remember { mutableStateOf(false) }
     // "Just now" stays true while the page is open.
@@ -68,6 +69,11 @@ fun PhoneSettings() {
                             }, color = c.muted, fontSize = 12.sp, fontFamily = PlexSans)
                         }
                     }
+                    if (Tools.claude != null) Setting(tr("The phone can open Claude Code", "הטלפון יכול לפתוח את Claude Code"),
+                        hint = tr("In a project's folder, in a new terminal: a new session, the last one, or an earlier one, with Remote Control if asked. Nothing else.",
+                            "בתיקיית הפרויקט, בטרמינל חדש: סשן חדש, האחרון או סשן קודם, עם Remote Control אם ביקשו. שום דבר אחר.")) {
+                        Toggle(settings.phoneLaunch) { on -> Settings.update { it.copy(phoneLaunch = on) }; PhoneLink.nudge() }
+                    }
                     Setting(tr("Show the code again", "הצגת הקוד שוב"), onClick = { showQr = true })
                     Item({ confirm = true }) {
                         Text(tr("Unpair phone", "ניתוק טלפון"), color = c.danger, fontSize = 14.sp, fontFamily = PlexSans, modifier = Modifier.weight(1f))
@@ -82,8 +88,8 @@ fun PhoneSettings() {
             }
         }
 
-        Text(tr("Only data goes through, sealed end to end: the relay in between can't read it or change it, and this computer never runs anything that comes from the phone. Nothing here listens for connections; both sides only reach out.",
-            "עוברים רק נתונים, מוצפנים מקצה לקצה: הממסר שבאמצע לא יכול לקרוא אותם או לשנות אותם, והמחשב לא מריץ שום דבר שמגיע מהטלפון. שום דבר כאן לא מחכה לחיבורים; שני הצדדים רק יוצאים החוצה."),
+        Text(tr("Only data goes through, sealed end to end: the relay in between can't read it or change it. The one thing the phone can ask this computer to do is open Claude Code in a project's folder, and only in the ways above; never a command of its own. Nothing here listens for connections; both sides only reach out.",
+            "עוברים רק נתונים, מוצפנים מקצה לקצה: הממסר שבאמצע לא יכול לקרוא אותם או לשנות אותם. הדבר היחיד שהטלפון יכול לבקש מהמחשב הוא לפתוח את Claude Code בתיקיית פרויקט, ורק בדרכים שלמעלה; אף פעם לא פקודה משלו. שום דבר כאן לא מחכה לחיבורים; שני הצדדים רק יוצאים החוצה."),
             color = c.faint, fontSize = 12.sp, lineHeight = 18.sp, fontFamily = PlexSans, modifier = Modifier.widthIn(max = 560.dp))
     }
 }

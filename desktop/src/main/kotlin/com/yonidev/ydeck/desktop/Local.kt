@@ -128,20 +128,47 @@ object Tools {
                 if (wt != null) listOf(wt.path, "-d", dir.path, "--title", title) + shell
                 else listOf(cmd.path, "/c", "start", title, "/D", dir.path) + shell
             }
-            ToolKind.AGENT -> {
-                // Quotes, ";" (a new tab to Windows Terminal) and cmd's own signs would cut the prompt short.
-                val said = prompt?.replace(Regex("\\s*[\\r\\n]+\\s*"), " ")?.replace(Regex("[\";&|<>^%!]"), " ")?.trim()
-                val claude = listOf(tool.exe.path) + when {
-                    said != null -> listOf(said)
-                    !fresh && Claude.lastSession(dir) != null -> listOf("--continue")
-                    else -> emptyList()
-                }
-                if (wt != null) listOf(wt.path, "-d", dir.path, "--title", "Claude Code · $title") + claude
-                else listOf(cmd.path, "/c", "start", "Claude Code", "/D", dir.path, cmd.path, "/k") + claude
-            }
+            ToolKind.AGENT -> claudeLine(tool.exe, dir, title, when {
+                prompt != null -> listOfNotNull(said(prompt))
+                !fresh && Claude.lastSession(dir) != null -> listOf("--continue")
+                else -> emptyList()
+            })
         }
         start(cmdLine, dir)
     }
+
+    /**
+     * Claude Code in [dir], in a new terminal: a new conversation, the folder's last one ([resume] = "continue"), or
+     * one by its id; with Remote Control on, named [remote]; [prompt] as the first message. False when Claude Code
+     * isn't here or the terminal couldn't start.
+     */
+    fun claudeIn(dir: File, title: String, resume: String? = null, remote: String? = null, prompt: String? = null): Boolean {
+        val exe = claude?.exe ?: return false
+        val args = buildList {
+            when {
+                resume == "continue" -> add("--continue")
+                resume != null -> { add("--resume"); add(resume) }
+            }
+            // Named, so the prompt after it isn't taken for the name.
+            if (remote != null) { add("--remote-control"); add(said(remote) ?: "YDeck") }
+            prompt?.let(::said)?.let(::add)
+        }
+        return start(claudeLine(exe, dir, title, args), dir)
+    }
+
+    private fun claudeLine(exe: File, dir: File, title: String, args: List<String>): List<String> {
+        val claude = listOf(exe.path) + args
+        val wt = windowsTerminal
+        return if (wt != null) listOf(wt.path, "-d", dir.path, "--title", "Claude Code · ${said(title) ?: ""}") + claude
+        else listOf(cmd.path, "/c", "start", "Claude Code", "/D", dir.path, cmd.path, "/k") + claude
+    }
+
+    /**
+     * Words for Claude Code's command line, as one argument: one line; no quotes, ";" (a new tab to Windows
+     * Terminal) or cmd's own signs, which would cut it short; no leading "-", which would make it an option.
+     */
+    fun said(text: String): String? =
+        text.replace(Regex("\\s*[\\r\\n]+\\s*"), " ").replace(Regex("[\";&|<>^%!]"), " ").trim().trimStart('-', ' ').takeIf { it.isNotEmpty() }
 
     /** A command in a new terminal tab, in the folder; the tab stays open to show what happened. */
     fun run(command: Command, dir: File) {
@@ -168,12 +195,10 @@ object Tools {
         start(listOf(explorer.exe.path, "/select,", File(path).path), null)
     }
 
-    private fun start(cmdLine: List<String>, dir: File?) {
-        runCatching {
-            ProcessBuilder(cmdLine).apply { if (dir?.isDirectory == true) directory(dir) }
-                .redirectOutput(ProcessBuilder.Redirect.DISCARD).redirectError(ProcessBuilder.Redirect.DISCARD).start()
-        }
-    }
+    private fun start(cmdLine: List<String>, dir: File?): Boolean = runCatching {
+        ProcessBuilder(cmdLine).apply { if (dir?.isDirectory == true) directory(dir) }
+            .redirectOutput(ProcessBuilder.Redirect.DISCARD).redirectError(ProcessBuilder.Redirect.DISCARD).start()
+    }.isSuccess
 }
 
 /** The shell for the terminal button and the project commands, chosen once for the whole PC (desktop.json). */

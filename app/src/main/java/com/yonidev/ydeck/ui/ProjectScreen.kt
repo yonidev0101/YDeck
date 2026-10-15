@@ -32,6 +32,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -55,9 +57,12 @@ import androidx.compose.ui.unit.sp
 import com.yonidev.ydeck.R
 import com.yonidev.ydeck.data.Project
 import com.yonidev.ydeck.data.Router
+import com.yonidev.ydeck.link.Launch
+import com.yonidev.ydeck.link.Launched
 import com.yonidev.ydeck.link.Live
 import com.yonidev.ydeck.link.LiveFile
 import com.yonidev.ydeck.link.LiveReceipt
+import com.yonidev.ydeck.link.LiveSession
 import com.yonidev.ydeck.link.Memory
 import com.yonidev.ydeck.link.Note
 
@@ -66,7 +71,8 @@ private enum class Tab(val label: String) { MEMORY("זיכרון"), GIT("Git"), 
 /**
  * One project, everything the computer knows about it, in three tabs: its memory (what's next, what's open, the last
  * session, the decisions), Git (branch, changes, sessions and the files they touched, commits), and its links.
- * [onWrite] leaves a decision or a next step for the computer; null when the phone isn't paired.
+ * [onWrite] leaves a decision or a next step for the computer; null when the phone isn't paired. [onLaunch] asks the
+ * computer to open Claude Code in the project's folder; null when it doesn't take such requests.
  */
 @Composable
 fun ProjectScreen(
@@ -76,16 +82,20 @@ fun ProjectScreen(
     pending: List<Note>,
     onBack: () -> Unit,
     onWrite: ((kind: String, text: String) -> Unit)?,
+    launches: List<Pair<Launch, Launched?>> = emptyList(),
+    onLaunch: ((mode: String, session: String, prompt: String, remote: Boolean) -> Unit)? = null,
 ) {
     val c = LocalDeck.current
     var tab by rememberSaveable { mutableStateOf(Tab.MEMORY) }
     var writing by remember { mutableStateOf<String?>(null) }
+    var launching by remember { mutableStateOf(false) }
     val canWrite = onWrite != null && memory != null
     PageScaffold(
         title = p.name, onBack = onBack,
         actions = { if (canWrite) IconButton(onClick = { writing = Note.NEXT }) { Icon(Icons.Outlined.Edit, "כתיבה", tint = c.fg) } },
     ) {
         item { Header(p, live) }
+        if (onLaunch != null && live != null) item { ClaudeCard(launches.lastOrNull()) { launching = true } }
         item { Tabs(tab) { tab = it } }
         when (tab) {
             Tab.MEMORY -> item {
@@ -97,6 +107,10 @@ fun ProjectScreen(
         }
     }
     writing?.let { kind -> WriteSheet(kind, onDismiss = { writing = null }, onSend = { k, text -> writing = null; onWrite?.invoke(k, text) }) }
+    if (launching) LaunchSheet(live?.sessions.orEmpty(), onDismiss = { launching = false }) { mode, session, prompt, remote ->
+        launching = false
+        onLaunch?.invoke(mode, session, prompt, remote)
+    }
 }
 
 @Composable
@@ -427,6 +441,128 @@ private fun WriteSheet(initial: String, onDismiss: () -> Unit, onSend: (String, 
                     modifier = Modifier.weight(1f).height(50.dp),
                 ) { Text("שליחה למחשב", fontSize = 16.sp, fontWeight = FontWeight.Medium) }
             }
+        }
+    }
+}
+
+// ── Claude Code on the computer ──
+
+private val CLAUDE = Color(0xFFD97757)
+private const val CLAUDE_APP = "com.anthropic.claude"
+
+/** "Open Claude on the computer", and what became of the last time it was asked. */
+@Composable
+private fun ClaudeCard(last: Pair<Launch, Launched?>?, onOpen: () -> Unit) {
+    val c = LocalDeck.current
+    val context = LocalContext.current
+    val l = last?.first
+    val done = last?.second
+    val status = when {
+        l == null -> null
+        done == null -> if (System.currentTimeMillis() - l.at > 90_000) "המחשב עוד לא ענה. YDeck פתוח בו?" else "נשלח, מחכה למחשב…"
+        done.ok -> "נפתח במחשב ${ago(l.at)}" + if (l.remote) " · זמין באפליקציית Claude" else ""
+        else -> when (done.why) {
+            "off" -> "הפתיחה מהטלפון כבויה במחשב (הגדרות ← טלפון)"
+            "claude" -> "Claude Code לא מותקן במחשב"
+            "stale" -> "הבקשה הגיעה מאוחר מדי ולא נפתחה. אפשר לשלוח שוב."
+            "project", "folder" -> "לפרויקט אין תיקייה במחשב"
+            "session" -> "הסשן הזה כבר לא נמצא בתיקייה"
+            else -> "Claude לא נפתח במחשב"
+        }
+    }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 6.dp)) {
+        Row(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.surface).clickable(onClick = onOpen).padding(horizontal = 14.dp, vertical = 11.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            IconBox(R.drawable.si_claude, 34.dp, tint = Color.White, bg = CLAUDE)
+            Column(Modifier.weight(1f)) {
+                Text("פתיחת Claude במחשב", color = c.fg, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                Text(status ?: "להמשיך, סשן חדש או סשן קודם", color = if (done?.ok == false) c.openText else c.muted, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        if (l != null && l.remote && done?.ok == true) SmallAction("פתיחת אפליקציית Claude", Modifier.padding(top = 4.dp)) {
+            // The session shows up there under the project's name; without the app, its page on Google Play.
+            val open = context.packageManager.getLaunchIntentForPackage(CLAUDE_APP)
+                ?: Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=$CLAUDE_APP"))
+            runCatching { context.startActivity(open) }
+        }
+    }
+}
+
+/**
+ * How to open Claude Code on the computer: pick up the last session, start a new one, or choose an earlier one;
+ * with Remote Control (to go on from the Claude app here) and a first message. The computer does exactly this and
+ * nothing else (see [Launch]).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LaunchSheet(sessions: List<LiveSession>, onDismiss: () -> Unit, onSend: (String, String, String, Boolean) -> Unit) {
+    val c = LocalDeck.current
+    var mode by remember { mutableStateOf(if (sessions.isEmpty()) Launch.NEW else Launch.CONTINUE) }
+    var chosen by remember { mutableStateOf<String?>(null) }
+    var text by remember { mutableStateOf("") }
+    var remote by rememberSaveable { mutableStateOf(true) }
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = c.surface) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp).padding(bottom = 22.dp)) {
+            Text("Claude במחשב", color = c.fg, fontSize = 20.sp, fontFamily = Display, modifier = Modifier.padding(bottom = 12.dp))
+            val modes = if (sessions.isEmpty()) listOf(Launch.NEW to "סשן חדש")
+                else listOf(Launch.CONTINUE to "להמשיך", Launch.NEW to "סשן חדש", Launch.RESUME to "סשן קודם")
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.surface2).padding(3.dp)) {
+                modes.forEach { (k, label) ->
+                    val on = k == mode
+                    Box(
+                        Modifier.weight(1f).clip(RoundedCornerShape(9.dp)).background(if (on) c.line else Color.Transparent).clickable { mode = k }.padding(vertical = 9.dp),
+                        contentAlignment = Alignment.Center,
+                    ) { Text(label, color = if (on) c.fg else c.muted, fontSize = 15.sp, fontWeight = if (on) FontWeight.Medium else FontWeight.Normal) }
+                }
+            }
+            Text(
+                when (mode) {
+                    Launch.CONTINUE -> "ממשיך את הסשן האחרון: ${sessions.firstOrNull()?.title.orEmpty()}"
+                    Launch.RESUME -> "בוחרים סשן מהתיקייה של הפרויקט."
+                    else -> "סשן חדש בתיקייה של הפרויקט, עם הזיכרון שלו."
+                },
+                color = c.muted, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 12.dp, bottom = 8.dp),
+            )
+            if (mode == Launch.RESUME) Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.surface2).padding(vertical = 4.dp)) {
+                sessions.forEach { s ->
+                    val on = s.id == chosen
+                    Row(
+                        Modifier.fillMaxWidth().clickable { chosen = s.id }.padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Box(Modifier.size(10.dp).clip(CircleShape).background(if (on) c.accent else c.line))
+                        Column(Modifier.weight(1f)) {
+                            Text(s.title, color = c.fg, fontSize = 15.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, style = TextStyle(textDirection = dirOf(s.title)))
+                            if (s.at > 0) Text(ago(s.at), color = c.faint, fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+            Box(Modifier.padding(top = 10.dp).fillMaxWidth().heightIn(min = 72.dp).clip(RoundedCornerShape(14.dp)).background(c.surface2).padding(14.dp)) {
+                val style = TextStyle(color = c.fg, fontSize = 16.sp, lineHeight = 23.sp, fontFamily = PlexSans, textDirection = TextDirection.Content)
+                if (text.isEmpty()) Text(if (mode == Launch.NEW) "מה לעשות? (לא חובה)" else "הודעה להמשך (לא חובה)", style = style.copy(color = c.faint))
+                BasicTextField(text, { text = it.take(Launch.MAX) }, textStyle = style, cursorBrush = SolidColor(c.fg), modifier = Modifier.fillMaxWidth())
+            }
+            Row(
+                Modifier.padding(top = 12.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable { remote = !remote }.padding(vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Remote Control", color = c.fg, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                    Text("להמשיך לעבוד על הסשן מאפליקציית Claude בטלפון", color = c.muted, fontSize = 13.sp)
+                }
+                Switch(remote, { remote = it }, colors = SwitchDefaults.colors(checkedTrackColor = c.accent, checkedThumbColor = Color.White))
+            }
+            Button(
+                onClick = { onSend(mode, if (mode == Launch.RESUME) chosen.orEmpty() else "", text, remote) },
+                enabled = mode != Launch.RESUME || chosen != null,
+                colors = ButtonDefaults.buttonColors(containerColor = c.fg, contentColor = c.bg, disabledContainerColor = c.surface2, disabledContentColor = c.faint),
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.padding(top = 14.dp).fillMaxWidth().height(50.dp),
+            ) { Text("פתיחה במחשב", fontSize = 16.sp, fontWeight = FontWeight.Medium) }
+            Text("נפתח בטרמינל חדש במחשב, בתיקייה של הפרויקט. YDeck צריך להיות פתוח שם.", color = c.faint, fontSize = 12.sp, modifier = Modifier.padding(top = 10.dp))
         }
     }
 }

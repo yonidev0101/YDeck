@@ -38,6 +38,11 @@ class Snapshot(
     val live: Map<String, Live> = emptyMap(),
     /** The ids of the phone's notes the computer has stored (the latest ones), so the phone stops showing them as waiting. */
     val applied: List<String> = emptyList(),
+    /** The computer opens Claude Code sessions the phone asks for (see [Launch]); false when that's off in its
+     *  settings or Claude Code isn't installed. */
+    val launch: Boolean = false,
+    /** What became of the phone's latest launch requests. */
+    val launched: List<Launched> = emptyList(),
 ) {
     fun encode(): ByteArray = JSONObject().apply {
         put("app", "YDeck")
@@ -49,6 +54,8 @@ class Snapshot(
         put("memory", JSONObject().apply { memory.forEach { (id, m) -> put(id, m.toJson()) } })
         put("live", JSONObject().apply { live.forEach { (id, l) -> put(id, l.toJson()) } })
         put("applied", JSONArray(applied))
+        put("launch", launch)
+        put("launched", JSONArray().apply { launched.forEach { put(JSONObject().put("id", it.id).put("ok", it.ok).put("why", it.why)) } })
     }.toString().toByteArray()
 
     companion object {
@@ -63,6 +70,9 @@ class Snapshot(
                 memory = mem.keys().asSequence().associateWith { memoryOf(mem.optJSONObject(it) ?: JSONObject()) },
                 live = (o.optJSONObject("live") ?: JSONObject()).let { l -> l.keys().asSequence().associateWith { Live.of(l.optJSONObject(it) ?: JSONObject()) } },
                 applied = o.optJSONArray("applied")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList(),
+                launch = o.optBoolean("launch"),
+                launched = o.optJSONArray("launched")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) } }.orEmpty()
+                    .map { Launched(it.optString("id"), it.optBoolean("ok"), it.optString("why")) },
             )
         }
 
@@ -91,6 +101,8 @@ data class LiveFile(val code: String, val path: String)
 data class LiveCommit(val hash: String, val at: Long, val author: String, val subject: String)
 data class LiveReceipt(val title: String, val agent: String, val startAt: Long, val endAt: Long, val files: List<LiveFile>, val rewound: Boolean)
 data class LiveLoop(val kind: String, val title: String, val detail: String)
+/** A Claude Code conversation in the folder, to pick up from the phone: its id, a line about it, when it last moved. */
+data class LiveSession(val id: String, val title: String, val at: Long)
 
 data class Live(
     val branch: String = "",
@@ -115,6 +127,8 @@ data class Live(
     val missingEnv: List<String> = emptyList(),
     val version: String = "",
     val hasGit: Boolean = false,
+    /** The folder's latest Claude Code conversations, newest first. */
+    val sessions: List<LiveSession> = emptyList(),
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("branch", branch); put("changes", changes); put("ahead", ahead); put("behind", behind); put("upstream", upstream)
@@ -130,6 +144,7 @@ data class Live(
         })
         put("loops", JSONArray().apply { loops.forEach { put(JSONObject().put("kind", it.kind).put("title", it.title).put("detail", it.detail)) } })
         put("ports", JSONArray(ports)); put("missingEnv", JSONArray(missingEnv)); put("version", version)
+        put("sessions", JSONArray().apply { sessions.forEach { put(JSONObject().put("id", it.id).put("title", it.title).put("at", it.at)) } })
     }
 
     companion object {
@@ -148,6 +163,7 @@ data class Live(
             ports = o.optJSONArray("ports")?.let { a -> (0 until a.length()).map { a.optInt(it) } } ?: emptyList(),
             missingEnv = o.optJSONArray("missingEnv")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList(),
             version = o.optString("version"),
+            sessions = o.objs("sessions").map { LiveSession(it.optString("id"), it.optString("title"), it.optLong("at")) }.filter { Launch.isSessionId(it.id) },
         )
     }
 }
@@ -180,3 +196,53 @@ data class Note(val id: String, val project: String, val kind: String, val text:
         }.getOrNull()
     }
 }
+
+// ── what the phone asks for: a Claude Code session on the computer ──
+
+/**
+ * "Open Claude in this project": a request from a closed list, never a command. The computer opens Claude Code in
+ * the project's own folder, in a new terminal, and nothing else: a new conversation ([NEW]), the folder's last one
+ * ([CONTINUE]), or one of its conversations by id ([RESUME]); optionally with Remote Control on, to drive it from the
+ * Claude app, and with a first message typed on the phone. Sealed as "launch", so a note can't pass for one.
+ */
+data class Launch(
+    val id: String,
+    val project: String,
+    val mode: String,
+    /** The conversation to pick up ([RESUME] only): a session id, nothing else. */
+    val session: String = "",
+    val prompt: String = "",
+    val remote: Boolean = false,
+    val at: Long,
+) {
+    fun encode(): ByteArray = JSONObject().put("app", "YDeck").put("kind", "launch").put("v", 1)
+        .put("id", id).put("project", project).put("mode", mode).put("session", session)
+        .put("prompt", prompt).put("remote", remote).put("at", at).toString().toByteArray()
+
+    companion object {
+        const val NEW = "new"
+        const val CONTINUE = "continue"
+        const val RESUME = "resume"
+        /** The longest first message the computer accepts. */
+        const val MAX = 1000
+        /** A request that waited longer than this (the computer was off) is dropped, never run late. */
+        const val FRESH_MS = 15 * 60_000L
+
+        private val SESSION = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+        fun isSessionId(s: String) = SESSION.matches(s)
+
+        fun decode(bytes: ByteArray): Launch? = runCatching {
+            val o = JSONObject(String(bytes))
+            if (o.optString("app") != "YDeck" || o.optString("kind") != "launch") return null
+            val mode = o.optString("mode").takeIf { it == NEW || it == CONTINUE || it == RESUME } ?: return null
+            val session = o.optString("session")
+            if (mode == RESUME && !isSessionId(session)) return null
+            // One line of plain text: it reaches Claude Code on its command line.
+            val prompt = o.optString("prompt").map { if (it.isISOControl()) ' ' else it }.joinToString("").replace(Regex("\\s+"), " ").trim().take(MAX)
+            Launch(o.optString("id").take(64), o.optString("project").take(100), mode, if (mode == RESUME) session else "", prompt, o.optBoolean("remote"), o.optLong("at"))
+        }.getOrNull()
+    }
+}
+
+/** What the computer did with a [Launch]: opened it, or why not (in words the phone shows as they are). */
+data class Launched(val id: String, val ok: Boolean, val why: String = "")

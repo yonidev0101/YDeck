@@ -1,10 +1,13 @@
 package com.yonidev.ydeck.desktop
 
+import com.yonidev.ydeck.link.Launch
+import com.yonidev.ydeck.link.Launched
 import com.yonidev.ydeck.link.Live
 import com.yonidev.ydeck.link.LiveCommit
 import com.yonidev.ydeck.link.LiveFile
 import com.yonidev.ydeck.link.LiveLoop
 import com.yonidev.ydeck.link.LiveReceipt
+import com.yonidev.ydeck.link.LiveSession
 import com.yonidev.ydeck.link.MemDecision
 import com.yonidev.ydeck.link.Note
 import com.yonidev.ydeck.link.MemRelease
@@ -26,7 +29,8 @@ import java.util.Base64
  * (git, the agent, receipts, open loops), seals them with the pairing's key (shared/kotlin/.../Link.kt) and puts them
  * in the box on the relay when anything changed. Every 20 seconds it takes the notes the phone left (a decision, a next
  * step) and writes them into the project's files, where the next Claude session reads them. Notes are data: they are
- * stored, never run. Nothing listens here; both sides only reach out to the relay.
+ * stored, never run. The one request the phone can make is to open Claude Code in a project's folder ([launch]): a
+ * closed list of ways, checked here, never a command line of its own. Nothing listens here; both sides only reach out.
  * The pairing's secret lives in %LOCALAPPDATA%\YDeck Data\phone.json, never in a backup or a project.
  */
 object PhoneLink {
@@ -51,6 +55,8 @@ object PhoneLink {
     @Volatile private var lastSent: String? = null
     /** The phone's notes stored lately (ids, newest last), told back to the phone in every state. */
     private val applied = java.util.concurrent.CopyOnWriteArrayList<String>()
+    /** What became of the phone's latest launch requests (newest last), told back to it in every state. */
+    private val launched = java.util.concurrent.CopyOnWriteArrayList<Launched>()
     /** The last commits of each folder, read again only when its last commit changes. */
     private val logs = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, List<GitCommit>>>()
     private val wake = Object()
@@ -66,6 +72,7 @@ object PhoneLink {
             pairing = Pairing(Base64.getUrlDecoder().decode(o.getString("secret")))
             _state.value = State(paired = true, pairedAt = o.optLong("pairedAt"))
             o.optJSONArray("applied")?.let { a -> (0 until a.length()).forEach { applied += a.getString(it) } }
+            o.optJSONArray("launched")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.forEach { launched += Launched(it.optString("id"), it.optBoolean("ok"), it.optString("why")) } }
         }
         Thread({
             var last = 0L
@@ -93,7 +100,8 @@ object PhoneLink {
     fun nudge() = synchronized(wake) { pendingSend = true; wake.notifyAll() }
 
     private fun save(p: Pairing, pairedAt: Long) {
-        file.writeText(JSONObject().put("secret", Pairing.b64(p.secret)).put("pairedAt", pairedAt).put("applied", org.json.JSONArray(applied.takeLast(50))).toString())
+        file.writeText(JSONObject().put("secret", Pairing.b64(p.secret)).put("pairedAt", pairedAt).put("applied", org.json.JSONArray(applied.takeLast(50)))
+            .put("launched", org.json.JSONArray().apply { launched.takeLast(10).forEach { put(JSONObject().put("id", it.id).put("ok", it.ok).put("why", it.why)) } }).toString())
     }
 
     /**
@@ -107,20 +115,49 @@ object PhoneLink {
         val waiting = relay.notes() ?: return
         if (waiting.isEmpty()) return
         var stored = false
+        var asked = false
         for ((n, sealed) in waiting) {
             val note = runCatching { Note.decode(p.open("note", sealed)) }.getOrNull()
             if (note != null && note.id !in applied && store(note)) {
                 applied += note.id
                 stored = true
             }
+            // Not a note: maybe a launch request (sealed apart, so neither passes for the other).
+            if (note == null) runCatching { Launch.decode(p.open("launch", sealed)) }.getOrNull()?.let { l ->
+                if (launched.none { it.id == l.id }) { launched += launch(l); asked = true }
+            }
             relay.dropNote(n)
         }
-        if (stored) {
+        if (stored || asked) {
             while (applied.size > 50) applied.removeAt(0)
+            while (launched.size > 10) launched.removeAt(0)
             save(p, _state.value.pairedAt)
-            ProjectFiles.sync()
+            if (stored) ProjectFiles.sync()
             pendingSend = true
         }
+    }
+
+    /**
+     * The phone asks to open Claude Code in a project. Only what [Launch] allows, only in the project's own folder,
+     * only while it's on in Settings → Phone, and only when fresh: a request that waited on the relay while this
+     * computer was off is dropped, so nothing opens by surprise later. A session to resume must be one of the
+     * folder's. The answer goes back as a code the phone puts in words.
+     */
+    private fun launch(l: Launch): Launched {
+        fun no(why: String) = Launched(l.id, false, why)
+        if (!Settings.state.value.phoneLaunch) return no("off")
+        if (Tools.claude == null) return no("claude")
+        if (kotlin.math.abs(System.currentTimeMillis() - l.at) > Launch.FRESH_MS) return no("stale")
+        val project = Repo.deck.value.byId(l.project) ?: return no("project")
+        val dir = Settings.state.value.localOf(project.id).dir ?: return no("folder")
+        val resume = when (l.mode) {
+            // The folder's last conversation that a person had (`--continue` could pick up a handoff's `claude -p`).
+            Launch.CONTINUE -> Claude.conversations(dir, 1).firstOrNull()?.id
+            Launch.RESUME -> l.session.takeIf { Launch.isSessionId(it) && File(Claude.sessionsDir(dir), "$it.jsonl").isFile } ?: return no("session")
+            else -> null
+        }
+        val ok = Tools.claudeIn(dir, project.name, resume, remote = project.name.takeIf { l.remote }, prompt = l.prompt.ifBlank { null })
+        return if (ok) Launched(l.id, true) else no("start")
     }
 
     /** One note into its project. False when the project is gone (the note is dropped). */
@@ -156,6 +193,7 @@ object PhoneLink {
         val old = pairing
         val p = Pairing.create()
         applied.clear()
+        launched.clear()
         save(p, System.currentTimeMillis())
         pairing = p
         lastSent = null
@@ -189,7 +227,7 @@ object PhoneLink {
         val snapshot = snapshot()
         val plain = snapshot.encode()
         // What changed, without the time it was made.
-        val hash = sha(Snapshot(0, snapshot.computer, snapshot.deck, snapshot.memory, snapshot.live, snapshot.applied).encode())
+        val hash = sha(Snapshot(0, snapshot.computer, snapshot.deck, snapshot.memory, snapshot.live, snapshot.applied, snapshot.launch, snapshot.launched).encode())
         var s = _state.value
         if (hash != lastSent) {
             if (relay.putState(p.seal("state", plain))) {
@@ -226,7 +264,8 @@ object PhoneLink {
             )
         }
         val live = deck.projects.mapNotNull { p -> settings.localOf(p.id).folder?.let { p.id to live(it) } }.toMap()
-        return Snapshot(System.currentTimeMillis(), computer, JSONObject(Repo.exportJson(deck)), memory, live, applied.toList())
+        return Snapshot(System.currentTimeMillis(), computer, JSONObject(Repo.exportJson(deck)), memory, live, applied.toList(),
+            launch = settings.phoneLaunch && Tools.claude != null, launched = launched.toList())
     }
 
     /** What the project's window shows here: git, the agent, the latest receipts, open loops, the dev server. */
@@ -249,6 +288,7 @@ object PhoneLink {
             receipts = receipts.take(6).map { r -> LiveReceipt(r.title.take(200), r.agent.label, r.startAt, r.endAt, files(r.files), r.rewound != null) },
             loops = Loops.of(git, pulse, session, receipts).map { LiveLoop(it.kind.name, it.title, it.detail) },
             ports = pulse?.ports.orEmpty(), missingEnv = pulse?.missingEnv.orEmpty(), version = pulse?.version.orEmpty(),
+            sessions = Claude.conversations(java.io.File(folder)).map { LiveSession(it.id, it.title, it.at) },
         )
     }
 

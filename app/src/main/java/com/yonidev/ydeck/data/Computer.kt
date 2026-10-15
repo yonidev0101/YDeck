@@ -9,6 +9,8 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.glance.appwidget.updateAll
+import com.yonidev.ydeck.link.Launch
+import com.yonidev.ydeck.link.Launched
 import com.yonidev.ydeck.link.Live
 import com.yonidev.ydeck.link.Memory
 import com.yonidev.ydeck.link.Note
@@ -46,6 +48,10 @@ object Computer {
         val live: Map<String, Live> = emptyMap(),
         /** Notes written here that the computer hasn't stored yet (sent or not). */
         val pending: List<Note> = emptyList(),
+        /** The computer opens Claude Code when asked (see [launch]). */
+        val canLaunch: Boolean = false,
+        /** Claude Code sessions asked for here, and what the computer did with each (null: not yet). */
+        val launches: List<Pair<Launch, Launched?>> = emptyList(),
     )
 
     enum class Result { UPDATED, SAME, EMPTY, OFFLINE, REFUSED, BROKEN }
@@ -79,6 +85,7 @@ object Computer {
             memory = memory,
             live = live,
             pending = outbox.map { it.first },
+            canLaunch = mem?.optBoolean("launch") ?: false,
         )
     }
 
@@ -121,6 +128,22 @@ object Computer {
         }
         writeOutbox(c, list)
         return list.all { it.second }
+    }
+
+    // ── asking: Claude Code on the computer ──
+
+    /**
+     * Asks the computer to open Claude Code in [projectId]'s folder (see [Launch]). Sent now or never: unlike a note
+     * it isn't kept for later, since a session that opens hours after it was asked for is a surprise, not a help.
+     */
+    suspend fun launch(context: Context, projectId: String, mode: String, session: String, prompt: String, remote: Boolean): Boolean = withContext(Dispatchers.IO) {
+        val app = context.applicationContext
+        val p = pairing ?: return@withContext false
+        val l = Launch(java.util.UUID.randomUUID().toString(), projectId, mode, session, prompt.trim().take(Launch.MAX), remote, System.currentTimeMillis())
+        if (!Relay(p).postNote(p.seal("launch", l.encode()))) return@withContext false
+        val s = state(app)
+        _state.value = s.copy(launches = (s.launches + (l to null)).takeLast(10))
+        true
     }
 
     /** A scanned QR code. Null when it isn't a YDeck computer's; otherwise the computer's name, and the pairing is kept. */
@@ -171,12 +194,15 @@ object Computer {
             put("computer", snapshot.computer)
             put("memory", JSONObject().apply { snapshot.memory.forEach { (id, m) -> put(id, with(Snapshot) { m.toJson() }) } })
             put("live", JSONObject().apply { snapshot.live.forEach { (id, l) -> put(id, l.toJson()) } })
+            put("launch", snapshot.launch)
         }.toString())
         // Notes the computer has stored are done; the rest wait.
         if (outbox.any { it.first.id in snapshot.applied }) writeOutbox(app, outbox.filterNot { it.first.id in snapshot.applied })
         etag = got.etag
         writeLink(app, p, snapshot.computer, got.etag, now)
-        _state.value = State(paired = true, name = snapshot.computer, stateAt = snapshot.at, checkedAt = now, memory = snapshot.memory, live = snapshot.live, pending = outbox.map { it.first })
+        val launches = state(app).launches.map { (l, done) -> l to (done ?: snapshot.launched.firstOrNull { it.id == l.id }) }
+        _state.value = State(paired = true, name = snapshot.computer, stateAt = snapshot.at, checkedAt = now, memory = snapshot.memory, live = snapshot.live,
+            pending = outbox.map { it.first }, canLaunch = snapshot.launch, launches = launches)
         DeckWidget().updateAll(app)
         Result.UPDATED
     }

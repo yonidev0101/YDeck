@@ -113,6 +113,8 @@ class MainActivity : ComponentActivity() {
                                 pending = computer?.pending.orEmpty().filter { it.project == project.id },
                                 onBack = { page = Page.Home },
                                 onWrite = if (computer?.paired == true) { kind, text -> write(project.id, kind, text) } else null,
+                                launches = computer?.launches.orEmpty().filter { it.first.project == project.id },
+                                onLaunch = if (computer?.paired == true && computer?.canLaunch == true) { mode, session, prompt, remote -> launch(project.id, mode, session, prompt, remote) } else null,
                             )
                         } ?: androidx.compose.runtime.LaunchedEffect(p) { page = Page.Home }
                         Page.Scan -> ScanScreen(onCode = { page = Page.Home; scanned(it) }, onClose = { page = Page.Home })
@@ -252,6 +254,25 @@ class MainActivity : ComponentActivity() {
                 delay(10_000)
                 if (Computer.state.value?.pending.orEmpty().none { it.project == projectId }) break
                 if (Computer.sync(this@MainActivity) == Computer.Result.UPDATED) deck = Repo.deck(this@MainActivity)
+            }
+        }
+    }
+
+    /**
+     * Claude Code on the computer, asked for: sent at once (or not at all), then watched for a minute or so until the
+     * computer says what it did (YDeck there takes requests every 20 seconds).
+     */
+    private fun launch(projectId: String, mode: String, session: String, prompt: String, remote: Boolean) {
+        lifecycleScope.launch {
+            if (!Computer.launch(this@MainActivity, projectId, mode, session, prompt, remote)) {
+                toast("אין חיבור לאינטרנט. הבקשה לא נשלחה.")
+                return@launch
+            }
+            toast("נשלח למחשב")
+            for (attempt in 0 until 15) {
+                delay(5_000)
+                if (Computer.sync(this@MainActivity) == Computer.Result.UPDATED) deck = Repo.deck(this@MainActivity)
+                if (Computer.state.value?.launches.orEmpty().none { it.first.project == projectId && it.second == null }) break
             }
         }
     }
