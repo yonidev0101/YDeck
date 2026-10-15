@@ -12,6 +12,8 @@
     </queries>
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- The phone's own unlock (PIN, pattern, password or a finger) before it asks the computer to open Claude. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <!-- Only for the built-in scanner, asked only if Google's scanner can't open. -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />

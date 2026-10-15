@@ -127,8 +127,9 @@ object Settings {
         val folderGit: Boolean = true,
         /** Links without a brand mark show their site's icon, fetched by the domain name alone (see [Favicons]). */
         val siteIcons: Boolean = true,
-        /** The paired phone may open Claude Code in a project's folder (a closed list of ways, see [PhoneLink.launch]). */
-        val phoneLaunch: Boolean = true,
+        /** The paired phone may open Claude Code in a project's folder (a closed list of ways, see [PhoneLink.launch]). Off
+         *  until turned on here, at the computer. */
+        val phoneLaunch: Boolean = false,
         /** "system", "en" or "he" (see [I18n]). */
         val language: String = "system",
         /** "system", "light" or "dark". */
@@ -161,7 +162,7 @@ object Settings {
                 put("folderStatus", s.folderStatus)
                 put("folderGit", s.folderGit)
                 put("siteIcons", s.siteIcons)
-                put("phoneLaunch", s.phoneLaunch)
+                put("phoneLaunchOn", s.phoneLaunch)
                 put("language", s.language)
                 put("appearance", s.appearance)
                 put("appearanceV2", true)
@@ -200,7 +201,8 @@ object Settings {
             folderStatus = o.optBoolean("folderStatus", true),
             folderGit = o.optBoolean("folderGit", true),
             siteIcons = o.optBoolean("siteIcons", true),
-            phoneLaunch = o.optBoolean("phoneLaunch", true),
+            // Off until turned on here; 1.16.0 saved "phoneLaunch" on for everyone, so that one is not read.
+            phoneLaunch = o.optBoolean("phoneLaunchOn", false),
             language = o.optString("language", "system"),
             // 1.11: dark became the default; a "system" saved before then was the old default, not a choice.
             appearance = if (!o.has("appearanceV2") && o.optString("appearance", "system") == "system") "dark" else o.optString("appearance", "dark"),

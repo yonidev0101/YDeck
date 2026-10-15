@@ -39,8 +39,11 @@ class Snapshot(
     /** The ids of the phone's notes the computer has stored (the latest ones), so the phone stops showing them as waiting. */
     val applied: List<String> = emptyList(),
     /** The computer opens Claude Code sessions the phone asks for (see [Launch]); false when that's off in its
-     *  settings or Claude Code isn't installed. */
+     *  settings (the default) or Claude Code isn't installed. */
     val launch: Boolean = false,
+    /** Claude Code is on the computer, and its YDeck can open it for the phone once that's turned on: the phone shows
+     *  the way, and where to turn it on. */
+    val claude: Boolean = false,
     /** What became of the phone's latest launch requests. */
     val launched: List<Launched> = emptyList(),
 ) {
@@ -55,6 +58,7 @@ class Snapshot(
         put("live", JSONObject().apply { live.forEach { (id, l) -> put(id, l.toJson()) } })
         put("applied", JSONArray(applied))
         put("launch", launch)
+        put("claude", claude)
         put("launched", JSONArray().apply { launched.forEach { put(JSONObject().put("id", it.id).put("ok", it.ok).put("why", it.why)) } })
     }.toString().toByteArray()
 
@@ -71,6 +75,7 @@ class Snapshot(
                 live = (o.optJSONObject("live") ?: JSONObject()).let { l -> l.keys().asSequence().associateWith { Live.of(l.optJSONObject(it) ?: JSONObject()) } },
                 applied = o.optJSONArray("applied")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList(),
                 launch = o.optBoolean("launch"),
+                claude = o.optBoolean("claude"),
                 launched = o.optJSONArray("launched")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) } }.orEmpty()
                     .map { Launched(it.optString("id"), it.optBoolean("ok"), it.optString("why")) },
             )

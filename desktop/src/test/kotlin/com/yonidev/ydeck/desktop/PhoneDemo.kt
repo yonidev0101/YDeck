@@ -14,7 +14,7 @@ class PhoneDemo {
         val arg = System.getProperty("phone") ?: return
         val out = File("build/phone-qr.txt")
         if (arg == "delete") {
-            val p = Pairing.parse(out.readText().trim())!!.first
+            val p = Pairing.parse(out.readText().trim())!!.pairing
             val r = Relay(p)
             val ok = r.delete()
             println("deleted: $ok (${r.lastCode})")

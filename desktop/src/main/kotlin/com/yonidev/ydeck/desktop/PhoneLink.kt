@@ -12,11 +12,13 @@ import com.yonidev.ydeck.link.MemDecision
 import com.yonidev.ydeck.link.Note
 import com.yonidev.ydeck.link.MemRelease
 import com.yonidev.ydeck.link.Memory
+import com.yonidev.ydeck.link.NewKey
 import com.yonidev.ydeck.link.Pairing
 import com.yonidev.ydeck.link.Relay
 import com.yonidev.ydeck.link.Snapshot
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
 import org.json.JSONObject
 import java.io.File
 import java.security.MessageDigest
@@ -37,7 +39,11 @@ object PhoneLink {
 
     data class State(
         val paired: Boolean = false,
-        /** The secret was just made and the QR is on screen; becomes false once the phone has read the box. */
+        /** A one-time code on screen (changed every two minutes), waiting for a phone to send its key through it. */
+        val qr: String? = null,
+        /** When the code on screen stops working. */
+        val qrUntil: Long = 0,
+        /** Just paired: becomes false once the phone has read the box. */
         val waiting: Boolean = false,
         val pairedAt: Long = 0,
         /** When the box last took our state, and when the phone last read it (from the relay). */
@@ -63,8 +69,13 @@ object PhoneLink {
 
     val computer: String get() = System.getenv("COMPUTERNAME")?.let { it.lowercase().replaceFirstChar(Char::uppercase) } ?: "Windows"
 
-    /** The QR's text while pairing (or to pair a second time with the same phone). */
-    fun qrText(): String? = pairing?.qrText(computer)
+    /** The one-time code on screen, and whether its box on the relay is claimed yet (a phone can only post to a
+     *  claimed box). Never saved: closing YDeck ends it. */
+    @Volatile private var offer: Pairing? = null
+    @Volatile private var offerClaimed = false
+
+    /** A project's name, each time the phone opened Claude Code here (a Windows notification, see Main). */
+    val opened = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 4)
 
     fun start() {
         runCatching {
@@ -77,12 +88,14 @@ object PhoneLink {
         Thread({
             var last = 0L
             while (true) {
+                runCatching { takeOffer() }
                 runCatching { takeNotes() }
                 // The state at once after a note (the phone sees it stored) or a nudge, else every minute.
                 if (System.currentTimeMillis() - last >= 55_000 || pendingSend || _state.value.waiting) {
                     pendingSend = false; last = System.currentTimeMillis(); runCatching { tick() }
                 }
-                synchronized(wake) { wake.wait(if (_state.value.waiting) 3_000 else 20_000) }
+                val hurry = _state.value.waiting || offer != null
+                synchronized(wake) { wake.wait(if (hurry) 3_000 else 20_000) }
             }
         }, "phone-link").apply { isDaemon = true }.start()
         // A change in the projects goes out within seconds, not at the next minute.
@@ -117,6 +130,10 @@ object PhoneLink {
         var stored = false
         var asked = false
         for ((n, sealed) in waiting) {
+            // A phone paired with an older code moves to a secret that never was on a screen: the rest of this box
+            // goes with the old secret (the phone sends again what it hasn't seen stored).
+            val key = runCatching { NewKey.decode(p.open("rekey", sealed)) }.getOrNull()
+            if (key != null) { adopt(key, samePhone = true); return }
             val note = runCatching { Note.decode(p.open("note", sealed)) }.getOrNull()
             if (note != null && note.id !in applied && store(note)) {
                 applied += note.id
@@ -157,6 +174,7 @@ object PhoneLink {
             else -> null
         }
         val ok = Tools.claudeIn(dir, project.name, resume, remote = project.name.takeIf { l.remote }, prompt = l.prompt.ifBlank { null })
+        if (ok) opened.tryEmit(project.name)
         return if (ok) Launched(l.id, true) else no("start")
     }
 
@@ -188,22 +206,62 @@ object PhoneLink {
         return true
     }
 
-    /** A new pairing: a new secret (any earlier phone is cut off), saved, sent at once. The QR shows it. */
+    /**
+     * Shows a one-time code. A phone that scans it sends the lasting secret it made ([takeOffer]); until then the
+     * phone paired now (if any) stays paired. The code changes every two minutes, and works once.
+     */
     fun pair() {
+        val old = offer
+        val o = Pairing.create()
+        offer = o
+        offerClaimed = false
+        _state.update { it.copy(qr = o.qrText(computer), qrUntil = System.currentTimeMillis() + NewKey.CODE_MS) }
+        if (old != null) emptyBox(old)
+        nudge()
+    }
+
+    /** The code was closed: it stops working at once. */
+    fun cancelPair() {
+        val o = offer ?: return
+        offer = null
+        _state.update { it.copy(qr = null, qrUntil = 0) }
+        emptyBox(o)
+    }
+
+    /** The one-time code's box: claimed (so a phone can post to it), changed when it expires, read for a phone's key. */
+    private fun takeOffer() {
+        val o = offer ?: return
+        if (System.currentTimeMillis() >= _state.value.qrUntil) { if (offer === o) pair(); return }
+        val relay = Relay(o)
+        if (!offerClaimed) offerClaimed = relay.putState(o.seal("hello", "{}".toByteArray()))
+        if (!offerClaimed) return
+        for ((_, sealed) in relay.notes() ?: return) {
+            val key = runCatching { NewKey.decode(o.open("pair", sealed)) }.getOrNull() ?: continue
+            if (offer !== o) return
+            offer = null
+            emptyBox(o)
+            adopt(key, samePhone = false)
+            return
+        }
+    }
+
+    /** The phone's own secret becomes the pairing; the earlier one's box is emptied (an earlier phone is cut off). */
+    private fun adopt(key: NewKey, samePhone: Boolean) {
         val old = pairing
-        val p = Pairing.create()
-        applied.clear()
-        launched.clear()
-        save(p, System.currentTimeMillis())
+        val p = Pairing(key.secret)
+        if (!samePhone) { applied.clear(); launched.clear() }
+        val at = if (samePhone) _state.value.pairedAt else System.currentTimeMillis()
+        save(p, at)
         pairing = p
         lastSent = null
-        _state.value = State(paired = true, waiting = true, pairedAt = System.currentTimeMillis())
+        _state.update { if (samePhone) it.copy(paired = true) else State(paired = true, waiting = true, pairedAt = at) }
         if (old != null) emptyBox(old)
         nudge()
     }
 
     /** "Unpair phone": the box on the relay is emptied and the secret forgotten. The phone keeps what it last saw. */
     fun unpair() {
+        cancelPair()
         val old = pairing ?: return
         pairing = null
         lastSent = null
@@ -218,28 +276,28 @@ object PhoneLink {
         for (attempt in 0 until 5) { if (Relay(p).delete()) break; Thread.sleep(5_000L * (attempt + 1)) }
     }.apply { isDaemon = true }.start()
 
-    /** The QR was closed before the phone scanned it: stays paired (scan later from Settings), just stops hurrying. */
-    fun stopWaiting() { _state.value = _state.value.copy(waiting = false) }
-
     private fun tick() {
         val p = pairing ?: return
         val relay = Relay(p)
         val snapshot = snapshot()
         val plain = snapshot.encode()
         // What changed, without the time it was made.
-        val hash = sha(Snapshot(0, snapshot.computer, snapshot.deck, snapshot.memory, snapshot.live, snapshot.applied, snapshot.launch, snapshot.launched).encode())
-        var s = _state.value
+        val hash = sha(Snapshot(0, snapshot.computer, snapshot.deck, snapshot.memory, snapshot.live, snapshot.applied, snapshot.launch, snapshot.claude, snapshot.launched).encode())
+        var sentAt: Long? = null
+        var offline = false
         if (hash != lastSent) {
-            if (relay.putState(p.seal("state", plain))) {
-                lastSent = hash
-                s = s.copy(sentAt = System.currentTimeMillis(), offline = false)
-            } else s = s.copy(offline = true)
+            if (relay.putState(p.seal("state", plain))) { lastSent = hash; sentAt = System.currentTimeMillis() } else offline = true
         }
-        relay.meta()?.let { m ->
-            s = s.copy(phoneReadAt = m.readAt, offline = false)
-            if (s.waiting && m.readAt != null && m.readAt!! >= s.pairedAt) s = s.copy(waiting = false)
+        val m = relay.meta()
+        // Only what this learned changes: a code put on screen meanwhile stays.
+        if (pairing === p) _state.update { s ->
+            var n = s.copy(sentAt = sentAt ?: s.sentAt, offline = if (m != null) false else offline || s.offline && sentAt == null)
+            if (m != null) {
+                n = n.copy(phoneReadAt = m.readAt)
+                if (n.waiting && m.readAt != null && m.readAt!! >= n.pairedAt) n = n.copy(waiting = false)
+            }
+            n
         }
-        if (pairing === p) _state.value = s
     }
 
     /** The projects (with logos) and, for each one with a folder here, its memory. */
@@ -265,7 +323,7 @@ object PhoneLink {
         }
         val live = deck.projects.mapNotNull { p -> settings.localOf(p.id).folder?.let { p.id to live(it) } }.toMap()
         return Snapshot(System.currentTimeMillis(), computer, JSONObject(Repo.exportJson(deck)), memory, live, applied.toList(),
-            launch = settings.phoneLaunch && Tools.claude != null, launched = launched.toList())
+            launch = settings.phoneLaunch && Tools.claude != null, claude = Tools.claude != null, launched = launched.toList())
     }
 
     /** What the project's window shows here: git, the agent, the latest receipts, open loops, the dev server. */

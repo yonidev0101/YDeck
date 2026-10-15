@@ -19,14 +19,18 @@ import javax.crypto.spec.SecretKeySpec
  * The link between YDeck on the computer and YDeck on the phone, shared by both apps (plain JVM: javax.crypto and
  * HttpURLConnection exist on Windows and on Android alike).
  *
- * Pairing: the computer makes a random 32-byte secret and shows it in a QR code. The phone scans it. That is the only
- * place the secret ever travels. From it both sides derive, with HKDF-SHA256:
+ * Pairing: the computer makes a random 32-byte secret for one pairing and shows it in a QR code (v=2), changed every two
+ * minutes and good for one phone. The phone scans it, makes the lasting secret itself, and sends it sealed with the
+ * code's key ([NewKey], kind "pair"); the computer takes it and empties the code's box. So the lasting secret never
+ * appears on a screen, and a photo of the code is worth nothing once used or two minutes on. A phone paired with an
+ * older code (v=1, the lasting secret itself) moves to a new secret the same way (kind "rekey"). From a secret both
+ * sides derive, with HKDF-SHA256:
  *   box id  - which mailbox on the relay (16 bytes, hex)
  *   token   - proves to the relay that a call comes from one of the two (the relay keeps only its hash)
  *   key     - AES-256-GCM, seals everything that goes through the relay
  * The relay (relay/src/index.js) can neither read a box nor forge one. Only data goes through: the phone never
  * receives anything it runs. The computer runs nothing from the phone but one thing from a closed list: opening
- * Claude Code in a project's folder (see Launch in Snapshot.kt), which can be turned off on the computer.
+ * Claude Code in a project's folder (see Launch in Snapshot.kt), and only once that's turned on at the computer.
  */
 
 /** The relay. Outbound HTTPS from both sides; nothing listens on the computer. */
@@ -39,8 +43,8 @@ class Pairing(val secret: ByteArray) {
     val token: String = b64(hkdf("token"))
     private val key = SecretKeySpec(hkdf("key"), "AES")
 
-    /** What the QR code holds: `ydeck:pair?v=1&k=<secret>&n=<computer name>`. */
-    fun qrText(computer: String): String = "ydeck:pair?v=1&k=${b64(secret)}&n=" + URLEncoder.encode(computer.take(40), "UTF-8")
+    /** What the QR code holds: `ydeck:pair?v=2&k=<this one-time secret>&n=<computer name>`. */
+    fun qrText(computer: String): String = "ydeck:pair?v=2&k=${b64(secret)}&n=" + URLEncoder.encode(computer.take(40), "UTF-8")
 
     /** gzip, then AES-256-GCM. Layout: 1 (format) | 12-byte nonce | ciphertext+tag. [kind] is bound in, so a sealed
      *  state can't be replayed as something else. */
@@ -75,13 +79,15 @@ class Pairing(val secret: ByteArray) {
 
         fun create(): Pairing = Pairing(ByteArray(32).also { random.nextBytes(it) })
 
-        /** Reads a scanned QR code; null when it isn't YDeck's. Returns the pairing and the computer's name. */
-        fun parse(text: String): Pair<Pairing, String>? = runCatching {
+        /** Reads a scanned QR code; null when it isn't YDeck's. A v=1 code (YDeck for Windows before 1.16.1) is the
+         *  lasting secret itself; a v=2 code is [Code.oneTime]: the phone sends its own secret through it. */
+        fun parse(text: String): Code? = runCatching {
             if (!text.startsWith("ydeck:pair?")) return null
             val q = text.substringAfter('?').split('&').associate { it.substringBefore('=') to URLDecoder.decode(it.substringAfter('=', ""), "UTF-8") }
-            if (q["v"] != "1") return null
+            val v = q["v"]
+            if (v != "1" && v != "2") return null
             val secret = Base64.getUrlDecoder().decode(q["k"] ?: return null)
-            Pairing(secret) to (q["n"] ?: "").ifBlank { "Computer" }
+            Code(Pairing(secret), (q["n"] ?: "").ifBlank { "Computer" }, oneTime = v == "2")
         }.getOrNull()
 
         fun b64(b: ByteArray): String = Base64.getUrlEncoder().withoutPadding().encodeToString(b)
@@ -91,6 +97,29 @@ class Pairing(val secret: ByteArray) {
 
         private fun gzip(b: ByteArray): ByteArray = ByteArrayOutputStream().also { o -> GZIPOutputStream(o).use { it.write(b) } }.toByteArray()
         private fun gunzip(b: ByteArray): ByteArray = GZIPInputStream(ByteArrayInputStream(b)).use { it.readBytes() }
+    }
+}
+
+/** A scanned code: its pairing, the computer's name, and whether it's a one-time code. */
+data class Code(val pairing: Pairing, val computer: String, val oneTime: Boolean)
+
+/** The lasting secret the phone made, on its way to the computer: sealed as "pair" with a one-time code's key, or as
+ *  "rekey" with the secret it replaces. */
+class NewKey(val secret: ByteArray, val at: Long) {
+    fun encode(): ByteArray = org.json.JSONObject().put("app", "YDeck").put("kind", "key").put("v", 1)
+        .put("secret", Pairing.b64(secret)).put("at", at).toString().toByteArray()
+
+    companion object {
+        /** How long a one-time code works. */
+        const val CODE_MS = 2 * 60_000L
+
+        fun decode(bytes: ByteArray): NewKey? = runCatching {
+            val o = org.json.JSONObject(String(bytes))
+            if (o.optString("app") != "YDeck" || o.optString("kind") != "key") return null
+            val s = Base64.getUrlDecoder().decode(o.getString("secret"))
+            if (s.size != 32) return null
+            NewKey(s, o.optLong("at"))
+        }.getOrNull()
     }
 }
 

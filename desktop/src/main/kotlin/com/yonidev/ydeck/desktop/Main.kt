@@ -117,6 +117,13 @@ private fun ApplicationScope.App(background: Boolean, asks: MutableStateFlow<Ask
             tray.sendNotification(Notification(title, a.detail.ifBlank { " " }, Notification.Type.None))
         }
     }
+    // The phone opened Claude Code here: always said, so it never happens unseen.
+    LaunchedEffect(Unit) {
+        PhoneLink.opened.collect { name ->
+            tray.sendNotification(Notification(tr("$name: Claude opened from the phone", "$name: Claude נפתח מהטלפון"),
+                tr("Turn this off in Settings → Phone.", "אפשר לכבות בהגדרות ← טלפון."), Notification.Type.None))
+        }
+    }
 
     // The app window keeps its place and size when the language changes; it redraws inside (see AppWindow).
     if (mainOpen) AppWindow(deck, dark, playIntro = !background, onClose = { mainOpen = false }, openPalette = { palette = true }, addWidget = ::addWidget)

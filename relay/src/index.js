@@ -38,8 +38,11 @@ export class Box {
   constructor(state) {
     this.sql = state.storage.sql;
     this.storage = state.storage;
-    this.sql.exec('CREATE TABLE IF NOT EXISTS box (k TEXT PRIMARY KEY, v BLOB)');
+    this.table();
   }
+
+  // deleteAll() drops the table too: made again, so an emptied box answers "unauthorized", not an error.
+  table() { this.sql.exec('CREATE TABLE IF NOT EXISTS box (k TEXT PRIMARY KEY, v BLOB)'); }
 
   get(k) {
     const rows = this.sql.exec('SELECT v FROM box WHERE k = ?', k).toArray();
@@ -104,13 +107,14 @@ export class Box {
 
     if (req.method === 'DELETE' && what === '') {
       await this.storage.deleteAll();
+      this.table();
       return json({ ok: true });
     }
 
     return text('not found', 404);
   }
 
-  async alarm() { await this.storage.deleteAll(); }
+  async alarm() { await this.storage.deleteAll(); this.table(); }
 }
 
 async function sha256(data) {

@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -39,11 +40,12 @@ fun PhoneSettings() {
     val c = LocalDeck.current
     val s by PhoneLink.state.collectAsState()
     val settings by Settings.state.collectAsState()
-    var showQr by remember { mutableStateOf(false) }
     var confirm by remember { mutableStateOf(false) }
     // "Just now" stays true while the page is open.
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) { while (true) { delay(20_000); now = System.currentTimeMillis() } }
+    // A code left on screen stops working when the page closes.
+    DisposableEffect(Unit) { onDispose { PhoneLink.cancelPair() } }
 
     Column(verticalArrangement = Arrangement.spacedBy(22.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.widthIn(max = 560.dp)) {
@@ -54,8 +56,8 @@ fun PhoneSettings() {
         }
 
         when {
+            s.qr != null -> PairCard(s.qr!!, s.qrUntil, onClose = { PhoneLink.cancelPair() })
             !s.paired -> Row { Pill(tr("Pair a phone", "חיבור טלפון"), Tone.PRIMARY, Glyph.PHONE) { PhoneLink.pair() } }
-            s.waiting || showQr -> PairCard(waiting = s.waiting, onClose = { showQr = false; PhoneLink.stopWaiting() })
             else -> Column {
                 Group {
                     Item {
@@ -70,11 +72,12 @@ fun PhoneSettings() {
                         }
                     }
                     if (Tools.claude != null) Setting(tr("The phone can open Claude Code", "הטלפון יכול לפתוח את Claude Code"),
-                        hint = tr("In a project's folder, in a new terminal: a new session, the last one, or an earlier one, with Remote Control if asked. Nothing else.",
-                            "בתיקיית הפרויקט, בטרמינל חדש: סשן חדש, האחרון או סשן קודם, עם Remote Control אם ביקשו. שום דבר אחר.")) {
+                        hint = tr("Off until you turn it on here. In a project's folder, in a new terminal: a new session, the last one, or an earlier one, with Remote Control if asked. Claude works in your usual permission mode, and a notification shows each time.",
+                            "כבוי עד שמדליקים כאן. בתיקיית הפרויקט, בטרמינל חדש: סשן חדש, האחרון או סשן קודם, עם Remote Control אם ביקשו. Claude עובד במצב ההרשאות הרגיל שלך, וכל פתיחה מופיעה כהתראה.")) {
                         Toggle(settings.phoneLaunch) { on -> Settings.update { it.copy(phoneLaunch = on) }; PhoneLink.nudge() }
                     }
-                    Setting(tr("Show the code again", "הצגת הקוד שוב"), onClick = { showQr = true })
+                    Setting(tr("Pair a phone again", "חיבור טלפון מחדש"), hint = tr("A new code; the phone that scans it replaces this one.", "קוד חדש; הטלפון שיסרוק אותו יחליף את המחובר עכשיו."),
+                        onClick = { PhoneLink.pair() })
                     Item({ confirm = true }) {
                         Text(tr("Unpair phone", "ניתוק טלפון"), color = c.danger, fontSize = 14.sp, fontFamily = PlexSans, modifier = Modifier.weight(1f))
                     }
@@ -88,16 +91,17 @@ fun PhoneSettings() {
             }
         }
 
-        Text(tr("Only data goes through, sealed end to end: the relay in between can't read it or change it. The one thing the phone can ask this computer to do is open Claude Code in a project's folder, and only in the ways above; never a command of its own. Nothing here listens for connections; both sides only reach out.",
-            "עוברים רק נתונים, מוצפנים מקצה לקצה: הממסר שבאמצע לא יכול לקרוא אותם או לשנות אותם. הדבר היחיד שהטלפון יכול לבקש מהמחשב הוא לפתוח את Claude Code בתיקיית פרויקט, ורק בדרכים שלמעלה; אף פעם לא פקודה משלו. שום דבר כאן לא מחכה לחיבורים; שני הצדדים רק יוצאים החוצה."),
+        Text(tr("Only data goes through, sealed end to end: the relay in between can't read it or change it. The one thing the phone can ask this computer to do is open Claude Code in a project's folder, only once you turn it on above, and only in those ways; never a command of its own. Nothing here listens for connections; both sides only reach out.",
+            "עוברים רק נתונים, מוצפנים מקצה לקצה: הממסר שבאמצע לא יכול לקרוא אותם או לשנות אותם. הדבר היחיד שהטלפון יכול לבקש מהמחשב הוא לפתוח את Claude Code בתיקיית פרויקט, רק אחרי שמדליקים את זה למעלה, ורק בדרכים האלה; אף פעם לא פקודה משלו. שום דבר כאן לא מחכה לחיבורים; שני הצדדים רק יוצאים החוצה."),
             color = c.faint, fontSize = 12.sp, lineHeight = 18.sp, fontFamily = PlexSans, modifier = Modifier.widthIn(max = 560.dp))
     }
 }
 
 @Composable
-private fun PairCard(waiting: Boolean, onClose: () -> Unit) {
+private fun PairCard(text: String, until: Long, onClose: () -> Unit) {
     val c = LocalDeck.current
-    val text = remember { PhoneLink.qrText() } ?: return
+    var left by remember { mutableStateOf(0L) }
+    LaunchedEffect(until) { while (true) { left = ((until - System.currentTimeMillis()) / 1000).coerceAtLeast(0); delay(1_000) } }
     Row(horizontalArrangement = Arrangement.spacedBy(28.dp), verticalAlignment = Alignment.CenterVertically) {
         // Dark on light, with its quiet zone: every scanner reads it, also in the dark theme.
         Box(Modifier.clip(RoundedCornerShape(20.dp)).background(Color.White).padding(18.dp)) { Qr(text, 216.dp) }
@@ -115,13 +119,12 @@ private fun PairCard(waiting: Boolean, onClose: () -> Unit) {
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp)) {
-                if (waiting) {
-                    Box(Modifier.size(8.dp).clip(CircleShape).background(Color(0xFFF5A524)))
-                    Text(tr("Waiting for the phone…", "מחכה לטלפון…"), color = c.muted, fontSize = 13.sp, fontFamily = PlexSans)
-                }
-                Pill(if (waiting) tr("Later", "אחר כך") else tr("Done", "סיום"), Tone.SOFT, small = true, onClick = onClose)
+                Box(Modifier.size(8.dp).clip(CircleShape).background(Color(0xFFF5A524)))
+                Text(tr("Waiting for the phone… new code in ${left / 60}:${"%02d".format(left % 60)}", "מחכה לטלפון… קוד חדש בעוד ${left / 60}:${"%02d".format(left % 60)}"),
+                    color = c.muted, fontSize = 13.sp, fontFamily = PlexSans)
+                Pill(tr("Cancel", "ביטול"), Tone.SOFT, small = true, onClick = onClose)
             }
-            Text(tr("The code is the key. Show it only to your own phone.", "הקוד הוא המפתח. מראים אותו רק לטלפון שלך."),
+            Text(tr("Works once, for two minutes. The lasting key is made by the phone and never shown.", "עובד פעם אחת, לשתי דקות. המפתח הקבוע נוצר בטלפון ולא מוצג אף פעם."),
                 color = c.faint, fontSize = 12.sp, fontFamily = PlexSans)
         }
     }

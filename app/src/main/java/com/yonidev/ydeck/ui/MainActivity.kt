@@ -114,7 +114,8 @@ class MainActivity : ComponentActivity() {
                                 onBack = { page = Page.Home },
                                 onWrite = if (computer?.paired == true) { kind, text -> write(project.id, kind, text) } else null,
                                 launches = computer?.launches.orEmpty().filter { it.first.project == project.id },
-                                onLaunch = if (computer?.paired == true && computer?.canLaunch == true) { mode, session, prompt, remote -> launch(project.id, mode, session, prompt, remote) } else null,
+                                launchOn = computer?.canLaunch == true,
+                                onLaunch = if (computer?.paired == true && (computer?.claudeHere == true || computer?.canLaunch == true)) { mode, session, prompt, remote -> launch(project.id, mode, session, prompt, remote) } else null,
                             )
                         } ?: androidx.compose.runtime.LaunchedEffect(p) { page = Page.Home }
                         Page.Scan -> ScanScreen(onCode = { page = Page.Home; scanned(it) }, onClose = { page = Page.Home })
@@ -196,11 +197,16 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun pair(code: String) {
-        val name = Computer.pair(this, code) ?: return
-        connecting = name
-        Computer.schedule(this)
         lifecycleScope.launch {
-            // The computer sends its state the moment it shows the code; give it a few seconds if it's slower.
+            val name = when (val r = Computer.pair(this@MainActivity, code)) {
+                is Computer.Paired.Done -> r.name
+                Computer.Paired.Expired -> { toast("הקוד כבר לא בתוקף. במחשב: הגדרות ← טלפון, מציגים קוד חדש וסורקים שוב."); return@launch }
+                Computer.Paired.Offline -> { toast("אין חיבור לאינטרנט"); return@launch }
+                Computer.Paired.NotOurs -> return@launch
+            }
+            connecting = name
+            Computer.schedule(this@MainActivity)
+            // The computer takes the key within a few seconds (it looks every 3) and sends its state at once.
             var result = Computer.Result.EMPTY
             for (attempt in 0 until 8) {
                 result = Computer.sync(this@MainActivity)
@@ -263,6 +269,27 @@ class MainActivity : ComponentActivity() {
      * computer says what it did (YDeck there takes requests every 20 seconds).
      */
     private fun launch(projectId: String, mode: String, session: String, prompt: String, remote: Boolean) {
+        // Whoever has the phone in hand proves it's theirs first: its screen lock (PIN, pattern, password or a finger).
+        confirmOwner { send(projectId, mode, session, prompt, remote) }
+    }
+
+    /** Runs [then] after the phone's own unlock is confirmed; at once when the phone has no screen lock. */
+    private fun confirmOwner(then: () -> Unit) {
+        val keyguard = getSystemService(android.app.KeyguardManager::class.java)
+        if (keyguard?.isDeviceSecure != true) { then(); return }
+        val auth = android.hardware.biometrics.BiometricManager.Authenticators.BIOMETRIC_WEAK or
+            android.hardware.biometrics.BiometricManager.Authenticators.DEVICE_CREDENTIAL
+        android.hardware.biometrics.BiometricPrompt.Builder(this)
+            .setTitle("פתיחת Claude במחשב")
+            .setSubtitle("אישור שזה אתה")
+            .setAllowedAuthenticators(auth)
+            .build()
+            .authenticate(android.os.CancellationSignal(), mainExecutor, object : android.hardware.biometrics.BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(result: android.hardware.biometrics.BiometricPrompt.AuthenticationResult) = then()
+            })
+    }
+
+    private fun send(projectId: String, mode: String, session: String, prompt: String, remote: Boolean) {
         lifecycleScope.launch {
             if (!Computer.launch(this@MainActivity, projectId, mode, session, prompt, remote)) {
                 toast("אין חיבור לאינטרנט. הבקשה לא נשלחה.")

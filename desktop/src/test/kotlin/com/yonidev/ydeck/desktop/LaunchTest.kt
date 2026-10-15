@@ -4,8 +4,10 @@ import com.yonidev.ydeck.link.Launch
 import com.yonidev.ydeck.link.Launched
 import com.yonidev.ydeck.link.Live
 import com.yonidev.ydeck.link.LiveSession
+import com.yonidev.ydeck.link.NewKey
 import com.yonidev.ydeck.link.Note
 import com.yonidev.ydeck.link.Pairing
+import com.yonidev.ydeck.link.Relay
 import com.yonidev.ydeck.link.Snapshot
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -39,7 +41,33 @@ class LaunchTest {
         assertEquals("one two three", l.prompt)
     }
 
+    /** The one-time code against the real relay: the phone's key goes through it once, then the code is dead. */
+    @Test fun oneTimeCodeCarriesThePhonesKeyOnce() {
+        val offer = Pairing.create()
+        val code = Pairing.parse(offer.qrText("PC"))!!
+        assertTrue(code.oneTime)
+        // Before the computer claims the code's box, a phone can't post to it.
+        val phoneSide = Relay(code.pairing)
+        assertTrue(!phoneSide.postNote(code.pairing.seal("pair", NewKey(ByteArray(32), 1).encode())))
+        val computerSide = Relay(offer)
+        assertTrue(computerSide.putState(offer.seal("hello", "{}".toByteArray())))
+        val mine = Pairing.create()
+        assertTrue(phoneSide.postNote(code.pairing.seal("pair", NewKey(mine.secret, 2).encode())))
+        val got = computerSide.notes()!!.single().second
+        val key = NewKey.decode(offer.open("pair", got))!!
+        assertTrue(key.secret.contentEquals(mine.secret))
+        // A key can't pass for a note, a launch or a rekey.
+        assertTrue(runCatching { offer.open("rekey", got) }.isFailure)
+        // Used: the computer empties the code's box, and the code no longer takes anything.
+        assertTrue(computerSide.delete())
+        assertTrue(!phoneSide.postNote(code.pairing.seal("pair", NewKey(Pairing.create().secret, 3).encode())))
+        assertEquals(401, phoneSide.lastCode)
+        // Older codes still read, as lasting secrets.
+        assertTrue(!Pairing.parse(offer.qrText("PC").replace("v=2", "v=1"))!!.oneTime)
+    }
+
     @Test fun promptStaysOneHarmlessArgument() {
+        assertEquals("ends with", Tools.said("ends with\\\\"))
         assertEquals("dangerously-skip-permissions", Tools.said("--dangerously-skip-permissions"))
         assertEquals("a   b   c", Tools.said("a\"; b & c"))
         assertEquals("line one line two", Tools.said("line one\r\nline two"))

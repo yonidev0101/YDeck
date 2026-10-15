@@ -165,10 +165,11 @@ object Tools {
 
     /**
      * Words for Claude Code's command line, as one argument: one line; no quotes, ";" (a new tab to Windows
-     * Terminal) or cmd's own signs, which would cut it short; no leading "-", which would make it an option.
+     * Terminal) or cmd's own signs, which would cut it short; no leading "-", which would make it an option; no
+     * trailing "\", which would turn the closing quote into one.
      */
     fun said(text: String): String? =
-        text.replace(Regex("\\s*[\\r\\n]+\\s*"), " ").replace(Regex("[\";&|<>^%!]"), " ").trim().trimStart('-', ' ').takeIf { it.isNotEmpty() }
+        text.replace(Regex("\\s*[\\r\\n]+\\s*"), " ").replace(Regex("[\";&|<>^%!]"), " ").trim().trimStart('-', ' ').trimEnd('\\', ' ').takeIf { it.isNotEmpty() }
 
     /** A command in a new terminal tab, in the folder; the tab stays open to show what happened. */
     fun run(command: Command, dir: File) {

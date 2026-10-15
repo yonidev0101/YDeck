@@ -13,12 +13,14 @@ import com.yonidev.ydeck.link.Launch
 import com.yonidev.ydeck.link.Launched
 import com.yonidev.ydeck.link.Live
 import com.yonidev.ydeck.link.Memory
+import com.yonidev.ydeck.link.NewKey
 import com.yonidev.ydeck.link.Note
 import com.yonidev.ydeck.link.Pairing
 import com.yonidev.ydeck.link.Relay
 import com.yonidev.ydeck.link.Snapshot
 import com.yonidev.ydeck.widget.DeckWidget
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
@@ -31,7 +33,8 @@ import java.util.concurrent.TimeUnit
  * YDeck on the computer, seen from the phone. The computer is where projects are made and kept; the phone reads them,
  * with each project's memory, from the sealed box on the relay (shared/kotlin/.../Link.kt).
  *
- *   noBackupFilesDir/computer.json  the pairing's secret, the computer's name, the box's last ETag. Never in a backup.
+ *   noBackupFilesDir/computer.json  the pairing's secret, the computer's name, the box's last ETag, and the secret it
+ *                                   moves to (see [moveKey]). Never in a backup.
  *   filesDir/memory.json            the memory of every project, as the computer last sent it.
  *   filesDir/projects.json          the projects themselves (Repo), replaced by every new state.
  */
@@ -50,6 +53,8 @@ object Computer {
         val pending: List<Note> = emptyList(),
         /** The computer opens Claude Code when asked (see [launch]). */
         val canLaunch: Boolean = false,
+        /** Claude Code is on the computer, so the phone shows the way (and, while [canLaunch] is off, where to turn it on). */
+        val claudeHere: Boolean = false,
         /** Claude Code sessions asked for here, and what the computer did with each (null: not yet). */
         val launches: List<Pair<Launch, Launched?>> = emptyList(),
     )
@@ -63,6 +68,11 @@ object Computer {
 
     @Volatile private var pairing: Pairing? = null
     @Volatile private var etag: String? = null
+    /** The secret was made here, never shown on a screen (a one-time code, or moved to after an older one). */
+    @Volatile private var made = false
+    /** The secret it's moving to, and when the computer was last told; see [moveKey]. */
+    @Volatile private var nextKey: ByteArray? = null
+    @Volatile private var nextAt = 0L
 
     private fun linkFile(c: Context) = File(c.applicationContext.noBackupFilesDir, "computer.json")
     private fun memoryFile(c: Context) = File(c.applicationContext.filesDir, "memory.json")
@@ -73,6 +83,9 @@ object Computer {
         val link = runCatching { JSONObject(linkFile(context).readText()) }.getOrNull()
         pairing = link?.optString("secret")?.takeIf { it.isNotEmpty() }?.let { runCatching { Pairing(Base64.getUrlDecoder().decode(it)) }.getOrNull() }
         etag = link?.optString("etag")?.takeIf { it.isNotEmpty() }
+        made = link?.optBoolean("made") ?: false
+        nextKey = link?.optString("next")?.takeIf { it.isNotEmpty() }?.let { runCatching { Base64.getUrlDecoder().decode(it) }.getOrNull() }
+        nextAt = link?.optLong("nextAt") ?: 0
         val mem = runCatching { JSONObject(memoryFile(context).readText()) }.getOrNull()
         val memory = mem?.optJSONObject("memory")?.let { m -> m.keys().asSequence().associateWith { Snapshot.memoryOf(m.getJSONObject(it)) } }.orEmpty()
         val live = mem?.optJSONObject("live")?.let { m -> m.keys().asSequence().associateWith { Live.of(m.getJSONObject(it)) } }.orEmpty()
@@ -86,6 +99,7 @@ object Computer {
             live = live,
             pending = outbox.map { it.first },
             canLaunch = mem?.optBoolean("launch") ?: false,
+            claudeHere = mem?.optBoolean("claude") ?: false,
         )
     }
 
@@ -146,14 +160,74 @@ object Computer {
         true
     }
 
-    /** A scanned QR code. Null when it isn't a YDeck computer's; otherwise the computer's name, and the pairing is kept. */
-    fun pair(context: Context, qr: String): String? {
-        val (p, name) = Pairing.parse(qr) ?: return null
+    sealed interface Paired {
+        data class Done(val name: String) : Paired
+        data object NotOurs : Paired
+        /** The code was used already, changed (every two minutes), or closed. */
+        data object Expired : Paired
+        data object Offline : Paired
+    }
+
+    /**
+     * A scanned QR code. A one-time code (YDeck for Windows 1.16.1 on) carries the key for this pairing only: the
+     * lasting secret is made here and sent through it, so it never shows on a screen. An older code is the lasting
+     * secret itself; [moveKey] then moves to one made here.
+     */
+    suspend fun pair(context: Context, qr: String): Paired = withContext(Dispatchers.IO) {
+        val app = context.applicationContext
+        val code = Pairing.parse(qr) ?: return@withContext Paired.NotOurs
+        val p = if (code.oneTime) {
+            val mine = Pairing.create()
+            val relay = Relay(code.pairing)
+            var sent = false
+            // The computer claims the code's box a second or two after showing it.
+            for (attempt in 0 until 4) {
+                if (relay.postNote(code.pairing.seal("pair", NewKey(mine.secret, System.currentTimeMillis()).encode()))) { sent = true; break }
+                if (relay.lastCode == 0) return@withContext Paired.Offline
+                delay(2_000)
+            }
+            if (!sent) return@withContext Paired.Expired
+            mine
+        } else code.pairing
+        state(app)
         pairing = p
         etag = null
-        writeLink(context, p, name, etag = null, checkedAt = 0)
-        _state.value = state(context).copy(paired = true, name = name)
-        return name
+        made = code.oneTime
+        nextKey = null
+        nextAt = 0
+        writeLink(app, p, code.computer, etag = null, checkedAt = 0)
+        _state.value = state(app).copy(paired = true, name = code.computer)
+        Paired.Done(code.computer)
+    }
+
+    /**
+     * A pairing from an older code (the lasting secret was on the computer's screen) moves to a secret made here: sent
+     * sealed with the old one; once the computer has put a state in the new box, the phone follows. A computer too old
+     * to know this ignores it, and the phone asks again every hour or so until one answers.
+     */
+    private fun moveKey(c: Context) {
+        val p = pairing ?: return
+        if (made) return
+        val now = System.currentTimeMillis()
+        nextKey?.let { next ->
+            val n = Pairing(next)
+            val got = Relay(n).getState(null)?.sealed
+            if (got != null && runCatching { n.open("state", got) }.isSuccess) {
+                pairing = n
+                made = true
+                nextKey = null
+                etag = null
+                writeLink(c, n, state(c).name, etag = null, checkedAt = state(c).checkedAt)
+                // Notes left in the old box may have gone with it: sent again (the computer skips what it has).
+                if (outbox.isNotEmpty()) writeOutbox(c, outbox.map { it.first to false })
+                return
+            }
+            if (now - nextAt < 3600_000L) return
+        }
+        val key = nextKey ?: Pairing.create().secret
+        nextKey = key
+        if (Relay(p).postNote(p.seal("rekey", NewKey(key, now).encode()))) nextAt = now
+        writeLink(c, p, state(c).name, etag, state(c).checkedAt)
     }
 
     /** Forgets the computer. The projects and memory last seen stay on the phone. */
@@ -169,6 +243,7 @@ object Computer {
     suspend fun sync(context: Context): Result = withContext(Dispatchers.IO) {
         val app = context.applicationContext
         state(app)
+        runCatching { moveKey(app) }
         val p = pairing ?: return@withContext Result.REFUSED
         if (outbox.any { !it.second }) sendPending(app)
         val relay = Relay(p)
@@ -195,6 +270,7 @@ object Computer {
             put("memory", JSONObject().apply { snapshot.memory.forEach { (id, m) -> put(id, with(Snapshot) { m.toJson() }) } })
             put("live", JSONObject().apply { snapshot.live.forEach { (id, l) -> put(id, l.toJson()) } })
             put("launch", snapshot.launch)
+            put("claude", snapshot.claude)
         }.toString())
         // Notes the computer has stored are done; the rest wait.
         if (outbox.any { it.first.id in snapshot.applied }) writeOutbox(app, outbox.filterNot { it.first.id in snapshot.applied })
@@ -202,7 +278,7 @@ object Computer {
         writeLink(app, p, snapshot.computer, got.etag, now)
         val launches = state(app).launches.map { (l, done) -> l to (done ?: snapshot.launched.firstOrNull { it.id == l.id }) }
         _state.value = State(paired = true, name = snapshot.computer, stateAt = snapshot.at, checkedAt = now, memory = snapshot.memory, live = snapshot.live,
-            pending = outbox.map { it.first }, canLaunch = snapshot.launch, launches = launches)
+            pending = outbox.map { it.first }, canLaunch = snapshot.launch, claudeHere = snapshot.claude, launches = launches)
         DeckWidget().updateAll(app)
         Result.UPDATED
     }
@@ -214,7 +290,8 @@ object Computer {
     }
 
     private fun writeLink(c: Context, p: Pairing, name: String, etag: String?, checkedAt: Long) {
-        linkFile(c).writeText(JSONObject().put("secret", Pairing.b64(p.secret)).put("name", name).put("etag", etag ?: "").put("checkedAt", checkedAt).toString())
+        linkFile(c).writeText(JSONObject().put("secret", Pairing.b64(p.secret)).put("name", name).put("etag", etag ?: "").put("checkedAt", checkedAt)
+            .put("made", made).put("next", nextKey?.let(Pairing::b64) ?: "").put("nextAt", nextAt).toString())
     }
 
     /** The sample's memory, so "try a sample" shows what a paired phone shows. */

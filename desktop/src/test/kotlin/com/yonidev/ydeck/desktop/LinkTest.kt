@@ -25,7 +25,7 @@ class LinkTest {
         assertEquals(p.token, back.token)
         assertEquals(32, p.boxId.length)
         assertNull(Pairing.parse("https://example.com"))
-        assertNull(Pairing.parse("ydeck:pair?v=2&k=abc"))
+        assertNull(Pairing.parse("ydeck:pair?v=3&k=abc"))
     }
 
     @Test fun sealedOnlyOpensWithTheSameKeyAndKind() {

@@ -83,6 +83,8 @@ fun ProjectScreen(
     onBack: () -> Unit,
     onWrite: ((kind: String, text: String) -> Unit)?,
     launches: List<Pair<Launch, Launched?>> = emptyList(),
+    /** The computer takes launch requests now; when false, the card says where to turn it on. */
+    launchOn: Boolean = false,
     onLaunch: ((mode: String, session: String, prompt: String, remote: Boolean) -> Unit)? = null,
 ) {
     val c = LocalDeck.current
@@ -95,7 +97,7 @@ fun ProjectScreen(
         actions = { if (canWrite) IconButton(onClick = { writing = Note.NEXT }) { Icon(Icons.Outlined.Edit, "כתיבה", tint = c.fg) } },
     ) {
         item { Header(p, live) }
-        if (onLaunch != null && live != null) item { ClaudeCard(launches.lastOrNull()) { launching = true } }
+        if (onLaunch != null && live != null) item { ClaudeCard(launches.lastOrNull(), launchOn) { launching = true } }
         item { Tabs(tab) { tab = it } }
         when (tab) {
             Tab.MEMORY -> item {
@@ -452,12 +454,13 @@ private const val CLAUDE_APP = "com.anthropic.claude"
 
 /** "Open Claude on the computer", and what became of the last time it was asked. */
 @Composable
-private fun ClaudeCard(last: Pair<Launch, Launched?>?, onOpen: () -> Unit) {
+private fun ClaudeCard(last: Pair<Launch, Launched?>?, on: Boolean, onOpen: () -> Unit) {
     val c = LocalDeck.current
     val context = LocalContext.current
     val l = last?.first
     val done = last?.second
     val status = when {
+        !on -> "כבוי במחשב. מדליקים ב־YDeck במחשב ← הגדרות ← טלפון."
         l == null -> null
         done == null -> if (System.currentTimeMillis() - l.at > 90_000) "המחשב עוד לא ענה. YDeck פתוח בו?" else "נשלח, מחכה למחשב…"
         done.ok -> "נפתח במחשב ${ago(l.at)}" + if (l.remote) " · זמין באפליקציית Claude" else ""
@@ -472,16 +475,16 @@ private fun ClaudeCard(last: Pair<Launch, Launched?>?, onOpen: () -> Unit) {
     }
     Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 6.dp)) {
         Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.surface).clickable(onClick = onOpen).padding(horizontal = 14.dp, vertical = 11.dp),
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.surface).clickable(enabled = on, onClick = onOpen).padding(horizontal = 14.dp, vertical = 11.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            IconBox(R.drawable.si_claude, 34.dp, tint = Color.White, bg = CLAUDE)
+            IconBox(R.drawable.si_claude, 34.dp, tint = Color.White, bg = if (on) CLAUDE else c.surface2)
             Column(Modifier.weight(1f)) {
                 Text("פתיחת Claude במחשב", color = c.fg, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                Text(status ?: "להמשיך, סשן חדש או סשן קודם", color = if (done?.ok == false) c.openText else c.muted, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(status ?: "להמשיך, סשן חדש או סשן קודם", color = if (on && done?.ok == false) c.openText else c.muted, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         }
-        if (l != null && l.remote && done?.ok == true) SmallAction("פתיחת אפליקציית Claude", Modifier.padding(top = 4.dp)) {
+        if (on && l != null && l.remote && done?.ok == true) SmallAction("פתיחת אפליקציית Claude", Modifier.padding(top = 4.dp)) {
             // The session shows up there under the project's name; without the app, its page on Google Play.
             val open = context.packageManager.getLaunchIntentForPackage(CLAUDE_APP)
                 ?: Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=$CLAUDE_APP"))
