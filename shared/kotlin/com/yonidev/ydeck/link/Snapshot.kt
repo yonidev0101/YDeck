@@ -121,11 +121,15 @@ data class Live(
     val lastSubject: String = "",
     val files: List<LiveFile> = emptyList(),
     val commits: List<LiveCommit> = emptyList(),
-    /** WORKING, WAITING, DONE, or "" when no agent is in the folder; since when, and a line about it. */
+    /** WORKING, WAITING, OPEN (running, not busy), DONE, or "" when no agent is in the folder; since when, and a line about it. */
     val agentMode: String = "",
     val agentSince: Long = 0,
     val agentDetail: String = "",
     val agent: String = "",
+    /** The session shown has Remote Control on: it can be driven from the Claude app. */
+    val agentRemote: Boolean = false,
+    /** How many Claude Code sessions run in the folder now (working, waiting or open). */
+    val agentOpen: Int = 0,
     val receipts: List<LiveReceipt> = emptyList(),
     val loops: List<LiveLoop> = emptyList(),
     val ports: List<Int> = emptyList(),
@@ -141,6 +145,7 @@ data class Live(
         put("files", JSONArray().apply { files.forEach { put(it.json()) } })
         put("commits", JSONArray().apply { commits.forEach { put(JSONObject().put("hash", it.hash).put("at", it.at).put("author", it.author).put("subject", it.subject)) } })
         put("agentMode", agentMode); put("agentSince", agentSince); put("agentDetail", agentDetail); put("agent", agent)
+        put("agentRemote", agentRemote); put("agentOpen", agentOpen)
         put("receipts", JSONArray().apply {
             receipts.forEach { r ->
                 put(JSONObject().put("title", r.title).put("agent", r.agent).put("startAt", r.startAt).put("endAt", r.endAt).put("rewound", r.rewound)
@@ -163,6 +168,7 @@ data class Live(
             hasGit = o.optBoolean("hasGit"), files = o.fileList("files"),
             commits = o.objs("commits").map { LiveCommit(it.optString("hash"), it.optLong("at"), it.optString("author"), it.optString("subject")) },
             agentMode = o.optString("agentMode"), agentSince = o.optLong("agentSince"), agentDetail = o.optString("agentDetail"), agent = o.optString("agent"),
+            agentRemote = o.optBoolean("agentRemote"), agentOpen = o.optInt("agentOpen"),
             receipts = o.objs("receipts").map { LiveReceipt(it.optString("title"), it.optString("agent"), it.optLong("startAt"), it.optLong("endAt"), it.fileList("files"), it.optBoolean("rewound")) },
             loops = o.objs("loops").map { LiveLoop(it.optString("kind"), it.optString("title"), it.optString("detail")) },
             ports = o.optJSONArray("ports")?.let { a -> (0 until a.length()).map { a.optInt(it) } } ?: emptyList(),

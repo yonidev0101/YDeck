@@ -316,7 +316,7 @@ object FolderBadges {
             if (!local.tagged) continue
             val dir = local.dir ?: continue
             val key = dir.path
-            val mode = if (!settings.folderStatus) null else ClaudeLink.statusIn(key, sessions, now)?.mode?.takeIf { it != ClaudeMode.DONE }
+            val mode = if (!settings.folderStatus) null else ClaudeLink.statusIn(key, sessions, now)?.mode?.takeIf { it == ClaudeMode.WORKING || it == ClaudeMode.WAITING }
             val dirty = settings.folderGit && (Git.state.value[local.folder]?.changes ?: 0) > 0
             val want = (mode?.name ?: "NONE") + if (dirty) "+GIT" else ""
             val have = shown.getOrPut(key) { FolderTag.marks(dir) }

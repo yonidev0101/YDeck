@@ -137,7 +137,7 @@ fun StatusLine(p: Project, local: Local) {
         if (claude != null) {
             sep()
             ClaudeDot(claude.mode, c == Dark, 7.dp)
-            Text(claudeText(claude), color = if (claude.mode == ClaudeMode.DONE) c.muted else claudeColor(claude.mode, c == Dark), fontSize = 13.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans)
+            Text(claudeText(claude), color = if (claude.mode == ClaudeMode.DONE || claude.mode == ClaudeMode.OPEN) c.muted else claudeColor(claude.mode, c == Dark), fontSize = 13.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans)
         }
         if (git != null) {
             sep(); Mono(git.branch)
@@ -209,7 +209,7 @@ private fun CardTitle(text: String, modifier: Modifier = Modifier) {
 @Composable
 private fun LiveAgent(local: Local, dark: Boolean) {
     val c = LocalDeck.current
-    val session = claudeIn(local.folder)?.takeIf { it.mode != ClaudeMode.DONE } ?: return
+    val session = claudeIn(local.folder)?.takeIf { it.mode == ClaudeMode.WORKING || it.mode == ClaudeMode.WAITING } ?: return
     val waiting = session.mode == ClaudeMode.WAITING
     Card(fill = if (waiting) CHANGED_DOT.copy(alpha = if (dark) 0.14f else 0.12f) else c.accentTint, padding = 18.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {

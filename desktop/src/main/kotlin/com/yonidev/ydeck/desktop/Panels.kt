@@ -122,7 +122,7 @@ fun QuickLook(p: Project, dark: Boolean, onClose: () -> Unit, onOpen: (Project) 
             Pill(tr("Open project", "לפרויקט"), Tone.TINT, small = true) { onOpen(p); onClose() }
         }
 
-        if (session != null && session.mode != ClaudeMode.DONE) {
+        if (session != null && (session.mode == ClaudeMode.WORKING || session.mode == ClaudeMode.WAITING)) {
             val waiting = session.mode == ClaudeMode.WAITING
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(if (waiting) CHANGED_DOT.copy(alpha = if (dark) 0.14f else 0.12f) else c.accentTint)
                 .padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {

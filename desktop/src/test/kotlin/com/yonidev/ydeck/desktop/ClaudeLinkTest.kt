@@ -131,4 +131,50 @@ class ClaudeLinkTest {
         assertTrue(start.getJSONArray("args").toList().last().toString().endsWith("|| exit /b 0"))
         assertTrue(args.contains("http://127.0.0.1:${ClaudeLink.PORT}/claude"))
     }
+
+    @Test fun aSessionStillRunningIsOpenAndGoesWithItsProcess() {
+        val folder = "C:\\Work\\open-${System.nanoTime()}"
+        fun ev(name: String, s: String, vararg extra: Pair<String, String>) =
+            JSONObject().put("hook_event_name", name).put("session_id", s).put("cwd", folder).apply { extra.forEach { (k, v) -> put(k, v) } }
+        val t = System.currentTimeMillis()
+        val s = "o-${System.nanoTime()}"
+        ClaudeLink.handle(ev("SessionStart", s), t - 60_000)
+        ClaudeLink.handle(ev("UserPromptSubmit", s, "prompt" to "fix it"), t - 55_000)
+        ClaudeLink.handle(ev("Stop", s, "last_assistant_message" to "Fixed."), t - 50_000)
+        // Done, but its claude still runs (with Remote Control): open.
+        ClaudeLink.tidy(t, mapOf(s to OpenSessions.Open(s, folder, busy = false, remote = true, since = t - 50_000)))
+        val open = ClaudeLink.statusIn(folder, ClaudeLink.sessions.value, t)!!
+        assertEquals(ClaudeMode.OPEN, open.mode)
+        assertTrue(open.remote)
+        assertEquals(1, ClaudeLink.openIn(folder, ClaudeLink.sessions.value))
+        // The terminal closed: gone at once, nothing left to show.
+        ClaudeLink.tidy(t + 4000, emptyMap())
+        assertNull(ClaudeLink.sessions.value[s])
+
+        // Closed in the middle of work: over now, not 15 minutes later.
+        val w = "w-${System.nanoTime()}"
+        ClaudeLink.handle(ev("UserPromptSubmit", w, "prompt" to "long task"), t - 30_000)
+        ClaudeLink.tidy(t, emptyMap())
+        assertEquals(ClaudeMode.DONE, ClaudeLink.sessions.value[w]!!.mode)
+
+        // Open before YDeck started (no hooks heard): taken from the list, and follows it.
+        val l = "l-${System.nanoTime()}"
+        ClaudeLink.tidy(t, mapOf(l to OpenSessions.Open(l, folder, busy = true, remote = false, since = t)))
+        assertEquals(ClaudeMode.WORKING, ClaudeLink.sessions.value[l]!!.mode)
+        ClaudeLink.tidy(t + 2000, mapOf(l to OpenSessions.Open(l, folder, busy = false, remote = false, since = t + 2000)))
+        assertEquals(ClaudeMode.OPEN, ClaudeLink.sessions.value[l]!!.mode)
+        ClaudeLink.tidy(t + 4000, emptyMap())
+        assertNull(ClaudeLink.sessions.value[l])
+    }
+
+    @Test fun claudeCodesListOfOpenSessions() {
+        val rec = JSONObject("""{"pid":4084,"sessionId":"26bf8ead-d698-4c2e-a936-52bd2a44199b","cwd":"C:\\Work\\nova","procStart":"134364667085451274","kind":"interactive","status":"idle","statusUpdatedAt":5,"bridgeSessionId":"session_01"}""")
+        val open = OpenSessions.read(rec) { _, _ -> true }!!
+        assertEquals("C:\\Work\\nova", open.cwd)
+        assertFalse(open.busy)
+        assertTrue(open.remote)
+        // A process that ended (or another under its pid) doesn't count; nor does a session that isn't interactive.
+        assertNull(OpenSessions.read(rec) { _, _ -> false })
+        assertNull(OpenSessions.read(JSONObject(rec.toString()).put("kind", "background")) { _, _ -> true })
+    }
 }

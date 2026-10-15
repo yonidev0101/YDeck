@@ -23,7 +23,8 @@ import java.util.concurrent.TimeUnit
  * The server listens on 127.0.0.1 only and needs a key that only the plugin's files hold.
  */
 
-enum class ClaudeMode { WORKING, WAITING, DONE }
+/** WORKING, WAITING for the user, OPEN (the session runs but nothing is going on: it waits for a message), DONE. */
+enum class ClaudeMode { WORKING, WAITING, OPEN, DONE }
 
 /** The coding agents YDeck follows: Claude Code through its hooks, Codex through the sessions it writes (see [Codex]). */
 enum class Agent(val label: String) { CLAUDE("Claude"), CODEX("Codex") }
@@ -35,6 +36,10 @@ data class ClaudeSession(
     /** When the current piece of work began (the prompt), to tell a long task from a quick answer. */
     val workStart: Long,
     val agent: Agent = Agent.CLAUDE,
+    /** Remote Control is on: it can be driven from the Claude app. */
+    val remote: Boolean = false,
+    /** Known only from Claude Code's list of open sessions (no word from the hooks): its state follows that list. */
+    val listed: Boolean = false,
 )
 
 /** Something worth a Windows notification: Claude needs the user, or finished a long task. */
@@ -64,6 +69,9 @@ object ClaudeLink {
     private val _alerts = MutableSharedFlow<ClaudeAlert>(extraBufferCapacity = 8)
     val alerts: SharedFlow<ClaudeAlert> = _alerts
 
+    /** The sessions open on this computer, from Claude Code's own list (null: this Claude Code keeps none). */
+    @Volatile private var open: Map<String, OpenSessions.Open>? = null
+
     /** Ticks every half minute, so "done 3 minutes ago" moves on and fades out on time. */
     val minute = MutableStateFlow(0L)
 
@@ -89,6 +97,7 @@ object ClaudeLink {
         Thread({
             while (true) {
                 val now = System.currentTimeMillis()
+                if ((now / 2000) % 2 == 1L) runCatching { open = OpenSessions.scan() }
                 runCatching { tidy(now) }
                 if ((now / 2000) % 2 == 0L) runCatching { Codex.poll(now) }
                 (now / 30_000).let { if (it != minute.value) minute.value = it }
@@ -145,26 +154,47 @@ object ClaudeLink {
     /**
      * Sessions catch up with what the hooks can't say: after the user answers Claude's question the conversation
      * moves on (its transcript grows), so it's working again; work with no sign of life is over; done fades out.
+     * With Claude Code's list of open sessions ([open]): a finished session whose `claude` still runs is open; one
+     * whose `claude` is gone (a closed terminal says nothing) is over at once; and a session open before YDeck
+     * started, or without the plugin, shows too.
      */
-    fun tidy(now: Long) {
+    fun tidy(now: Long, open: Map<String, OpenSessions.Open>? = this.open) {
         val next = _sessions.value.mapNotNull { (id, s) ->
             if (s.agent != Agent.CLAUDE) return@mapNotNull id to s
+            val live = open?.get(id)
+            // A moment's grace: a session just started may not be on the list yet.
+            val gone = open != null && live == null && now - s.since > 10_000
+            if (s.listed) return@mapNotNull if (live == null) null
+                else id to s.copy(mode = if (live.busy) ClaudeMode.WORKING else ClaudeMode.OPEN, cwd = live.cwd, remote = live.remote,
+                    since = if (live.busy != (s.mode == ClaudeMode.WORKING)) live.since else s.since)
             val written = s.transcript?.let { File(it).lastModified() }?.takeIf { it > 0 } ?: s.since
             id to when {
+                gone && s.mode == ClaudeMode.OPEN -> return@mapNotNull null
+                gone && (s.mode == ClaudeMode.WORKING || s.mode == ClaudeMode.WAITING) -> s.copy(mode = ClaudeMode.DONE, since = now)
                 s.mode == ClaudeMode.WAITING && written > s.since + 1500 -> s.copy(mode = ClaudeMode.WORKING, since = written)
-                s.mode == ClaudeMode.WORKING && now - maxOf(written, s.since) > STALE_MS -> s.copy(mode = ClaudeMode.DONE, since = maxOf(written, s.since))
+                s.mode == ClaudeMode.WORKING && now - maxOf(written, s.since) > STALE_MS ->
+                    s.copy(mode = if (live != null) ClaudeMode.OPEN else ClaudeMode.DONE, since = maxOf(written, s.since))
+                s.mode == ClaudeMode.DONE && live != null -> s.copy(mode = ClaudeMode.OPEN, remote = live.remote)
                 s.mode == ClaudeMode.DONE && now - s.since > 12 * 60 * 60 * 1000L -> return@mapNotNull null
+                live != null && live.remote != s.remote -> s.copy(remote = live.remote)
                 else -> s
             }
-        }.toMap()
+        }.toMap().toMutableMap()
+        open?.values?.filter { it.id !in next }?.forEach { o ->
+            next[o.id] = ClaudeSession(o.id, o.cwd, if (o.busy) ClaudeMode.WORKING else ClaudeMode.OPEN, o.since, "", null, o.since, remote = o.remote, listed = true)
+        }
         if (next != _sessions.value) _sessions.value = next
     }
 
-    /** The most pressing session in [folder] (or a folder inside it): waiting, then working, then recently done. */
+    /** The most pressing session in [folder] (or a folder inside it): waiting, then working, then open, then recently done. */
     fun statusIn(folder: String, all: Map<String, ClaudeSession>, now: Long = System.currentTimeMillis()): ClaudeSession? =
         all.values.filter { isUnder(it.cwd, folder) }
             .filter { it.mode != ClaudeMode.DONE || now - it.since < DONE_FOR_MS }
-            .minWithOrNull(compareBy<ClaudeSession> { when (it.mode) { ClaudeMode.WAITING -> 0; ClaudeMode.WORKING -> 1; ClaudeMode.DONE -> 2 } }.thenByDescending { it.since })
+            .minWithOrNull(compareBy<ClaudeSession> { when (it.mode) { ClaudeMode.WAITING -> 0; ClaudeMode.WORKING -> 1; ClaudeMode.OPEN -> 2; ClaudeMode.DONE -> 3 } }.thenByDescending { it.since })
+
+    /** How many sessions run in [folder] now (working, waiting or open). */
+    fun openIn(folder: String, all: Map<String, ClaudeSession>): Int =
+        all.values.count { isUnder(it.cwd, folder) && it.mode != ClaudeMode.DONE && it.agent == Agent.CLAUDE }
 
     /** Codex's sessions, as read from its files: they join Claude's, under their own ids. */
     fun setCodex(found: Map<String, ClaudeSession>) {
@@ -181,6 +211,41 @@ object ClaudeLink {
         val text = ProjectFiles.briefing(p, File(folder))
         ProjectFiles.keepLocalOutOfGit(File(folder))
         return JSONObject().put("hookSpecificOutput", JSONObject().put("hookEventName", "SessionStart").put("additionalContext", text))
+    }
+}
+
+/**
+ * Claude Code's own list of the sessions open on this computer: ~/.claude/sessions/<pid>.json, one for each running
+ * `claude`, written by Claude Code itself. A record counts only while its process runs: the same pid, started at the
+ * same moment (a pid can be reused once a process ends).
+ */
+object OpenSessions {
+    data class Open(val id: String, val cwd: String, val busy: Boolean, val remote: Boolean, val since: Long)
+
+    private val dir = File(System.getProperty("user.home"), ".claude/sessions")
+
+    /** The open sessions by id; null when Claude Code keeps no such list here (then nothing is taken from it). */
+    fun scan(): Map<String, Open>? {
+        val files = dir.listFiles { f -> f.isFile && f.extension == "json" } ?: return null
+        return files.mapNotNull { f -> runCatching { read(JSONObject(f.readText())) }.getOrNull() }.associateBy { it.id }
+    }
+
+    fun read(o: JSONObject, alive: (Long, Long?) -> Boolean = ::running): Open? {
+        if (o.optString("kind", "interactive") != "interactive") return null
+        if (!alive(o.getLong("pid"), o.optString("procStart").toLongOrNull())) return null
+        val id = o.optString("sessionId").ifBlank { return null }
+        val cwd = o.optString("cwd").ifBlank { return null }
+        return Open(id, cwd, o.optString("status") == "busy", o.optString("bridgeSessionId").isNotBlank(),
+            o.optLong("statusUpdatedAt").takeIf { it > 0 } ?: o.optLong("startedAt"))
+    }
+
+    /** The process runs, and is the one that wrote the record: its start (a Windows FILETIME) matches, to 2 seconds. */
+    private fun running(pid: Long, procStart: Long?): Boolean {
+        val h = ProcessHandle.of(pid).orElse(null)?.takeIf { it.isAlive } ?: return false
+        val start = h.info().startInstant().orElse(null) ?: return true
+        if (procStart == null) return true
+        val mine = start.toEpochMilli() * 10_000 + 116_444_736_000_000_000L
+        return kotlin.math.abs(mine - procStart) < 20_000_000
     }
 }
 

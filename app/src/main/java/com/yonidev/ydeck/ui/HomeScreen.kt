@@ -1,6 +1,7 @@
 package com.yonidev.ydeck.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -123,6 +124,8 @@ private fun ProjectRow(p: Project, memory: Memory?, live: com.yonidev.ydeck.link
         when (live?.agentMode) {
             "WORKING" -> Box(Modifier.size(8.dp).clip(androidx.compose.foundation.shape.CircleShape).background(c.accentText))
             "WAITING" -> Box(Modifier.size(8.dp).clip(androidx.compose.foundation.shape.CircleShape).background(c.open))
+            // A session runs there, not busy: a ring.
+            "OPEN" -> Box(Modifier.size(8.dp).border(1.5.dp, c.muted, androidx.compose.foundation.shape.CircleShape))
             else -> StateDot(memory)
         }
     }

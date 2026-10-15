@@ -342,12 +342,14 @@ object SiteIcons {
 fun claudeColor(mode: ClaudeMode, dark: Boolean): Color = when (mode) {
     ClaudeMode.WORKING -> if (dark) Color(0xFF9C97FF) else Color(0xFF3D35E0)
     ClaudeMode.WAITING -> CHANGED_DOT
+    ClaudeMode.OPEN -> if (dark) Color(0xFFB9B9C2) else Color(0xFF6E6E78)
     ClaudeMode.DONE -> CLEAN_DOT
 }
 
 fun claudeText(s: ClaudeSession): String = when (s.mode) {
     ClaudeMode.WORKING -> tr("${s.agent.label} is working", "${s.agent.label} עובד")
     ClaudeMode.WAITING -> tr("${s.agent.label} needs you", "${s.agent.label} מחכה לך")
+    ClaudeMode.OPEN -> tr("${s.agent.label} is open", "${s.agent.label} פתוח") + if (s.remote) " · Remote Control" else ""
     ClaudeMode.DONE -> tr("${s.agent.label} finished · ${ago(s.since)}", "${s.agent.label} סיים · ${ago(s.since)}")
 }
 
@@ -359,9 +361,13 @@ fun claudeIn(folder: String?): ClaudeSession? {
     return remember(folder, all, minute) { folder?.let { ClaudeLink.statusIn(it, all) } }
 }
 
-/** A dot in the state's colour; it breathes while Claude works. */
+/** A dot in the state's colour; it breathes while Claude works. An open session is a ring: there, not busy. */
 @Composable
 fun ClaudeDot(mode: ClaudeMode, dark: Boolean, size: Dp = 6.dp) {
+    if (mode == ClaudeMode.OPEN) {
+        Box(Modifier.size(size).clip(RoundedCornerShape(size / 2)).border(1.5.dp, claudeColor(mode, dark), RoundedCornerShape(size / 2)))
+        return
+    }
     val alpha = if (mode == ClaudeMode.WORKING) {
         val t = rememberInfiniteTransition()
         t.animateFloat(1f, 0.25f, infiniteRepeatable(tween(900), RepeatMode.Reverse)).value

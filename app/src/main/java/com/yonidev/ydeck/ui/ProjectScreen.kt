@@ -10,6 +10,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -109,7 +110,7 @@ fun ProjectScreen(
         }
     }
     writing?.let { kind -> WriteSheet(kind, onDismiss = { writing = null }, onSend = { k, text -> writing = null; onWrite?.invoke(k, text) }) }
-    if (launching) LaunchSheet(live?.sessions.orEmpty(), onDismiss = { launching = false }) { mode, session, prompt, remote ->
+    if (launching) LaunchSheet(live?.sessions.orEmpty(), live, onDismiss = { launching = false }) { mode, session, prompt, remote ->
         launching = false
         onLaunch?.invoke(mode, session, prompt, remote)
     }
@@ -133,15 +134,21 @@ private fun Header(p: Project, live: Live?) {
             val (color, words) = when (live.agentMode) {
                 "WORKING" -> c.accentText to "$name עובד"
                 "WAITING" -> c.open to "$name מחכה לך"
+                "OPEN" -> c.muted to "$name פתוח"
                 else -> c.closed to "$name סיים"
             }
+            val extra = listOfNotNull(
+                "Remote Control".takeIf { live.agentRemote && live.agentMode != "DONE" },
+                "${live.agentOpen} סשנים פתוחים".takeIf { live.agentOpen > 1 },
+            )
             Row(
                 Modifier.padding(top = 14.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.surface).padding(horizontal = 14.dp, vertical = 11.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Box(Modifier.size(8.dp).clip(CircleShape).background(color))
+                if (live.agentMode == "OPEN") Box(Modifier.size(8.dp).border(1.5.dp, color, CircleShape))
+                else Box(Modifier.size(8.dp).clip(CircleShape).background(color))
                 Column(Modifier.weight(1f)) {
-                    Text(words + if (live.agentSince > 0) " · ${ago(live.agentSince)}" else "", color = c.fg, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    Text((listOf(words) + extra).joinToString(" · ") + if (live.agentSince > 0) " · ${ago(live.agentSince)}" else "", color = c.fg, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                     if (live.agentDetail.isNotBlank()) Text(live.agentDetail, color = c.muted, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, style = TextStyle(textDirection = dirOf(live.agentDetail)))
                 }
             }
@@ -500,7 +507,7 @@ private fun ClaudeCard(last: Pair<Launch, Launched?>?, on: Boolean, onOpen: () -
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun LaunchSheet(sessions: List<LiveSession>, onDismiss: () -> Unit, onSend: (String, String, String, Boolean) -> Unit) {
+private fun LaunchSheet(sessions: List<LiveSession>, live: Live?, onDismiss: () -> Unit, onSend: (String, String, String, Boolean) -> Unit) {
     val c = LocalDeck.current
     var mode by remember { mutableStateOf(if (sessions.isEmpty()) Launch.NEW else Launch.CONTINUE) }
     var chosen by remember { mutableStateOf<String?>(null) }
@@ -509,6 +516,12 @@ private fun LaunchSheet(sessions: List<LiveSession>, onDismiss: () -> Unit, onSe
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = c.surface) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp).padding(bottom = 22.dp)) {
             Text("Claude במחשב", color = c.fg, fontSize = 20.sp, fontFamily = Display, modifier = Modifier.padding(bottom = 12.dp))
+            // Already one running there: say so before a second one opens.
+            if (live != null && live.agentOpen > 0) Text(
+                (if (live.agentOpen == 1) "כבר יש סשן פתוח בתיקייה הזאת" else "כבר יש ${live.agentOpen} סשנים פתוחים בתיקייה הזאת") +
+                    if (live.agentRemote) ", עם Remote Control: אפשר להמשיך אותו באפליקציית Claude." else ".",
+                color = c.openText, fontSize = 13.sp, lineHeight = 19.sp, modifier = Modifier.padding(bottom = 12.dp),
+            )
             val modes = if (sessions.isEmpty()) listOf(Launch.NEW to "סשן חדש")
                 else listOf(Launch.CONTINUE to "להמשיך", Launch.NEW to "סשן חדש", Launch.RESUME to "סשן קודם")
             Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.surface2).padding(3.dp)) {
