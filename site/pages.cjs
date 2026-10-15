@@ -141,7 +141,6 @@ function download(apk) {
 <p class="lead">YDeck ל־Windows ו־YDeck לאנדרואיד, חינם.</p>
 <div class="part"><h2>YDeck ל־Windows</h2><p class="sub">קוד פתוח (MIT). כל גרסה נבנית ב־GitHub Actions מהקוד שבריפו, ועולה לדף ה־Releases.</p>
 <div class="dl"><a class="pill big" href="https://github.com/yonidev0101/YDeck/releases/latest">הורדת הגרסה האחרונה</a><span class="size">MSI · Windows 10 ומעלה</span></div>
-<p class="sub" dir="ltr" lang="en">Free code signing provided by <a href="https://about.signpath.io">SignPath.io</a>, certificate by <a href="https://signpath.org">SignPath Foundation</a>. See the <a href="/code-signing">Code signing policy</a>.</p>
 ${sec('למה Windows מזהיר?', '<p>הקובץ עוד לא חתום דיגיטלית, אז SmartScreen מציג אזהרה בפעם הראשונה: לוחצים "מידע נוסף" ואז "הפעל בכל זאת". ראו <a href="/code-signing">Code signing policy</a>.</p>')}
 ${sec('הסרה', '<p>הגדרות Windows ← אפליקציות ← YDeck ← הסרה. כדי שלא יישאר כלום, לפני ההסרה מכבים בהגדרות של YDeck את הלוגו על התיקיות, את ״פתיחה ב־YDeck״ ואת ההפעלה עם Windows.</p>')}</div>
 <div class="part"><h2>YDeck לאנדרואיד</h2><p class="sub">גרסה ${apk.version} · לאנדרואיד 12 ומעלה · חינם, בלי חשבון.</p>
@@ -158,7 +157,6 @@ function downloadEn(apk) {
 <p class="lead">YDeck for Windows and YDeck for Android, free.</p>
 <div class="part"><h2>YDeck for Windows</h2><p class="sub">Open source (MIT). Every release is built by GitHub Actions from the code in the repository, and published on its Releases page.</p>
 <div class="dl"><a class="pill big" href="https://github.com/yonidev0101/YDeck/releases/latest">Download the latest version</a><span class="size">MSI · Windows 10 and later</span></div>
-<p class="sub">Free code signing provided by <a href="https://about.signpath.io">SignPath.io</a>, certificate by <a href="https://signpath.org">SignPath Foundation</a>. See the <a href="/code-signing">Code signing policy</a>.</p>
 ${sec('Why does Windows warn?', '<p>The installer isn’t digitally signed yet, so SmartScreen warns the first time: click "More info", then "Run anyway". See the <a href="/code-signing">Code signing policy</a>.</p>')}
 ${sec('Uninstalling', '<p>Windows Settings → Apps → YDeck → Uninstall. To leave nothing behind, first turn off in YDeck’s Settings the logo on folders, "Open in YDeck" and starting with Windows.</p>')}
 ${sec('The source', '<p><a href="https://github.com/yonidev0101/YDeck">github.com/yonidev0101/YDeck</a></p>')}</div>
@@ -190,11 +188,11 @@ ${RING(84)}
 function codeSigning(email) {
   return `<div class="doc"><div class="wrap" dir="ltr" lang="en">
 <h1>Code signing policy</h1>
-<p class="lead">How YDeck for Windows is built and signed, and who decides what gets released.</p>
+<p class="lead">How YDeck for Windows is built and released, and why it isn’t signed yet.</p>
 <p class="meta">YDeck · open source under the MIT License · <a href="https://github.com/yonidev0101/YDeck">github.com/yonidev0101/YDeck</a></p>
-${sec('Signing', '<p>Free code signing provided by <a href="https://about.signpath.io">SignPath.io</a>, certificate by <a href="https://signpath.org">SignPath Foundation</a>.</p><p><b>Status:</b> being set up. Until signing is in place, the installers are not signed, and Windows SmartScreen warns on first run.</p>')}
-${sec('What is signed', '<p>Only the Windows installer (<code>YDeck-Windows-&lt;version&gt;.msi</code>) and the program inside it, built from this repository’s source. Third-party libraries and the bundled Java runtime are included as their maintainers publish them.</p>')}
-${sec('How a release is built', '<p>Every release is built on GitHub Actions, on a clean Windows machine, from the tagged commit in the public repository (<a href="https://github.com/yonidev0101/YDeck/blob/main/.github/workflows/windows.yml">.github/workflows/windows.yml</a>), and published on the <a href="https://github.com/yonidev0101/YDeck/releases">Releases</a> page. Nothing built on a developer’s own computer is released. Each signing request is approved by hand.</p>')}
+${sec('Signing', '<p><b>Not signed yet.</b> The Windows installer (<code>YDeck-Windows-&lt;version&gt;.msi</code>) is not code-signed for now, so Windows SmartScreen warns the first time it runs: click “More info”, then “Run anyway”. Signing will come once the project can have it; this page will say so.</p>')}
+${sec('Where to get it', '<p>Only from the <a href="https://github.com/yonidev0101/YDeck/releases">Releases</a> page of the public repository, or from this site’s <a href="/download">download page</a>, which points there. Third-party libraries and the bundled Java runtime are included as their maintainers publish them.</p>')}
+${sec('How a release is built', '<p>Every release is built on GitHub Actions, on a clean Windows machine, from the tagged commit in the public repository (<a href="https://github.com/yonidev0101/YDeck/blob/main/.github/workflows/windows.yml">.github/workflows/windows.yml</a>), and published on the <a href="https://github.com/yonidev0101/YDeck/releases">Releases</a> page. Nothing built on a developer’s own computer is released, and every release is started by hand.</p>')}
 ${sec('Team and roles', '<p>YDeck is a one-person project.</p><ul><li><b>Committer and reviewer:</b> <a href="https://github.com/yonidev0101">Yoni (yonidev0101)</a></li><li><b>Approver:</b> <a href="https://github.com/yonidev0101">Yoni (yonidev0101)</a></li></ul><p>Changes proposed by anyone else (pull requests) are reviewed before they are merged. The account uses two-factor authentication.</p>')}
 ${sec('Privacy', '<p>YDeck has no accounts, no ads and no analytics. The program does not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it, with one exception that can be turned off: for a link without a built-in mark, only the site’s domain name is sent to Google’s and DuckDuckGo’s icon services. The full policy, including the optional encrypted phone link: <a href="/privacy">Privacy Policy</a>.</p>')}
 ${sec('Contact', `<p>Questions or a report about a release: <a href="mailto:${email}">${email}</a> or <a href="https://github.com/yonidev0101/YDeck/issues">GitHub issues</a>.</p>`)}
@@ -207,7 +205,7 @@ function build({ DIST, EMAIL, SITE_URL, apk }) {
   he('privacy/index.html', 'מדיניות פרטיות · YDeck', 'מה YDeck שומר, מה יוצא מהמחשב ומהטלפון, ומה לא. בעברית ובאנגלית.', privacy(EMAIL));
   write('download/index.html', shell({ lang: 'en', dir: 'ltr', title: 'Download · YDeck', desc: `YDeck for Windows (open source) and YDeck ${apk.version} for Android.`, siteUrl: SITE_URL, email: EMAIL, body: downloadEn({ ...apk, email: EMAIL }), alt: { href: '/he/download', label: 'עברית' } }));
   write('he/download/index.html', shell({ lang: 'he', dir: 'rtl', title: 'הורדה · YDeck', desc: `YDeck ל־Windows (קוד פתוח) ו־YDeck ${apk.version} לאנדרואיד.`, siteUrl: SITE_URL, email: EMAIL, body: download({ ...apk, email: EMAIL }), alt: { href: '/download', label: 'English' } }));
-  write('code-signing/index.html', shell({ lang: 'en', dir: 'ltr', title: 'Code signing policy · YDeck', desc: 'How YDeck for Windows is built and signed, and who approves each release.', siteUrl: SITE_URL, email: EMAIL, body: codeSigning(EMAIL) }));
+  write('code-signing/index.html', shell({ lang: 'en', dir: 'ltr', title: 'Code signing policy · YDeck', desc: 'How YDeck for Windows is built and released, and why it isn’t signed yet.', siteUrl: SITE_URL, email: EMAIL, body: codeSigning(EMAIL) }));
   he('android/index.html', 'YDeck לאנדרואיד', 'ווידג\'ט לאנדרואיד שמחזיק את הקישורים של כל פרויקט, וכל נגיעה פותחת בחשבון הנכון.', android());
   he('404.html', 'לא נמצא · YDeck', 'העמוד לא נמצא.', `<div class="center">${RING(64)}<h1 style="font-size:clamp(36px,6vw,64px)">אין כאן כלום.</h1><a class="text-link" href="/he/">לעמוד הבית</a></div>`);
 }

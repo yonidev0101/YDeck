@@ -66,9 +66,10 @@ before uninstalling. Your projects and settings stay in `%APPDATA%\YDeck` and `%
 
 ## Code signing policy
 
-Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org)
-(being set up). Only the Windows installer built from this repository by GitHub Actions is signed, and every signing
-request is approved by hand. Committer, reviewer and approver: [Yoni (yonidev0101)](https://github.com/yonidev0101).
+The Windows installer is not code-signed yet, so Windows SmartScreen warns the first time it runs ("More info", then
+"Run anyway"). Every installer is built by GitHub Actions from a tagged commit in this repository and published only on
+[Releases](https://github.com/yonidev0101/YDeck/releases). Committer, reviewer and approver:
+[Yoni (yonidev0101)](https://github.com/yonidev0101).
 The full policy: <https://ydeck-app.pages.dev/code-signing>. Privacy: <https://ydeck-app.pages.dev/privacy>.
 
 ## License
