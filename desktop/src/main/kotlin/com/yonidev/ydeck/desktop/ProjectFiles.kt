@@ -95,7 +95,37 @@ object ProjectFiles {
             val f = File(dir, SHARED)
             val o = runCatching { JSONObject(f.readText()) }.getOrDefault(JSONObject())
             o.put("decisions", JSONArray().apply { decisions.forEach { put(JSONObject().put("text", it.text).put("date", it.date)) } })
-            f.writeText(o.toString(2) + "\n")
+            writeShared(f, o)
+        }
+    }
+
+    /** The order .ydeck.json's fields are written in (and those of its decisions, links, commands, releases); anything else follows, by name. */
+    private val ORDER = listOf("summary", "summaryAt", "decisions", "links", "commands", "releases", "text", "label", "version", "date", "url", "line", "note")
+
+    /**
+     * Writes .ydeck.json, which is committed with the code: only when what it says changed (so the file isn't touched,
+     * and git sees nothing, when nothing did), and always in the same order, so a change shows as itself.
+     */
+    fun writeShared(f: File, o: JSONObject) {
+        val before = runCatching { JSONObject(f.readText()) }.getOrNull()
+        if (before != null && before.similar(o)) return
+        f.writeText(ordered(o) + "\n")
+    }
+
+    /** [o] as JSON with two-space indents, its fields (and those of the objects in it) in a fixed order. */
+    fun ordered(o: Any?, indent: String = ""): String {
+        val inner = "$indent  "
+        return when (o) {
+            is JSONObject -> {
+                if (o.isEmpty) return "{}"
+                val keys = o.keySet().sortedWith(compareBy<String>({ ORDER.indexOf(it).let { i -> if (i < 0) ORDER.size else i } }, { it }))
+                keys.joinToString(",\n", "{\n", "\n$indent}") { "$inner${JSONObject.quote(it)}: ${ordered(o.get(it), inner)}" }
+            }
+            is JSONArray -> {
+                if (o.isEmpty) return "[]"
+                (0 until o.length()).joinToString(",\n", "[\n", "\n$indent]") { inner + ordered(o.get(it), inner) }
+            }
+            else -> JSONObject.valueToString(o)
         }
     }
 
@@ -215,9 +245,11 @@ object ClaudeSummary {
     fun writeSummary(dir: File, text: String) {
         val f = File(dir, ProjectFiles.SHARED)
         val o = runCatching { JSONObject(f.readText()) }.getOrDefault(JSONObject())
+        // The same summary again changes nothing (not even its time).
+        if (o.optString("summary") == text.trim()) return
         o.put("summary", text.trim())
         o.put("summaryAt", java.time.Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS).toString())
-        f.writeText(o.toString(2) + "\n")
+        ProjectFiles.writeShared(f, o)
     }
 }
 

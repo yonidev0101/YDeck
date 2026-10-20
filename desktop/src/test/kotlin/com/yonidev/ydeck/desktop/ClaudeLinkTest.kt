@@ -178,6 +178,26 @@ class ClaudeLinkTest {
         assertNull(OpenSessions.read(JSONObject(rec.toString()).put("kind", "background")) { _, _ -> true })
     }
 
+    @Test fun theSharedFileIsWrittenOnlyWhenItChanges() {
+        val d = Files.createTempDirectory("ydeck-shared").toFile()
+        try {
+            val f = File(d, ".ydeck.json")
+            // Written by Claude, in its own layout: the same decisions again leave it as it is.
+            val claude = "{\"links\": [{\"label\": \"GitHub\", \"url\": \"https://github.com/x/y\"}],\n \"decisions\": [{\"text\": \"main, not master\", \"date\": \"2026-10-20\"}]}\n"
+            f.writeText(claude)
+            ProjectFiles.writeDecisions(d, listOf(Decision("main, not master", "2026-10-20")))
+            assertEquals(claude, f.readText())
+            // A real change is written in a fixed order: the summary, the decisions, then the links.
+            ProjectFiles.writeDecisions(d, listOf(Decision("Hebrew first", "2026-10-21"), Decision("main, not master", "2026-10-20")))
+            ClaudeSummary.writeSummary(d, "A booking app.")
+            val text = f.readText()
+            assertTrue(text.indexOf("\"summary\"") < text.indexOf("\"decisions\"") && text.indexOf("\"decisions\"") < text.indexOf("\"links\""))
+            assertTrue(text.indexOf("\"text\"") < text.indexOf("\"date\""))
+            ClaudeSummary.writeSummary(d, "A booking app.")
+            assertEquals(text, f.readText())
+        } finally { d.deleteRecursively() }
+    }
+
     @Test fun closingTheDayIsACommandClaudeKnows() {
         val text = ClaudePlugin.closeDay()
         assertTrue(text.startsWith("---\ndescription: "))

@@ -48,7 +48,14 @@ class BrainTest {
             val text = File(dir, "AGENTS.md").readText()
             assertTrue(text.startsWith("# Agents\n\nUse pnpm.\n"))
             assertTrue(text.contains("- Payments go through Stripe only (2026-10-13)"))
-            assertTrue(text.contains("- Next: Ship deposits"))
+            // Where it stands changes with every session: it stays in the personal file, not in a committed one.
+            assertTrue(!text.contains("Ship deposits") && !text.contains("deposit webhook"))
+            ProjectFiles.writeHandoff(dir, Handoff("Something else", "And then", System.currentTimeMillis(), "Claude"))
+            ProjectFiles.writeNext(dir, "Another step")
+            val stamp = File(dir, "AGENTS.md").lastModified()
+            AgentsFile.sync(dir)
+            assertEquals(text, File(dir, "AGENTS.md").readText())
+            assertEquals(stamp, File(dir, "AGENTS.md").lastModified())
             // Again, and after a change: one block, kept current.
             ProjectFiles.writeDecisions(dir, listOf(Decision("Hebrew first", "2026-10-14")))
             AgentsFile.sync(dir); AgentsFile.sync(dir)

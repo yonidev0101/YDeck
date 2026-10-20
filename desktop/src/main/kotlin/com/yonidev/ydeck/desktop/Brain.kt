@@ -116,6 +116,11 @@ object Handoffs {
 /**
  * AGENTS.md, which Codex, Cursor and other agents read: when a project has one, YDeck keeps a block of its own in it
  * (between two markers) with the project's memory. Nothing else in the file is touched.
+ *
+ * Only what is committed with the project goes in (the summary and the decisions from .ydeck.json), so the block
+ * changes only when they do, and goes into the same commit. Where the work stands changes with every session: it
+ * stays in the personal .ydeck.local.json, which the block points to. (It used to be written here, so the file
+ * changed again after every session, the one that committed it included, and a project could never be closed.)
  */
 object AgentsFile {
     const val NAME = "AGENTS.md"
@@ -124,10 +129,8 @@ object AgentsFile {
 
     fun block(dir: File): String? {
         val shared = ProjectFiles.readShared(dir)
-        val local = ProjectFiles.readLocal(dir)
         val decisions = shared?.decisions.orEmpty()
-        val h = local?.handoff
-        if (shared?.summary.isNullOrBlank() && decisions.isEmpty() && h == null && local?.next.isNullOrBlank()) return null
+        if (shared?.summary.isNullOrBlank() && decisions.isEmpty()) return null
         return buildString {
             appendLine(START)
             appendLine("## Project memory")
@@ -136,12 +139,8 @@ object AgentsFile {
                 appendLine(); appendLine("### Decisions")
                 decisions.take(20).forEach { appendLine("- ${it.text}" + (if (it.date.isNotBlank()) " (${it.date})" else "")) }
             }
-            val next = local?.next?.ifBlank { null } ?: h?.next
-            if (h != null || next != null) {
-                appendLine(); appendLine("### Where it stands")
-                h?.done?.takeIf { it.isNotBlank() }?.let { appendLine("- Last session: $it") }
-                next?.let { appendLine("- Next: $it") }
-            }
+            appendLine()
+            appendLine("Where the work stands and the next step: ${ProjectFiles.LOCAL} in the project root (personal, kept out of git), when it's there.")
             append(END)
         }
     }
