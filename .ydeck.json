@@ -3,6 +3,10 @@
   "summaryAt": "2026-10-13T17:58:51Z",
   "decisions": [
     {
+      "text": "סגירת פרויקט להיום היא פקודה בפלאגין של YDeck (/ydeck:close-day): Claude מביא לנקודת עצירה, בודק, עושה commit (שינויים שלא הוא עשה רק באישור), push בלי force, עוצר שרתים, כותב now/next ומדווח מה נשאר פתוח; הטקסט המלא מוצג בהגדרות ← Claude Code",
+      "date": "2026-10-20"
+    },
+    {
       "text": "סשן Claude נחשב פתוח כל עוד תהליך ה־claude ששלח את ה־hooks רץ (מזוהה מהחיבור של ה־hook, לפי pid וזמן התחלה), ולא לפי ~/.claude/sessions/*.json, ש־Claude Code 2.1.30x הפסיק לכתוב; עצירה ב־Esc ו־Remote Control נקראים מה־transcript",
       "date": "2026-10-20"
     },
@@ -74,6 +78,11 @@
     }
   ],
   "releases": [
+    {
+      "version": "Windows 1.17.2",
+      "date": "2026-10-20",
+      "note": "פקודה ל־Claude לסגירת הפרויקט להיום: /ydeck:close-day (או פשוט \"סגור להיום\")"
+    },
     {
       "version": "Android 0.9.7",
       "date": "2026-10-20",

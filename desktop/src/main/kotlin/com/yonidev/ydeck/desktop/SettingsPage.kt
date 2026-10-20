@@ -202,10 +202,19 @@ private fun Briefing(deck: Deck) {
     val projects = deck.projects.filter { s.localOf(it.id).dir != null }
     if (projects.isEmpty()) return
     var open by remember { mutableStateOf(false) }
+    var command by remember { mutableStateOf(false) }
     var pick by remember { mutableStateOf(projects.first().id) }
     Column(Modifier.padding(top = 18.dp)) {
         Group {
             Setting(tr("What Claude is told at a session's start", "מה Claude מקבל בתחילת סשן"), value = if (open) tr("Hide", "הסתרה") else tr("Show", "הצגה"), onClick = { open = !open })
+            Setting(tr("Close the project for today: /ydeck:close-day", "סגירת הפרויקט להיום: ‎/ydeck:close-day"),
+                hint = tr("In Claude Code, or just ask Claude to close for today. It commits, pushes, stops what runs and leaves the next step.",
+                    "ב־Claude Code, או פשוט לבקש מ־Claude לסגור להיום. הוא עושה commit ו־push, עוצר את מה שרץ ומשאיר את הצעד הבא."),
+                value = if (command) tr("Hide", "הסתרה") else tr("Show", "הצגה"), onClick = { command = !command })
+        }
+        if (command) androidx.compose.foundation.text.selection.SelectionContainer {
+            Text(ClaudePlugin.closeDay(), color = c.muted, fontSize = 12.sp, lineHeight = 18.sp, fontFamily = PlexMono,
+                modifier = Modifier.padding(top = 12.dp).clip(RoundedCornerShape(14.dp)).border(1.dp, c.line, RoundedCornerShape(14.dp)).padding(16.dp))
         }
         if (open) {
             Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {

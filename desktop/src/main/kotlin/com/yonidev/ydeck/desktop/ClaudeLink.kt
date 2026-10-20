@@ -445,10 +445,13 @@ object ClaudePlugin {
     fun refresh() {
         write()
         val claude = Tools.claude?.exe ?: return
-        val ours = runCatching { JSONObject(File(root, "plugins/ydeck/hooks/hooks.json").readText()).toString() }.getOrNull() ?: return
+        // The hooks and the command, as written here and as in Claude Code's copy.
+        fun of(dir: File): String? = runCatching {
+            JSONObject(File(dir, "hooks/hooks.json").readText()).toString() + File(dir, "commands/$CLOSE_DAY.md").readText()
+        }.getOrNull()
+        val ours = of(File(root, "plugins/ydeck")) ?: return
         val cache = File(System.getProperty("user.home"), ".claude/plugins/cache/ydeck/ydeck")
-        val theirs = cache.listFiles()?.maxByOrNull { it.lastModified() }?.let { File(it, "hooks/hooks.json") }
-            ?.let { runCatching { JSONObject(it.readText()).toString() }.getOrNull() }
+        val theirs = cache.listFiles()?.maxByOrNull { it.lastModified() }?.let(::of)
         val path = runCatching {
             JSONObject(settings.readText()).optJSONObject("extraKnownMarketplaces")?.optJSONObject("ydeck")?.optJSONObject("source")?.optString("path")
         }.getOrNull()
@@ -464,17 +467,49 @@ object ClaudePlugin {
         File(root, ".claude-plugin").mkdirs()
         File(plugin, ".claude-plugin").mkdirs()
         File(plugin, "hooks").mkdirs()
+        File(plugin, "commands").mkdirs()
         File(root, ".claude-plugin/marketplace.json").writeText(JSONObject()
             .put("name", "ydeck").put("owner", JSONObject().put("name", "YDeck"))
             .put("plugins", JSONArray().put(JSONObject().put("name", "ydeck").put("source", "./plugins/ydeck")
                 .put("description", "Claude Code's state on the YDeck widgets, and each project's context from YDeck")))
             .toString(2))
         File(plugin, ".claude-plugin/plugin.json").writeText(JSONObject()
-            .put("name", "ydeck").put("version", "1.1.0").put("author", JSONObject().put("name", "YoniDev"))
+            .put("name", "ydeck").put("version", "1.2.0").put("author", JSONObject().put("name", "YoniDev"))
             .put("description", "Claude Code's state on the YDeck widgets, and each project's context from YDeck")
             .toString(2))
         File(plugin, "hooks/hooks.json").writeText(hooks().toString(2))
+        File(plugin, "commands/$CLOSE_DAY.md").writeText(closeDay())
     }
+
+    /** The command's name: /ydeck:close-day in Claude Code (or /close-day, when no other command has that name). */
+    const val CLOSE_DAY = "close-day"
+
+    /**
+     * /ydeck:close-day: what closing the project for today takes, so nothing in it stays open. The same steps as YDeck's
+     * own "Close the day" (commit, push, stop the servers, leave the next step), done by Claude, who knows the session's work.
+     */
+    fun closeDay(): String = """
+        ---
+        description: Close this project for today. Commit, push, stop what runs, and leave where it stands and the next step, so nothing stays open.
+        argument-hint: "[a note for tomorrow]"
+        ---
+
+        Close this project for today, so nothing is left open in it. Go through these steps in order, doing what applies and skipping what doesn't. Don't start new work.
+
+        1. Work in progress: if something from this session is half done, bring it to a safe stopping point (it builds, nothing is half edited). If finishing it would take more than a few minutes, stop and leave it for tomorrow instead.
+        2. Check: if code changed in this session and the project has a quick check (tests, type check, build), run it. If it fails and the fix is quick, fix it; otherwise leave it for tomorrow and say so.
+        3. Commit: run git status. Commit the changes that belong to this session's work, one commit per logical change, with clear messages. Never commit secrets (.env files, keys, tokens) or build output. Changes you didn't make (the user's own, or another session's): list them and ask whether to commit them; don't decide alone.
+        4. Push: if the repository has a remote, push the branch (set its upstream if it has none). Never force-push. If the push fails, say why and leave it.
+        5. Stop what runs: dev servers, watchers and background commands started in this session.
+        6. Leave where it stands: write .ydeck.local.json in the project root, keeping what is already in it: "now" is where the project stands, one short line; "next" is the first concrete step for tomorrow, specific enough to start from cold. In the user's language. Update .ydeck.json too if a decision, a release or a link from today belongs there, as this session's instructions from YDeck say.
+        7. Report, short, in the user's language:
+           - Done today
+           - Still open: anything not closed, and why (ideally nothing)
+           - Tomorrow starts with: the next step
+           Then say the day is closed for this project, and that /exit ends the session.
+
+        A note from the user for tomorrow, if any (put it in "next"): ${'$'}ARGUMENTS
+    """.trimIndent() + "\n"
 
     fun hooks(): JSONObject {
         val url = "http://127.0.0.1:${ClaudeLink.PORT}/claude"

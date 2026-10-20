@@ -178,6 +178,15 @@ class ClaudeLinkTest {
         assertNull(OpenSessions.read(JSONObject(rec.toString()).put("kind", "background")) { _, _ -> true })
     }
 
+    @Test fun closingTheDayIsACommandClaudeKnows() {
+        val text = ClaudePlugin.closeDay()
+        assertTrue(text.startsWith("---\ndescription: "))
+        assertTrue(text.contains("\$ARGUMENTS"))
+        assertTrue(text.contains(".ydeck.local.json") && text.contains("Never force-push"))
+        val p = DeckJson.decode(File("../store/play/source/demo-projects.json").readText()).projects[0]
+        assertTrue(ProjectFiles.briefing(p, Files.createTempDirectory("ydeck-brief").toFile()).contains("/ydeck:close-day"))
+    }
+
     @Test fun aSessionFollowsItsOwnProcess() {
         val folder = "C:\\Work\\proc-${System.nanoTime()}"
         fun ev(name: String, s: String, vararg extra: Pair<String, String>) =

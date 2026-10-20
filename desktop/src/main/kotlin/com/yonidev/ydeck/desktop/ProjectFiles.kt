@@ -163,6 +163,7 @@ object ProjectFiles {
             val repo = Settings.state.value.repoFiles
             appendLine("The user asked YDeck to have these files kept up to date. Do it as part of the work, and mention it in a few words when you do:")
             appendLine("- When you finish a meaningful piece of work, or the user is about to stop, write $LOCAL in the project root: {\"now\": \"what is in progress, one short line\", \"next\": \"the next concrete step\"}, in the language the user writes in. It is personal and kept out of git.")
+            appendLine("- When the user asks to close the project for today (\"close for today\", \"wrap up\", \"סגור להיום\"), run the /ydeck:${ClaudePlugin.CLOSE_DAY} command: it commits, pushes, stops what runs and leaves the next step, so nothing stays open.")
             if (!repo) {
                 append("The user turned off changes to files in the repository: leave $SHARED and AGENTS.md as they are.")
                 return@buildString
