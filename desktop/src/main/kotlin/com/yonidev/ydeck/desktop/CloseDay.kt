@@ -14,7 +14,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -107,7 +110,8 @@ fun CloseDayPage(deck: Deck) {
                         Row(Modifier.padding(start = 4.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                             Logo(p, 24.dp)
                             Spacer(Modifier.width(10.dp))
-                            Text(p.name, color = c.fg, fontSize = 15.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans)
+                            Text(p.name, color = c.fg, fontSize = 15.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans, modifier = Modifier.weight(1f))
+                            CloseWithClaude(p, plan.dir, small = true)
                         }
                         Group {
                             plan.steps.forEach { s ->
@@ -228,5 +232,73 @@ private fun DayClosed(plans: List<DayPlan>, nexts: Map<String, String>) {
             Spacer(Modifier.height(22.dp))
             TextAction(tr("Back to open loops", "חזרה למה שפתוח"), accent = true) { Nav.set(Screen.Loops) }
         }
+    }
+}
+
+/**
+ * "Close for today" with Claude: Claude Code runs /ydeck:close-day in the project, in the conversation that knows the
+ * day's work. Sessions open there with nothing going on are ended first (asked first) and the latest one picked up;
+ * while Claude works or waits for an answer, it's left alone.
+ */
+@Composable
+fun CloseWithClaude(p: Project, dir: File, small: Boolean = false) {
+    if (Tools.claude == null) return
+    val c = LocalDeck.current
+    val all by ClaudeLink.sessions.collectAsState()
+    val here = all.values.filter { it.agent == Agent.CLAUDE && it.mode != ClaudeMode.DONE && isUnder(it.cwd, dir.path) }
+    val command = "/ydeck:${ClaudePlugin.CLOSE_DAY}"
+    var ask by remember { mutableStateOf<String?>(null) }
+    Pill(tr("Close for today", "סגירה להיום"), Tone.SOFT, Glyph.MOON, small = small) {
+        ask = when {
+            here.any { it.mode == ClaudeMode.WORKING || it.mode == ClaudeMode.WAITING } -> BUSY
+            here.isEmpty() -> { CloseWithClaude.start(p, dir, emptyList()); null }
+            here.all { it.proc != null } -> OPEN
+            else -> UNKNOWN
+        }
+    }
+    val dialog = ask ?: return
+    val (title, text, go) = when (dialog) {
+        BUSY -> Triple(tr("Claude is still at work", "Claude עדיין באמצע"),
+            tr("Claude is working or waiting for you in ${p.name}. Close for today once it's done, or type $command in its window.",
+                "Claude עובד או מחכה לך ב־${p.name}. אפשר לסגור להיום כשיסיים, או לכתוב $command בחלון שלו."), null)
+        OPEN -> Triple(tr("Close Claude's session and wrap up?", "לסגור את הסשן ולסכם את היום?"),
+            tr("Claude is open in ${p.name}" + (if (here.size > 1) " (${here.size} sessions)" else "") + ". YDeck ends it and picks up the same conversation in a new window, with $command, so Claude knows what was done.",
+                "Claude פתוח ב־${p.name}" + (if (here.size > 1) " (${here.size} סשנים)" else "") + ". YDeck יסגור אותו וימשיך את אותה שיחה בחלון חדש עם $command, כך ש־Claude יודע מה נעשה היום."),
+            tr("Close and wrap up", "לסגור ולסכם"))
+        else -> Triple(tr("Claude is open in its window", "Claude פתוח בחלון שלו"),
+            tr("Type $command there (it's copied), and Claude closes the project for today.", "כתבו שם $command (הועתק), ו־Claude יסגור את הפרויקט להיום."), null)
+    }
+    if (dialog == UNKNOWN) LaunchedEffect(Unit) {
+        runCatching { java.awt.Toolkit.getDefaultToolkit().systemClipboard.setContents(java.awt.datatransfer.StringSelection(command), null) }
+    }
+    AlertDialog(
+        onDismissRequest = { ask = null },
+        title = { Text(title, fontFamily = PlexSans) },
+        text = { Text(text, fontFamily = PlexSans) },
+        confirmButton = {
+            if (go != null) TextButton({ ask = null; CloseWithClaude.start(p, dir, here) }) { Text(go, color = c.accentText, fontFamily = PlexSans) }
+            else TextButton({ ask = null }) { Text(tr("OK", "הבנתי"), color = c.accentText, fontFamily = PlexSans) }
+        },
+        dismissButton = { if (go != null) TextButton({ ask = null }) { Text(tr("Cancel", "ביטול"), color = c.fg, fontFamily = PlexSans) } },
+    )
+}
+
+private const val BUSY = "busy"
+private const val OPEN = "open"
+private const val UNKNOWN = "unknown"
+
+object CloseWithClaude {
+    /** Ends [open] (its `claude` and what it started), then opens Claude Code on the latest conversation with the command. */
+    fun start(p: Project, dir: File, open: List<ClaudeSession>) = Thread {
+        open.forEach { s -> s.proc?.takeIf(Callers::alive)?.let { end(it.pid) } }
+        val resume = open.maxByOrNull { it.since }?.id ?: Claude.conversations(dir, 1).firstOrNull()?.id
+        Tools.claudeIn(dir, p.name, resume = resume, prompt = "/ydeck:${ClaudePlugin.CLOSE_DAY}")
+    }.apply { isDaemon = true }.start()
+
+    private fun end(pid: Long) {
+        val h = ProcessHandle.of(pid).orElse(null) ?: return
+        h.descendants().forEach { it.destroy() }
+        h.destroy()
+        runCatching { h.onExit().get(5, java.util.concurrent.TimeUnit.SECONDS) }
     }
 }

@@ -88,6 +88,7 @@ private fun Header(p: Project, local: Local, actions: AppActions) {
             val editor = Tools.quick(dir).getOrNull(1)?.takeIf { it.kind != ToolKind.AGENT && it.kind != ToolKind.TERMINAL }
             if (editor != null) { Pill(editor.label.removePrefix("Android "), Tone.SOFT, Glyph.CODE) { Tools.launch(editor, dir, p.name) }; Spacer(Modifier.width(8.dp)) }
             Tools.claude?.let { claude -> Pill("Claude", Tone.DARK, Glyph.CLAUDE, CLAUDE_ORANGE) { Tools.launch(claude, dir, p.name) }; Spacer(Modifier.width(8.dp)) }
+            if (Tools.claude != null) { CloseWithClaude(p, dir); Spacer(Modifier.width(8.dp)) }
         }
         var menu by remember { mutableStateOf(false) }
         Box {
