@@ -1,5 +1,8 @@
 package com.yonidev.ydeck.desktop
 
+import com.sun.jna.Memory
+import com.sun.jna.platform.win32.IPHlpAPI
+import com.sun.jna.ptr.IntByReference
 import com.sun.net.httpserver.HttpServer
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -40,7 +43,12 @@ data class ClaudeSession(
     val remote: Boolean = false,
     /** Known only from Claude Code's list of open sessions (no word from the hooks): its state follows that list. */
     val listed: Boolean = false,
+    /** The `claude` process it runs in, found from its hooks: while it runs, the session is open. */
+    val proc: Proc? = null,
 )
+
+/** A process, told apart from a later one under the same pid by when it started (ms). */
+data class Proc(val pid: Long, val start: Long)
 
 /** Something worth a Windows notification: Claude needs the user, or finished a long task. */
 data class ClaudeAlert(val cwd: String, val mode: ClaudeMode, val detail: String)
@@ -51,6 +59,8 @@ object ClaudeLink {
     private const val DONE_FOR_MS = 30L * 60 * 1000
     /** Work with no word from Claude for this long has stopped (a closed terminal sends nothing). */
     private const val STALE_MS = 15L * 60 * 1000
+    /** Work whose `claude` still runs, with no word for this long, has stopped all the same (a safety net). */
+    private const val STALE_RUNNING_MS = 60L * 60 * 1000
     /** A task this long is worth a notification when it ends. */
     private const val LONG_TASK_MS = 60_000L
 
@@ -84,7 +94,10 @@ object ClaudeLink {
             server.createContext("/claude") { ex ->
                 val ok = ex.requestMethod == "POST" && ex.requestHeaders.getFirst("X-YDeck") == key
                 val reply = if (!ok) null else runCatching {
-                    handle(JSONObject(ex.requestBody.readNBytes(1 shl 20).toString(Charsets.UTF_8)), System.currentTimeMillis())
+                    // The hook's process is still connected now: its `claude` is found through it.
+                    handle(JSONObject(ex.requestBody.readNBytes(1 shl 20).toString(Charsets.UTF_8)), System.currentTimeMillis()) {
+                        Callers.claudeAt(ex.remoteAddress.port)
+                    }
                 }.getOrNull()
                 val body = (reply ?: JSONObject()).toString().toByteArray(Charsets.UTF_8)
                 ex.responseHeaders.add("Content-Type", "application/json")
@@ -94,11 +107,14 @@ object ClaudeLink {
             server.executor = null
             server.start()
         }
+        runCatching { restore(System.currentTimeMillis()) }
         Thread({
+            var saved = _sessions.value
             while (true) {
                 val now = System.currentTimeMillis()
                 if ((now / 2000) % 2 == 1L) runCatching { open = OpenSessions.scan() }
                 runCatching { tidy(now) }
+                if (_sessions.value !== saved) { saved = _sessions.value; runCatching { save(saved) } }
                 if ((now / 2000) % 2 == 0L) runCatching { Codex.poll(now) }
                 (now / 30_000).let { if (it != minute.value) minute.value = it }
                 Thread.sleep(2000)
@@ -106,14 +122,19 @@ object ClaudeLink {
         }, "ydeck-claude").apply { isDaemon = true; start() }
     }
 
-    /** One hook event. Returns the reply Claude Code reads (the project's context, at a session's start). */
-    fun handle(e: JSONObject, now: Long): JSONObject? {
+    /**
+     * One hook event. Returns the reply Claude Code reads (the project's context, at a session's start). [caller] finds
+     * the `claude` that sent it, asked once per session.
+     */
+    fun handle(e: JSONObject, now: Long, caller: () -> Proc? = { null }): JSONObject? {
         val id = e.optString("session_id").ifBlank { return null }
         val cwd = e.optString("cwd").ifBlank { return null }
         val transcript = e.optString("transcript_path").ifBlank { null }
         val before = _sessions.value[id]
+        val proc = before?.proc ?: if (e.optString("hook_event_name") != "SessionEnd") runCatching(caller).getOrNull() else null
         fun set(mode: ClaudeMode, detail: String, workStart: Long = before?.workStart ?: now) {
-            _sessions.value = _sessions.value + (id to ClaudeSession(id, cwd, mode, now, detail, transcript ?: before?.transcript, workStart))
+            _sessions.value = _sessions.value + (id to ClaudeSession(id, cwd, mode, now, detail, transcript ?: before?.transcript, workStart,
+                remote = before?.remote == true, proc = proc))
         }
         when (e.optString("hook_event_name")) {
             "SessionStart" -> {
@@ -135,7 +156,7 @@ object ClaudeLink {
             }
             "Stop" -> {
                 set(ClaudeMode.DONE, firstLine(e.optString("last_assistant_message")))
-                if (before != null && before.mode != ClaudeMode.DONE && now - before.workStart >= LONG_TASK_MS) {
+                if (before != null && (before.mode == ClaudeMode.WORKING || before.mode == ClaudeMode.WAITING) && now - before.workStart >= LONG_TASK_MS) {
                     _alerts.tryEmit(ClaudeAlert(cwd, ClaudeMode.DONE, firstLine(e.optString("last_assistant_message"))))
                 }
                 Receipts.end(id, now)
@@ -152,38 +173,76 @@ object ClaudeLink {
     }
 
     /**
-     * Sessions catch up with what the hooks can't say: after the user answers Claude's question the conversation
-     * moves on (its transcript grows), so it's working again; work with no sign of life is over; done fades out.
-     * With Claude Code's list of open sessions ([open]): a finished session whose `claude` still runs is open; one
-     * whose `claude` is gone (a closed terminal says nothing) is over at once; and a session open before YDeck
-     * started, or without the plugin, shows too.
+     * Sessions catch up with what the hooks can't say. Whether a session's `claude` still runs comes from its process
+     * (found from its hooks), or else from Claude Code's own list of open sessions ([open], which newer versions no
+     * longer keep): a finished session whose `claude` runs is open, one whose `claude` is gone (a closed terminal says
+     * nothing) is over at once. Its transcript tells the rest: after the user answers Claude's question the
+     * conversation moves on, so it's working again; a turn the user stopped (Esc, which no hook reports) is over; and
+     * whether Remote Control is on. Done fades out.
      */
-    fun tidy(now: Long, open: Map<String, OpenSessions.Open>? = this.open) {
+    fun tidy(now: Long, open: Map<String, OpenSessions.Open>? = this.open, alive: (Proc) -> Boolean = Callers::alive) {
         val next = _sessions.value.mapNotNull { (id, s) ->
             if (s.agent != Agent.CLAUDE) return@mapNotNull id to s
             val live = open?.get(id)
-            // A moment's grace: a session just started may not be on the list yet.
-            val gone = open != null && live == null && now - s.since > 10_000
             if (s.listed) return@mapNotNull if (live == null) null
                 else id to s.copy(mode = if (live.busy) ClaudeMode.WORKING else ClaudeMode.OPEN, cwd = live.cwd, remote = live.remote,
                     since = if (live.busy != (s.mode == ClaudeMode.WORKING)) live.since else s.since)
+            // Its claude runs (true), has ended (false), or nobody knows (null). A moment's grace on the list: a
+            // session just started may not be on it yet.
+            val running = when {
+                s.proc != null -> alive(s.proc)
+                live != null -> true
+                open != null && now - s.since > 10_000 -> false
+                else -> null
+            }
             val written = s.transcript?.let { File(it).lastModified() }?.takeIf { it > 0 } ?: s.since
+            val told = s.transcript?.takeIf { running != false }?.let { runCatching { Transcripts.read(it) }.getOrNull() }
+            val remote = live?.remote ?: told?.remote ?: s.remote
+            val idle = if (running == true) ClaudeMode.OPEN else ClaudeMode.DONE
             id to when {
-                gone && s.mode == ClaudeMode.OPEN -> return@mapNotNull null
-                gone && (s.mode == ClaudeMode.WORKING || s.mode == ClaudeMode.WAITING) -> s.copy(mode = ClaudeMode.DONE, since = now)
-                s.mode == ClaudeMode.WAITING && written > s.since + 1500 -> s.copy(mode = ClaudeMode.WORKING, since = written)
-                s.mode == ClaudeMode.WORKING && now - maxOf(written, s.since) > STALE_MS ->
-                    s.copy(mode = if (live != null) ClaudeMode.OPEN else ClaudeMode.DONE, since = maxOf(written, s.since))
-                s.mode == ClaudeMode.DONE && live != null -> s.copy(mode = ClaudeMode.OPEN, remote = live.remote)
+                running == false && s.mode == ClaudeMode.OPEN -> return@mapNotNull null
+                running == false && (s.mode == ClaudeMode.WORKING || s.mode == ClaudeMode.WAITING) -> s.copy(mode = ClaudeMode.DONE, since = now)
+                s.mode == ClaudeMode.WAITING && written > s.since + 1500 -> s.copy(mode = ClaudeMode.WORKING, since = written, remote = remote)
+                s.mode == ClaudeMode.WORKING && told?.stopped == true && written > s.workStart && now - written > 2000 ->
+                    s.copy(mode = idle, since = written, detail = "", remote = remote)
+                s.mode == ClaudeMode.WORKING && now - maxOf(written, s.since) > (if (running == true) STALE_RUNNING_MS else STALE_MS) ->
+                    s.copy(mode = idle, since = maxOf(written, s.since), remote = remote)
+                s.mode == ClaudeMode.DONE && running == true -> s.copy(mode = ClaudeMode.OPEN, remote = remote)
                 s.mode == ClaudeMode.DONE && now - s.since > 12 * 60 * 60 * 1000L -> return@mapNotNull null
-                live != null && live.remote != s.remote -> s.copy(remote = live.remote)
+                remote != s.remote -> s.copy(remote = remote)
                 else -> s
             }
         }.toMap().toMutableMap()
         open?.values?.filter { it.id !in next }?.forEach { o ->
             next[o.id] = ClaudeSession(o.id, o.cwd, if (o.busy) ClaudeMode.WORKING else ClaudeMode.OPEN, o.since, "", null, o.since, remote = o.remote, listed = true)
         }
+        Transcripts.keep(next.values.mapNotNull { it.transcript }.toSet())
         if (next != _sessions.value) _sessions.value = next
+    }
+
+    private val file get() = File(AppDirs.local, "claude-sessions.json")
+
+    /** Sessions with a known `claude` are kept on disk, so YDeck started again (after an update) still knows them. */
+    private fun save(all: Map<String, ClaudeSession>) {
+        val a = JSONArray()
+        all.values.filter { it.agent == Agent.CLAUDE && it.proc != null }.forEach { s ->
+            a.put(JSONObject().put("id", s.id).put("cwd", s.cwd).put("mode", s.mode.name).put("since", s.since).put("detail", s.detail)
+                .put("transcript", s.transcript ?: "").put("workStart", s.workStart).put("remote", s.remote)
+                .put("pid", s.proc!!.pid).put("start", s.proc.start))
+        }
+        file.writeText(a.toString())
+    }
+
+    /** The sessions saved last time whose `claude` still runs. */
+    private fun restore(now: Long) {
+        val a = JSONArray(file.readText())
+        val found = (0 until a.length()).mapNotNull { a.optJSONObject(it) }.mapNotNull { o ->
+            val proc = Proc(o.optLong("pid"), o.optLong("start")).takeIf { Callers.alive(it) } ?: return@mapNotNull null
+            val mode = runCatching { ClaudeMode.valueOf(o.optString("mode")) }.getOrNull() ?: return@mapNotNull null
+            ClaudeSession(o.getString("id"), o.getString("cwd"), mode, o.optLong("since", now), o.optString("detail"),
+                o.optString("transcript").ifBlank { null }, o.optLong("workStart", now), remote = o.optBoolean("remote"), proc = proc)
+        }
+        _sessions.value = found.associateBy { it.id } + _sessions.value
     }
 
     /** The most pressing session in [folder] (or a folder inside it): waiting, then working, then open, then recently done. */
@@ -224,9 +283,12 @@ object OpenSessions {
 
     private val dir = File(System.getProperty("user.home"), ".claude/sessions")
 
-    /** The open sessions by id; null when Claude Code keeps no such list here (then nothing is taken from it). */
+    /**
+     * The open sessions by id; null when Claude Code keeps no such list here (then nothing is taken from it). Claude
+     * Code 2.1.30x stopped writing it (the folder holds only its .key files), so an empty folder says nothing either.
+     */
     fun scan(): Map<String, Open>? {
-        val files = dir.listFiles { f -> f.isFile && f.extension == "json" } ?: return null
+        val files = dir.listFiles { f -> f.isFile && f.extension == "json" }?.takeIf { it.isNotEmpty() } ?: return null
         return files.mapNotNull { f -> runCatching { read(JSONObject(f.readText())) }.getOrNull() }.associateBy { it.id }
     }
 
@@ -247,6 +309,107 @@ object OpenSessions {
         val mine = start.toEpochMilli() * 10_000 + 116_444_736_000_000_000L
         return kotlin.math.abs(mine - procStart) < 20_000_000
     }
+}
+
+/**
+ * The `claude` behind a hook: the hook's process (curl) is still connected while YDeck reads it, so Windows' table of
+ * TCP connections names it, and its parents lead to `claude`. Known once, the session is open exactly as long as that
+ * process runs, whatever Claude Code keeps on disk.
+ */
+object Callers {
+    /** What a hook runs through on its way from `claude` (see [ClaudePlugin.hooks]). */
+    private val between = setOf("curl.exe", "cmd.exe", "powershell.exe", "pwsh.exe", "conhost.exe")
+
+    fun claudeAt(port: Int): Proc? {
+        var h = ProcessHandle.of(ownerOf(port) ?: return null).orElse(null) ?: return null
+        repeat(4) {
+            val name = h.info().command().orElse("").substringAfterLast('\\').lowercase()
+            // A process whose name can't be read could be anything: better unknown than wrong.
+            if (name.isBlank()) return null
+            if (name !in between) return proc(h)
+            h = h.parent().orElse(null) ?: return null
+        }
+        return null
+    }
+
+    fun alive(p: Proc): Boolean {
+        val h = ProcessHandle.of(p.pid).orElse(null)?.takeIf { it.isAlive } ?: return false
+        return proc(h)?.start == p.start
+    }
+
+    private fun proc(h: ProcessHandle): Proc? = h.info().startInstant().orElse(null)?.let { Proc(h.pid(), it.toEpochMilli()) }
+
+    /** The process at the other end of our connection from [port] (127.0.0.1:[port] to our server). */
+    private fun ownerOf(port: Int): Long? {
+        val api = IPHlpAPI.INSTANCE
+        val size = IntByReference()
+        val kind = IPHlpAPI.TCP_TABLE_CLASS.TCP_TABLE_OWNER_PID_CONNECTIONS
+        api.GetExtendedTcpTable(null, size, false, IPHlpAPI.AF_INET, kind, 0)
+        // Room for a few more connections made meanwhile.
+        size.value += 4096
+        val mem = Memory(size.value.toLong())
+        if (api.GetExtendedTcpTable(mem, size, false, IPHlpAPI.AF_INET, kind, 0) != 0) return null
+        // Ports are kept in network order, in the low 16 bits.
+        fun port(raw: Int) = ((raw and 0xff) shl 8) or ((raw shr 8) and 0xff)
+        return IPHlpAPI.MIB_TCPTABLE_OWNER_PID(mem).table
+            .firstOrNull { port(it.dwLocalPort) == port && port(it.dwRemotePort) == ClaudeLink.PORT }?.dwOwningPid?.toLong()
+    }
+}
+
+/**
+ * What a session's transcript says lately, read as it grows (only the new lines each time): whether the user stopped
+ * the last turn, and whether Remote Control is on.
+ */
+object Transcripts {
+    class Told(var stopped: Boolean = false, var remote: Boolean? = null)
+
+    private class Seen(var offset: Long, val told: Told = Told())
+    private val seen = java.util.concurrent.ConcurrentHashMap<String, Seen>()
+    /** A first read starts this far from the end: Remote Control is said near the start, but a huge file isn't read whole. */
+    private const val FIRST_READ = 16L shl 20
+
+    fun read(path: String): Told? {
+        val f = File(path)
+        val length = f.length().takeIf { it > 0 } ?: return null
+        val s = seen[path]?.takeIf { it.offset <= length } ?: Seen(maxOf(0, length - FIRST_READ)).also { seen[path] = it }
+        if (length > s.offset) java.io.RandomAccessFile(f, "r").use { raf ->
+            raf.seek(s.offset)
+            val bytes = ByteArray((length - s.offset).toInt()).also { raf.readFully(it) }
+            // Whole lines only: a line still being written is read next time.
+            val end = bytes.lastIndexOf('\n'.code.toByte())
+            if (end >= 0) {
+                String(bytes, 0, end, Charsets.UTF_8).lineSequence().forEach { take(s.told, it) }
+                s.offset += end + 1
+            }
+        }
+        return Told(s.told.stopped, s.told.remote)
+    }
+
+    /** One line of the transcript. Only the main conversation counts (not a subagent's). */
+    fun take(t: Told, line: String) {
+        if (!line.contains("\"isSidechain\":false")) return
+        when {
+            line.contains("\"type\":\"assistant\"") -> t.stopped = false
+            line.contains("\"type\":\"user\"") -> t.stopped = line.contains("[Request interrupted by user") && stoppedHere(line)
+            line.contains("\"subtype\":\"bridge_status\"") -> t.remote = true
+            line.contains("Remote Control disconnected") -> t.remote = false
+        }
+    }
+
+    /** The user's message is the stop itself (not, say, a file that mentions it). */
+    private fun stoppedHere(line: String): Boolean = runCatching {
+        val o = JSONObject(line)
+        if (o.optString("type") != "user") return false
+        val text = when (val c = o.optJSONObject("message")?.opt("content")) {
+            is String -> c
+            is JSONArray -> (0 until c.length()).mapNotNull { c.optJSONObject(it) }.filter { it.optString("type") == "text" }.joinToString("") { it.optString("text") }
+            else -> ""
+        }
+        text.trim().startsWith("[Request interrupted by user")
+    }.getOrDefault(false)
+
+    /** Forgets transcripts no session uses now. */
+    fun keep(paths: Set<String>) { seen.keys.retainAll(paths) }
 }
 
 /** Whether [path] is [folder] or inside it (Windows paths, any case). */

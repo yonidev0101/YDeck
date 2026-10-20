@@ -59,6 +59,9 @@ object PhoneLink {
 
     @Volatile private var pairing: Pairing? = null
     @Volatile private var lastSent: String? = null
+    @Volatile private var lastSentAt = 0L
+    /** The state goes out at least this often; a phone that hasn't heard for [com.yonidev.ydeck.link.Live.FRESH_MS] stops trusting it. */
+    private const val HEARTBEAT_MS = 5L * 60 * 1000
     /** The phone's notes stored lately (ids, newest last), told back to the phone in every state. */
     private val applied = java.util.concurrent.CopyOnWriteArrayList<String>()
     /** What became of the phone's latest launch requests (newest last), told back to it in every state. */
@@ -98,12 +101,14 @@ object PhoneLink {
                 synchronized(wake) { wake.wait(if (hurry) 3_000 else 20_000) }
             }
         }, "phone-link").apply { isDaemon = true }.start()
-        // A change in the projects goes out within seconds, not at the next minute.
+        // A change in the projects, or in what Claude is doing, goes out within seconds, not at the next minute.
         Thread({
             var seen = Repo.deck.value
+            var claude = ClaudeLink.sessions.value
             while (true) {
                 Thread.sleep(2_000)
                 if (Repo.deck.value !== seen) { seen = Repo.deck.value; nudge() }
+                if (ClaudeLink.sessions.value !== claude) { claude = ClaudeLink.sessions.value; nudge() }
             }
         }, "phone-link-watch").apply { isDaemon = true }.start()
     }
@@ -285,8 +290,10 @@ object PhoneLink {
         val hash = sha(Snapshot(0, snapshot.computer, snapshot.deck, snapshot.memory, snapshot.live, snapshot.applied, snapshot.launch, snapshot.claude, snapshot.launched).encode())
         var sentAt: Long? = null
         var offline = false
-        if (hash != lastSent) {
-            if (relay.putState(p.seal("state", plain))) { lastSent = hash; sentAt = System.currentTimeMillis() } else offline = true
+        // Sent again now and then even when nothing changed, so the phone knows this is still current (Claude's state
+        // shown there would otherwise stay as it was when the computer went to sleep).
+        if (hash != lastSent || System.currentTimeMillis() - lastSentAt >= HEARTBEAT_MS) {
+            if (relay.putState(p.seal("state", plain))) { lastSent = hash; lastSentAt = System.currentTimeMillis(); sentAt = lastSentAt } else offline = true
         }
         val m = relay.meta()
         // Only what this learned changes: a code put on screen meanwhile stays.
@@ -323,7 +330,7 @@ object PhoneLink {
         }
         val live = deck.projects.mapNotNull { p -> settings.localOf(p.id).folder?.let { p.id to live(it) } }.toMap()
         return Snapshot(System.currentTimeMillis(), computer, JSONObject(Repo.exportJson(deck)), memory, live, applied.toList(),
-            launch = settings.phoneLaunch && Tools.claude != null, claude = Tools.claude != null, launched = launched.toList())
+            launch = settings.phoneLaunch && Tools.claude != null, claude = Tools.claude != null, launched = launched.toList(), beat = HEARTBEAT_MS)
     }
 
     /** What the project's window shows here: git, the agent, the latest receipts, open loops, the dev server. */

@@ -31,7 +31,9 @@ import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
 import androidx.core.view.WindowCompat
 import androidx.glance.appwidget.updateAll
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
@@ -85,6 +87,15 @@ class MainActivity : ComponentActivity() {
             Settings.Global.getFloat(contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
         Computer.state(this)
         Computer.schedule(this)
+        // While the app is on screen, what the computer sends shows within seconds (Claude starting, stopping, done).
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                while (true) {
+                    delay(10_000)
+                    if (Computer.state.value?.paired == true && Computer.sync(this@MainActivity) == Computer.Result.UPDATED) deck = Repo.deck(this@MainActivity)
+                }
+            }
+        }
         refreshFavicons()
         updateShortcuts()
         // Light bar icons on the night ground.
@@ -109,7 +120,7 @@ class MainActivity : ComponentActivity() {
                         )
                         is Page.Project -> deck.byId(p.id)?.let { project ->
                             ProjectScreen(
-                                project, computer?.memory?.get(project.id), computer?.live?.get(project.id),
+                                project, computer?.memory?.get(project.id), computer?.live(project.id),
                                 pending = computer?.pending.orEmpty().filter { it.project == project.id },
                                 onBack = { page = Page.Home },
                                 onWrite = if (computer?.paired == true) { kind, text -> write(project.id, kind, text) } else null,

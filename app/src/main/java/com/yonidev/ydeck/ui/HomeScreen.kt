@@ -80,7 +80,7 @@ fun HomeScreen(
         item { SectionHeader(when (open) { 0 -> "פרויקטים"; 1 -> "פרויקטים · אחד פתוח"; else -> "פרויקטים · $open פתוחים" }) }
         item { Line() }
         items(deck.projects, key = { it.id }) { p ->
-            ProjectRow(p, computer?.memory?.get(p.id), computer?.live?.get(p.id), onClick = { onOpen(p) })
+            ProjectRow(p, computer?.memory?.get(p.id), computer?.live(p.id), onClick = { onOpen(p) })
             Divider(inset = 80.dp)
         }
         if (!paired) item {

@@ -57,7 +57,18 @@ object Computer {
         val claudeHere: Boolean = false,
         /** Claude Code sessions asked for here, and what the computer did with each (null: not yet). */
         val launches: List<Pair<Launch, Launched?>> = emptyList(),
-    )
+        /** The computer sends its state at least this often (0: an older YDeck that doesn't). */
+        val beat: Long = 0,
+    ) {
+        /**
+         * A project's live state, as far as it can be trusted now: when the computer has stopped sending (asleep, off,
+         * YDeck closed), what Claude was doing there is no longer shown, since it may have changed since.
+         */
+        fun live(projectId: String, now: Long = System.currentTimeMillis()): Live? {
+            val l = live[projectId] ?: return null
+            return if (beat > 0 && now - stateAt > 2 * beat + 60_000) l.withoutAgent() else l
+        }
+    }
 
     enum class Result { UPDATED, SAME, EMPTY, OFFLINE, REFUSED, BROKEN }
 
@@ -100,6 +111,7 @@ object Computer {
             pending = outbox.map { it.first },
             canLaunch = mem?.optBoolean("launch") ?: false,
             claudeHere = mem?.optBoolean("claude") ?: false,
+            beat = mem?.optLong("beat") ?: 0,
         )
     }
 
@@ -271,6 +283,7 @@ object Computer {
             put("live", JSONObject().apply { snapshot.live.forEach { (id, l) -> put(id, l.toJson()) } })
             put("launch", snapshot.launch)
             put("claude", snapshot.claude)
+            put("beat", snapshot.beat)
         }.toString())
         // Notes the computer has stored are done; the rest wait.
         if (outbox.any { it.first.id in snapshot.applied }) writeOutbox(app, outbox.filterNot { it.first.id in snapshot.applied })
@@ -278,7 +291,7 @@ object Computer {
         writeLink(app, p, snapshot.computer, got.etag, now)
         val launches = state(app).launches.map { (l, done) -> l to (done ?: snapshot.launched.firstOrNull { it.id == l.id }) }
         _state.value = State(paired = true, name = snapshot.computer, stateAt = snapshot.at, checkedAt = now, memory = snapshot.memory, live = snapshot.live,
-            pending = outbox.map { it.first }, canLaunch = snapshot.launch, claudeHere = snapshot.claude, launches = launches)
+            pending = outbox.map { it.first }, canLaunch = snapshot.launch, claudeHere = snapshot.claude, launches = launches, beat = snapshot.beat)
         DeckWidget().updateAll(app)
         Result.UPDATED
     }

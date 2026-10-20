@@ -177,4 +177,76 @@ class ClaudeLinkTest {
         assertNull(OpenSessions.read(rec) { _, _ -> false })
         assertNull(OpenSessions.read(JSONObject(rec.toString()).put("kind", "background")) { _, _ -> true })
     }
+
+    @Test fun aSessionFollowsItsOwnProcess() {
+        val folder = "C:\\Work\\proc-${System.nanoTime()}"
+        fun ev(name: String, s: String, vararg extra: Pair<String, String>) =
+            JSONObject().put("hook_event_name", name).put("session_id", s).put("cwd", folder).apply { extra.forEach { (k, v) -> put(k, v) } }
+        val t = System.currentTimeMillis()
+        val proc = Proc(4242, 77)
+        var running = true
+        val s = "p-${System.nanoTime()}"
+        // Asked once, at the first hook; Claude Code's list says nothing (it keeps none now).
+        var asked = 0
+        ClaudeLink.handle(ev("SessionStart", s), t - 60_000) { asked++; proc }
+        ClaudeLink.handle(ev("UserPromptSubmit", s, "prompt" to "fix it"), t - 55_000) { asked++; proc }
+        assertEquals(1, asked)
+        assertEquals(proc, ClaudeLink.sessions.value[s]!!.proc)
+        // Long work with no word from Claude: still working while its claude runs.
+        ClaudeLink.tidy(t - 55_000 + 20 * 60_000, null) { running }
+        assertEquals(ClaudeMode.WORKING, ClaudeLink.sessions.value[s]!!.mode)
+        ClaudeLink.handle(ev("Stop", s, "last_assistant_message" to "Fixed."), t - 50_000)
+        ClaudeLink.tidy(t, null) { running }
+        assertEquals(ClaudeMode.OPEN, ClaudeLink.sessions.value[s]!!.mode)
+        // The terminal closed: gone.
+        running = false
+        ClaudeLink.tidy(t + 2000, null) { running }
+        assertNull(ClaudeLink.sessions.value[s])
+
+        // Closed in the middle of work: over at once.
+        running = true
+        val w = "pw-${System.nanoTime()}"
+        ClaudeLink.handle(ev("UserPromptSubmit", w, "prompt" to "long task"), t) { proc }
+        running = false
+        ClaudeLink.tidy(t + 2000, null) { running }
+        assertEquals(ClaudeMode.DONE, ClaudeLink.sessions.value[w]!!.mode)
+        ClaudeLink.handle(ev("SessionEnd", w), t + 3000)
+    }
+
+    @Test fun aTurnTheUserStoppedIsOver() {
+        val transcript = Files.createTempFile("ydeck-transcript", ".jsonl").toFile()
+        try {
+            val s = "i-${System.nanoTime()}"
+            val t = System.currentTimeMillis() - 60_000
+            fun line(type: String, content: String) = JSONObject().put("isSidechain", false).put("type", type)
+                .put("message", JSONObject().put("role", type).put("content", org.json.JSONArray().put(JSONObject().put("type", "text").put("text", content)))).toString()
+            transcript.writeText(line("user", "fix it") + "\n" + line("assistant", "On it.") + "\n")
+            ClaudeLink.handle(event("UserPromptSubmit", s, "prompt" to "fix it", "transcript_path" to transcript.path), t) { Proc(1, 1) }
+            transcript.setLastModified(t + 1000)
+            ClaudeLink.tidy(t + 10_000, null) { true }
+            assertEquals(ClaudeMode.WORKING, ClaudeLink.sessions.value[s]!!.mode)
+            // Esc: no hook says so, the transcript does.
+            transcript.appendText(line("user", "[Request interrupted by user]") + "\n")
+            transcript.setLastModified(t + 20_000)
+            ClaudeLink.tidy(t + 30_000, null) { true }
+            assertEquals(ClaudeMode.OPEN, ClaudeLink.sessions.value[s]!!.mode)
+            ClaudeLink.handle(event("SessionEnd", s), t + 40_000)
+        } finally { transcript.delete() }
+    }
+
+    @Test fun theTranscriptTellsStopsAndRemoteControl() {
+        val told = Transcripts.Told()
+        Transcripts.take(told, """{"isSidechain":false,"type":"system","subtype":"bridge_status","content":"/remote-control is active"}""")
+        assertEquals(true, told.remote)
+        // A tool's output that mentions a stop isn't one.
+        Transcripts.take(told, """{"isSidechain":false,"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":"[Request interrupted by user]"}]}}""")
+        assertFalse(told.stopped)
+        Transcripts.take(told, """{"isSidechain":false,"type":"user","message":{"role":"user","content":[{"type":"text","text":"[Request interrupted by user for tool use]"}]}}""")
+        assertTrue(told.stopped)
+        // A subagent's lines don't count.
+        Transcripts.take(told, """{"isSidechain":true,"type":"assistant","message":{"role":"assistant","content":"go on"}}""")
+        assertTrue(told.stopped)
+        Transcripts.take(told, """{"isSidechain":false,"type":"system","subtype":"informational","content":"Remote Control disconnected — run /login"}""")
+        assertEquals(false, told.remote)
+    }
 }

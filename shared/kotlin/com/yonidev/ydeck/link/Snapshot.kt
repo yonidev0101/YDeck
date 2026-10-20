@@ -46,6 +46,8 @@ class Snapshot(
     val claude: Boolean = false,
     /** What became of the phone's latest launch requests. */
     val launched: List<Launched> = emptyList(),
+    /** The computer sends its state at least this often (ms), changed or not; 0 from a YDeck that doesn't. */
+    val beat: Long = 0,
 ) {
     fun encode(): ByteArray = JSONObject().apply {
         put("app", "YDeck")
@@ -60,6 +62,7 @@ class Snapshot(
         put("launch", launch)
         put("claude", claude)
         put("launched", JSONArray().apply { launched.forEach { put(JSONObject().put("id", it.id).put("ok", it.ok).put("why", it.why)) } })
+        put("beat", beat)
     }.toString().toByteArray()
 
     companion object {
@@ -78,6 +81,7 @@ class Snapshot(
                 claude = o.optBoolean("claude"),
                 launched = o.optJSONArray("launched")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) } }.orEmpty()
                     .map { Launched(it.optString("id"), it.optBoolean("ok"), it.optString("why")) },
+                beat = o.optLong("beat"),
             )
         }
 
@@ -139,6 +143,9 @@ data class Live(
     /** The folder's latest Claude Code conversations, newest first. */
     val sessions: List<LiveSession> = emptyList(),
 ) {
+    /** Without the agent: what a phone shows once the computer has gone quiet, since Claude there may have moved on. */
+    fun withoutAgent(): Live = copy(agentMode = "", agentSince = 0, agentDetail = "", agent = "", agentRemote = false, agentOpen = 0)
+
     fun toJson(): JSONObject = JSONObject().apply {
         put("branch", branch); put("changes", changes); put("ahead", ahead); put("behind", behind); put("upstream", upstream)
         put("web", web); put("lastAt", lastAt); put("lastSubject", lastSubject); put("hasGit", hasGit)
