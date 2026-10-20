@@ -1,0 +1,65 @@
+<!doctype html>
+<!--
+  Google Play graphics for 0.9 on, in the brand's dark language (night, a thin headline whose full stop is amber, the ring).
+  ?k=shot&n=1..4  phone screenshots 1080x1920, the real app (screens-0.9/*.png, the emulator with the sample project Nova)
+  ?k=feature&lang=he|en  feature graphic 1024x500
+  ?k=icon  512x512, full bleed (Play applies its own mask)
+  Rendered one at a time with headless Chrome into ../ (icon-512.png, feature-graphic-*.png, screenshots/):
+  chrome --headless=new --allow-file-access-from-files --force-device-scale-factor=1 --virtual-time-budget=4000 --window-size=W,H --screenshot=OUT "store.html?k=..."
+-->
+<meta charset="utf-8">
+<style>
+  @font-face { font-family: Plex; src: url("../../../app/src/main/res/font/plex_sans_hebrew_regular.ttf"); font-weight: 400; }
+  @font-face { font-family: Plex; src: url("../../../app/src/main/res/font/plex_sans_hebrew_medium.ttf"); font-weight: 500; }
+  @font-face { font-family: Noto; src: url("../../../app/src/main/res/font/noto_sans_hebrew.ttf"); font-weight: 100 900; }
+  :root { --night: #0B0B0D; --ink: #F4F4F5; --soft: #C8C8CE; --mute: #8B8B93; --line: #24242A; --amber: #F5A524; }
+  * { margin: 0; box-sizing: border-box; }
+  html, body { overflow: hidden; background: var(--night); color: var(--ink); font-family: Plex, sans-serif; -webkit-font-smoothing: antialiased; }
+  [dir=rtl] { direction: rtl; }
+  .dot { color: var(--amber); }
+  .ring .arc { fill: none; stroke: var(--ink); stroke-width: 11; stroke-linecap: round; stroke-dasharray: 188.5 37.7; }
+  .ring .end { fill: var(--amber); }
+
+  /* screenshots */
+  .shot { width: 1080px; height: 1920px; position: relative; }
+  .shot .copy { position: absolute; top: 130px; right: 96px; left: 96px; }
+  .shot h1 { font: 200 96px/1.1 Noto, sans-serif; letter-spacing: -1px; }
+  .shot p { margin-top: 30px; font-size: 36px; line-height: 1.45; color: var(--mute); max-width: 820px; }
+  .phone { position: absolute; top: 640px; left: 50%; width: 860px; margin-left: -430px; height: 1500px; border-radius: 76px;
+    border: 3px solid #2A2A30; background: #000; padding: 22px; box-shadow: 0 0 0 1px #000, 0 40px 120px rgba(0,0,0,.6); overflow: hidden; }
+  .phone img { width: 100%; border-radius: 56px; display: block; }
+
+  /* feature graphic */
+  .feature { width: 1024px; height: 500px; position: relative; display: flex; align-items: center; gap: 64px; padding: 0 88px; }
+  .feature svg { width: 210px; height: 210px; flex: none; }
+  .feature h1 { font: 200 76px/1.08 Noto, sans-serif; letter-spacing: -1px; }
+  .feature[lang=en] h1 { font-family: Plex, sans-serif; font-weight: 400; letter-spacing: -2.5px; }
+  .feature p { margin-top: 22px; font-size: 27px; line-height: 1.4; color: var(--mute); }
+
+  .icon { width: 512px; height: 512px; }
+</style>
+<body>
+<script>
+  const q = new URLSearchParams(location.search), k = q.get('k') || 'shot';
+  const ring = `<svg class="ring" viewBox="0 0 100 100"><circle class="arc" cx="50" cy="50" r="36" transform="rotate(-10 50 50)"/><circle class="end" cx="77.6" cy="26.9" r="7.5"/></svg>`;
+  const shots = [
+    ['welcome', 'הזיכרון של<br>הפרויקטים, בכיס<span class="dot">.</span>', 'מתחברים ל־YDeck במחשב בסריקת קוד אחת. מוצפן מקצה לקצה.'],
+    ['memory', 'מה הבא,<br>בכל פרויקט<span class="dot">.</span>', 'הצעד הבא, מה קורה עכשיו, ומה הסשן האחרון של הסוכן עשה.'],
+    ['decisions', 'מה שהחלטת,<br>נשאר<span class="dot">.</span>', 'החלטות, תקציר וגרסה אחרונה, כמו ש־YDeck במחשב זוכר אותם.'],
+    ['links', 'כל קונסולה,<br>בחשבון הנכון<span class="dot">.</span>', 'Firebase, Play Console, Vercel ו־GitHub של הפרויקט, בנגיעה אחת.'],
+  ];
+  let html;
+  if (k === 'shot') {
+    const [img, h, p] = shots[(+q.get('n') || 1) - 1];
+    html = `<div class="shot" dir="rtl"><div class="copy"><h1>${h}</h1><p>${p}</p></div><div class="phone"><img src="screens-0.9/${img}.png"></div></div>`;
+  } else if (k === 'feature') {
+    const he = q.get('lang') !== 'en';
+    html = he
+      ? `<div class="feature" dir="rtl" lang="he">${ring}<div><h1>שום דבר<br>לא נשאר פתוח<span class="dot">.</span></h1><p>הזיכרון של הפרויקטים שלך, בכיס.</p></div></div>`
+      : `<div class="feature" lang="en">${ring}<div><h1>Nothing<br>left open<span class="dot">.</span></h1><p>Your projects' memory, in your pocket.</p></div></div>`;
+  } else {
+    html = `<svg class="icon" viewBox="0 0 100 100"><rect width="100" height="100" fill="#0B0B0D"/><g transform="translate(19 19) scale(0.62)" class="ring"><circle class="arc" cx="50" cy="50" r="36" transform="rotate(-10 50 50)"/><circle class="end" cx="77.6" cy="26.9" r="7.5"/></g></svg>`;
+  }
+  document.body.innerHTML = html;
+  window.ready = Promise.all([document.fonts.ready, ...[...document.images].map(i => i.decode())]);
+</script>

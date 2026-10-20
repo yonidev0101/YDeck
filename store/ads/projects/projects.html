@@ -1,0 +1,132 @@
+<title>YDeck · פרויקטים</title>
+<!--
+  "Projects" campaign: it's easy to start a project, nobody remembers where each one stands. The same frame as
+  campaign/: the headline in white, its answer in grey ending on amber, the drawing in the middle, the signature at the bottom.
+  No indigo in stills. 1080×1350 for groups (the feed shows 4:5 whole), ?fmt=story for 1080×1920, ?lang=en for English.
+  render.cjs saves out/ydeck-projects-<id>[-en][-story].png.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Hebrew:wght@400;500&display=swap" rel="stylesheet">
+<style>
+@font-face { font-family: Plex; src: url("../../../app/src/main/res/font/plex_sans_hebrew_medium.ttf"); font-weight: 500; }
+@font-face { font-family: Plex; src: url("../../../app/src/main/res/font/plex_sans_hebrew_regular.ttf"); font-weight: 400; }
+:root{ --night:#0B0B0D; --hair:#26262C; --line:#F4F4F5;
+  --f:Plex,'IBM Plex Sans Hebrew',system-ui,'Segoe UI',Arial,sans-serif; color-scheme:dark; }
+*,*::before,*::after{box-sizing:border-box}
+html,body{background:var(--night);color:var(--line)}
+body{font-family:var(--f);direction:rtl}
+.wrap{max-width:1120px;margin:0 auto;padding-inline:16px;padding-block:40px 64px}
+h1{font-weight:400;font-size:clamp(24px,3.4vw,34px);margin:0 0 28px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px}
+@media (max-width:760px){.grid{grid-template-columns:minmax(0,420px);justify-content:center}}
+canvas{display:block;width:100%;height:auto;border-radius:18px;border:1px solid var(--hair);background:var(--night)}
+</style>
+<div class="wrap">
+  <h1>פרסומות: הפרויקטים</h1>
+  <div class="grid">
+    <canvas id="count" aria-label="שתים עשרה טבעות, כל אחת מצוירת בלבן עד מקום אחר, ובקצה של כל אחת חתיכה כתומה נפרדת"></canvas>
+    <canvas id="start" aria-label="שורות שמתחילות באותו מקום ונגמרות כל אחת במקום אחר, ובקצה כל אחת חתיכה כתומה"></canvas>
+    <canvas id="agent" aria-label="טרמינל באפור, חץ, וטבעת לבנה של פרויקט שהחתיכה הכתומה שלה עוד פתוחה"></canvas>
+    <canvas id="card" aria-label="כרטיס של פרויקט: פס התקדמות, שתי שורות סגורות עם סימון, ושורה כתומה של הצעד הבא"></canvas>
+  </div>
+</div>
+<script>
+(() => {
+const q = new URLSearchParams(location.search);
+const EN = q.get('lang') === 'en', STORY = q.get('fmt') === 'story';
+const W = 1080, H = STORY ? 1920 : 1350, D = Math.PI / 180;
+// where the frame and the drawing sit, per format
+const L = STORY ? { head: 470, answer: 580, cy: 1085, mark: 1688, sign: 1740 }
+                : { head: 235, answer: 345, cy: 765, mark: 1218, sign: 1268 };
+const T = (he, en) => EN ? en : he;
+const NIGHT = '#0B0B0D', PAPER = '#F4F4F5', MUTED = '#8B8B93', AMBER = '#F5A524', GREY = '#34343C';
+const FONT = (w, s) => `${w} ${s}px Plex, "IBM Plex Sans Hebrew", sans-serif`;
+
+// ---------- the frame every ad shares; the answer's last mark is amber (a dot for '.', the '?' itself) ----------
+function frame(g, head, answer) {
+  g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.direction = EN ? 'ltr' : 'rtl';
+  const fit = (s, w, size) => { g.font = FONT(w, size); while (g.measureText(s).width > 920) { size -= 2; g.font = FONT(w, size); } return size; };
+  fit(head, 500, 88); g.fillStyle = PAPER; g.fillText(head, W / 2, L.head);
+  const end = answer.slice(-1), body = answer.slice(0, -1), size = fit(answer, 400, 88), tw = g.measureText(body).width;
+  if (end === '?') {
+    const qw = g.measureText('?').width, sx = EN ? W / 2 - qw / 2 : W / 2 + qw / 2;
+    g.fillStyle = MUTED; g.fillText(body, sx, L.answer);
+    g.fillStyle = AMBER; g.fillText('?', EN ? sx + tw / 2 + qw / 2 + 4 : sx - tw / 2 - qw / 2 - 4, L.answer);
+  } else {
+    const gap = 30, sx = EN ? W / 2 - gap / 2 : W / 2 + gap / 2;
+    g.fillStyle = MUTED; g.fillText(body, sx, L.answer);
+    g.fillStyle = AMBER; g.beginPath(); g.arc(EN ? sx + tw / 2 + gap - 8 : sx - tw / 2 - gap + 8, L.answer - 9, size / 8.8, 0, Math.PI * 2); g.fill();
+  }
+  g.direction = 'ltr'; g.font = FONT(500, 46); g.fillStyle = PAPER; g.fillText('YDeck', W / 2, L.mark);
+  g.direction = EN ? 'ltr' : 'rtl'; g.font = FONT(400, 30); g.fillStyle = MUTED; g.fillText(T('שום דבר לא נשאר פתוח.', 'Nothing left open.'), W / 2, L.sign);
+}
+const pen = (g, w) => { g.lineWidth = w; g.lineCap = 'round'; g.lineJoin = 'round'; };
+function line(g, pts, color) { g.strokeStyle = color; g.beginPath(); g.moveTo(...pts[0]); pts.slice(1).forEach(p => g.lineTo(...p)); g.stroke(); }
+const box = (g, x, y, w, h, r, c) => { g.strokeStyle = c; g.beginPath(); g.roundRect(x, y, w, h, r); g.stroke(); };
+const mirrored = (g, f) => { g.save(); if (!EN) { g.translate(W, 0); g.scale(-1, 1); } f(); g.restore(); };
+const tick = (g, pts, c) => { const cx = (pts[0][0] + pts[pts.length - 1][0]) / 2; g.save(); if (!EN) { g.translate(cx, 0); g.scale(-1, 1); g.translate(-cx, 0); } line(g, pts, c); g.restore(); };
+
+// a project as a ring: white as far as it got, then a gap, then the amber piece that is still open; done = all grey
+function ring(g, x, y, r, done, w) {
+  pen(g, w); const a0 = -90 * D;
+  if (done >= 1) { g.strokeStyle = GREY; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.stroke(); return; }
+  const gap = (w * 1.6) / r, piece = Math.max(0.35, (w * 1.4) / r), a1 = a0 + Math.max(done, 0.04) * Math.PI * 2;
+  g.strokeStyle = PAPER; g.beginPath(); g.arc(x, y, r, a0, a1); g.stroke();
+  g.strokeStyle = AMBER; g.beginPath(); g.arc(x, y, r, a1 + gap, a1 + gap + piece); g.stroke();
+}
+
+// ---------- 1 · twelve projects, each stopped somewhere else ----------
+function count(g) {
+  const P = [0.78, 0.32, 0.55, 0.12, 0.9, 0.42, 0.66, 0.2, 0.5, 0.85, 0.05, 0.6];
+  const cols = [300, 540, 780], gapY = STORY ? 175 : 160, r = STORY ? 62 : 56;
+  P.forEach((p, i) => ring(g, cols[i % 3], L.cy + (Math.floor(i / 3) - 1.5) * gapY, r, p, 16));
+  frame(g, T('12 פרויקטים פתוחים.', '12 projects open.'), T('אתה יודע איפה כל אחד עומד?', 'Do you know where each one stands?'));
+}
+
+// ---------- 2 · everything starts in the same place, nothing ends in the same place ----------
+function start(g) {
+  mirrored(g, () => { pen(g, 22);
+    const ends = [760, 430, 610, 330, 850, 520], step = STORY ? 120 : 100, x0 = 230;
+    ends.forEach((e, i) => { const y = L.cy + (i - 2.5) * step;
+      line(g, [[x0, y], [e, y]], PAPER); line(g, [[e + 44, y], [e + 84, y]], AMBER); });
+  });
+  frame(g, T('קל להתחיל פרויקט.', 'Starting is easy.'), T('קשה לזכור איפה עצרת.', 'Remembering where you stopped isn\'t.'));
+}
+
+// ---------- 3 · the agent knows its task; the project is a bigger thing ----------
+function agent(g) {
+  const y = L.cy;
+  mirrored(g, () => { pen(g, 22);
+    box(g, 150, y - 95, 300, 190, 32, GREY);
+    line(g, [[205, y - 30], [235, y], [205, y + 30]], GREY); line(g, [[280, y], [390, y]], GREY);
+    line(g, [[510, y], [590, y]], PAPER); line(g, [[560, y - 34], [594, y], [560, y + 34]], PAPER);
+    ring(g, 790, y, 150, 0.68, 22);
+  });
+  frame(g, T('הסוכן יודע מה הוא עושה.', 'Your agent knows what it\'s doing.'), T('YDeck יודע איפה הפרויקט עומד.', 'YDeck knows where the project stands.'));
+}
+
+// ---------- 4 · the answer: one card per project, where it stands and what's next ----------
+function card(g) {
+  const top = L.cy - 300;
+  mirrored(g, () => { pen(g, 22);
+    box(g, 190, top, 700, 600, 44, PAPER);
+    line(g, [[260, top + 85], [470, top + 85]], PAPER);
+    line(g, [[260, top + 170], [600, top + 170]], PAPER); line(g, [[648, top + 170], [700, top + 170]], AMBER);
+    [top + 275, top + 375].forEach((yy, i) => { tick(g, [[264, yy + 2], [282, yy + 20], [314, yy - 20]], GREY); line(g, [[380, yy], [[760, 680][i], yy]], GREY); });
+    const yn = top + 485; box(g, 262, yn - 30, 60, 60, 16, PAPER); line(g, [[380, yn], [580, yn]], AMBER);
+  });
+  frame(g, T('איפה כל פרויקט עומד.', 'Where every project stands.'), T('ומה הצעד הבא.', 'And what comes next.'));
+}
+
+const jobs = { count, start, agent, card };
+window.ready = Promise.all(['500 40px Plex', '400 40px Plex', '500 40px "IBM Plex Sans Hebrew"', '400 40px "IBM Plex Sans Hebrew"']
+  .map(f => document.fonts.load(f))).catch(() => {}).then(() => {
+  for (const [id, f] of Object.entries(jobs)) {
+    const c = document.getElementById(id); c.width = W; c.height = H;
+    const g = c.getContext('2d'); g.fillStyle = NIGHT; g.fillRect(0, 0, W, H); f(g);
+  }
+  return true;
+});
+})();
+</script>

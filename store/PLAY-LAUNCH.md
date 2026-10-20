@@ -1,13 +1,13 @@
-# YDeck ב־Google Play: מדריך ההעלאה (מעודכן ל־0.8, 11 באוקטובר 2026)
+# YDeck ב־Google Play: מדריך ההעלאה (מעודכן ל־0.9.3, 14 באוקטובר 2026)
 
 שלב אחרי שלב ב־Play Console, עם הטקסט המוכן לכל שדה. הקבצים:
 
 | מה | איפה |
 |---|---|
-| ה־AAB להעלאה | `dist/YDeck-0.8.aab` (חתום במפתח ההעלאה) |
+| ה־AAB להעלאה | `dist/YDeck-0.9.3.aab` (versionCode 12, חתום במפתח ההעלאה) |
 | אייקון 512 | `store/play/icon-512.png` |
 | תמונה ראשית (Feature graphic) 1024×500 | `store/play/feature-graphic-he.png` (ולדף האנגלי `feature-graphic-en.png`) |
-| צילומי מסך לטלפון, 8 | `store/play/screenshots/YDeck-01.png` … `YDeck-08.png` (1080×1920) |
+| צילומי מסך לטלפון, 4 | `store/play/screenshots/YDeck-01.png` … `YDeck-04.png` (1080×1920) |
 | מדיניות פרטיות | https://ydeck-app.pages.dev/privacy |
 | אתר | https://ydeck-app.pages.dev |
 
@@ -53,80 +53,101 @@ Play Console ← **Create app**:
 
 ## 4. דף החנות (Grow users ← Store presence ← Main store listing)
 
-**App name (30):** `YDeck: כל פרויקט בווידג'ט`
+מעודכן ל־0.9: המיתוג החדש (כהה, הטבעת עם הנקודה הכתומה, "שום דבר לא נשאר פתוח"), והאפליקציה היא עכשיו הזיכרון של הפרויקטים, מחוברת ל־YDeck במחשב. **הטקסט הישן (עורך בטלפון, "בלי שרת", 161 שירותים) כבר לא נכון, וצריך להחליף אותו.**
+
+**App name (30):** `YDeck: זיכרון הפרויקטים`
 
 **Short description (80):**
 ```
-ווידג'ט לכל הפרויקטים שלך. כל קישור נפתח בחשבון הנכון.
+הזיכרון של הפרויקטים שלך, בכיס: איפה כל פרויקט עומד ומה הבא.
 ```
 
 **Full description:**
 ```
-כל הפרויקט. במקום אחד.
+שום דבר לא נשאר פתוח.
 
-יש לך כמה פרויקטים, ולכל אחד Firebase, Play Console, Vercel, GitHub ועוד, כל אחד בחשבון אחר. YDeck שמה את כולם בווידג'ט אחד על מסך הבית, וכל נגיעה פותחת את הקישור בחשבון של הפרויקט.
+הסוכנים כותבים את הקוד, ו־YDeck זוכר. בטלפון, YDeck הוא הזיכרון של הפרויקטים שלך: איפה כל פרויקט עומד, מה הסשן האחרון של הסוכן עשה, ומה הצעד הבא.
 
-מה YDeck עושה
-• ווידג'ט לכל פרויקט: הלוגו, הצבע והקישורים שלו, על זכוכית בגוון הפרויקט. מחליפים פרויקט בנגיעה בנקודות.
-• החשבון הנכון: שירותי גוגל נפתחים בחשבון הגוגל של הפרויקט, ו־Vercel בערוץ Chrome שבו מחובר החשבון שלו.
-• מדביקים קישור, והשירות מזוהה לבד: 161 שירותים עם הלוגו האמיתי.
-• כל גודל: מ־4×2 ועד שורה אחת.
-• ערכים להעתקה: package, repo, מזהים.
-• הכול נערך בטלפון. בלי חשבון, בלי שרת, בלי פרסומות.
+מה יש בטלפון
+• הבא: הצעד הבא של כל פרויקט, ונקודה כתומה כשמשהו עוד פתוח.
+• הזיכרון: מה קורה עכשיו, מה Claude או Codex עשו בסשן האחרון, תקציר, החלטות וגרסה אחרונה.
+• כותבים מהדרך: החלטה או צעד הבא שעלו לך מגיעים ל־YDeck במחשב.
+• קישורים: כל קונסולה של הפרויקט (Firebase, Play Console, Vercel, GitHub) נפתחת בחשבון הנכון.
+• ווידג'ט למסך הבית.
+
+איך זה עובד
+YDeck רץ במחשב (Windows, חינם וקוד פתוח) ועוקב אחרי הפרויקטים והסוכנים. בטלפון סורקים קוד אחד מההגדרות שלו, ומאז הזיכרון מגיע לטלפון. אפשר גם לנסות קודם עם פרויקט לדוגמה, בלי מחשב.
 
 פרטיות
-הפרויקטים נשמרים בטלפון בלבד. רק שמות אתרים נשלחים, כדי להביא את האייקון שלהם.
+בלי חשבון, בלי פרסומות ובלי אנליטיקס. בין הטלפון למחשב עובר רק מידע מוצפן מקצה לקצה, במפתח שנמצא רק בקוד שסרקת. גם אנחנו לא יכולים לקרוא אותו.
 ```
 
-**Graphics:** App icon ← `icon-512.png` · Feature graphic ← `feature-graphic-he.png` · Phone screenshots ← 8 הקבצים מ־`store/play/screenshots/` לפי הסדר.
+**Graphics:** App icon ← `icon-512.png` · Feature graphic ← `feature-graphic-he.png` · Phone screenshots: **מוחקים את 8 הישנים** ומעלים את 4 החדשים מ־`store/play/screenshots/` לפי הסדר (נבנים מ־`store/play/source/store.html`, עם מסכים אמיתיים מהאפליקציה ב־`source/screens-0.9/`).
 
 **Store settings:** App category: **Productivity** · Contact: `yonidev0101@gmail.com` · Website: `https://ydeck-app.pages.dev`
 
-**דף באנגלית (Add translation ← English):**
-- Name: `YDeck: Projects widget`
-- Short: `One widget for all your projects. Every link opens in the right account.`
+**דף באנגלית (English):**
+- Name: `YDeck: Project memory`
+- Short: `Your projects' memory, in your pocket: where each one stands and what's next.`
 - Full:
 ```
-Your whole project. One place.
+Nothing left open.
 
-You have several projects, and each has its Firebase, Play Console, Vercel, GitHub and more, each in a different account. YDeck puts them all in one home-screen widget, and every tap opens the link in that project's account.
+Your agents write the code; YDeck remembers. On your phone, YDeck is the memory of your projects: where each one stands, what the agent's last session did, and what comes next.
 
-• A widget per project: its logo, colour and links on glass tinted with the project colour. Tap the dots to switch projects.
-• The right account: Google services open in the project's Google account; Vercel opens in the Chrome channel signed in to its account.
-• Paste a link and the service is recognised: 161 services with their real logos.
-• Any size, from 4×2 down to a single row.
-• Values to copy: package, repo, IDs.
-• Everything is edited on the phone. No account, no server, no ads.
+On the phone
+• Next: each project's next step, with an amber dot while something is still open.
+• Memory: what's happening now, what Claude or Codex did in the last session, the summary, decisions and latest release.
+• Write on the go: a decision or next step you think of reaches YDeck on your computer.
+• Links: every console of the project (Firebase, Play Console, Vercel, GitHub) opens in the right account.
+• A home-screen widget.
 
-Privacy: projects stay on your phone. Only website names are sent, to fetch their icons.
+How it works
+YDeck runs on your computer (Windows, free and open source) and keeps track of your projects and agents. Scan one code from its settings and the memory reaches your phone. You can also try a sample project first, without a computer.
+
+Privacy
+No account, no ads, no analytics. Only end-to-end encrypted data passes between phone and computer, with a key that lives only in the code you scanned. Not even we can read it.
+
+The app is in Hebrew.
 ```
-- Feature graphic ← `feature-graphic-en.png`. אפשר להשתמש באותם צילומי מסך.
+- Feature graphic ← `feature-graphic-en.png`. אותם צילומי מסך.
 
 ## 5. תוכן האפליקציה (Policy and programs ← App content)
 
-| שאלה | תשובה |
-|---|---|
-| Privacy policy | `https://ydeck-app.pages.dev/privacy` |
-| App access | **All functionality is available without special access** |
-| Ads | **No, my app does not contain ads** |
-| Content rating | שאלון IARC: קטגוריה **All Other App Types**, מייל `yonidev0101@gmail.com`. לכל השאלות (אלימות, מין, שפה, סמים, הימורים, תקשורת בין משתמשים, שיתוף מיקום, רכישות) עונים **No** |
-| Target audience | **18 and over** · לא פונה לילדים |
-| News app | No |
-| COVID-19 / Health / Financial features / Government | No / No / My app doesn't provide any financial features / No |
-| Data safety | הטבלה למטה |
+מה השתנה מ־0.8, ומה לעדכן:
+
+| שאלה | תשובה | שינוי? |
+|---|---|---|
+| Privacy policy | `https://ydeck-app.pages.dev/privacy` (כבר מעודכנת לממסר ולמצלמה) | לא |
+| App access | **All or some functionality is restricted** ← Add instructions: הוראות למטה | **כן** |
+| Ads | **No, my app does not contain ads** | לא |
+| Content rating | IARC, **All Other App Types**, הכול **No**. ההערות שנכתבות בטלפון הולכות רק למחשב של אותו משתמש, אז זו לא תקשורת בין משתמשים | לא |
+| Target audience | **18 and over** | לא |
+| Data safety | הטבלה למטה | **לבדוק** |
+
+### App access: ההוראות לבודקים
+האפליקציה נפתחת בלי התחברות, אבל ההצמדה למחשב דורשת את YDeck ל־Windows. כדי שהבודק לא ייתקע מול מסך "חיבור למחשב", נותנים הוראות:
+- Name: `Sample project (no login)`
+- Username / Password: משאירים ריק (או `none`)
+- Any other information:
+```
+No account or login. On the first screen tap "לנסות עם פרויקט לדוגמה" (Try a sample project): it loads the sample project Nova with its full memory, links and widget, everything a paired phone shows.
+Pairing with a computer needs the free YDeck for Windows (https://ydeck-app.pages.dev/download): Settings → Phone shows a QR code to scan.
+```
 
 ### Data safety
+הממסר לא משנה את ההצהרה: לפי Google, מידע שיוצא מהטלפון **מוצפן מקצה לקצה, כך שרק השולח והנמען יכולים לקרוא אותו (גם לא המפתח)**, לא נחשב "נאסף" ולא מצהירים עליו. זה בדיוק הממסר: AES-256-GCM, והמפתח רק ב־QR.
 - Does your app collect or share any of the required user data types? **Yes**
 - Is all of the user data collected by your app encrypted in transit? **Yes**
-- Do you provide a way for users to request that their data is deleted? **No** (אין לנו מידע לשמור: הכול בטלפון ונמחק בהסרה)
+- Do you provide a way for users to request that their data is deleted? **No** (אין אצלנו מידע: הכול בטלפון ונמחק בהסרה. בממסר יש רק תיבה מוצפנת)
 
-סוג המידע היחיד: **App activity → Other user-generated content**
+סוג המידע היחיד: **App activity → Other user-generated content** (שמות אתרים לאייקונים)
 - Collected: **Yes** · Shared: **Yes** (Google ו־DuckDuckGo מקבלים את שם האתר כדי להחזיר אייקון)
 - Processed ephemerally: **Yes**
 - Required (users can't turn it off)
 - Purpose: **App functionality**
 
-כל שאר הסוגים (מייל, שם, מיקום, מזהי מכשיר, היסטוריית גלישה, קריסות): **לא**. כתובות המייל של הפרויקטים לא יוצאות מהטלפון. הגיבוי של אנדרואיד לא נחשב איסוף, כי הוא מוצפן ומנוהל על ידי המערכת.
+כל שאר הסוגים: **לא**. כולל **Photos and videos**: הסורק עובד בטלפון בלבד והתמונה לא נשמרת ולא יוצאת. ההרשאה CAMERA בקובץ ההתקנה מוצדקת בזה, ואין לה טופס הצהרה נפרד.
 
 ## 6. אחרי הבדיקה
 
