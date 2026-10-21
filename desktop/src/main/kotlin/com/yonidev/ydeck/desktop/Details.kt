@@ -231,7 +231,7 @@ fun NewProjectPage(folder: String?, actions: AppActions) {
                 }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TextAction(tr("Import a backup from YDeck for Android", "ייבוא גיבוי מ־YDeck לאנדרואיד"), accent = true, onClick = actions.import)
+                TextAction(tr("Restore a backup", "שחזור מגיבוי"), accent = true, onClick = actions.import)
                 TextAction(tr("Try a sample project", "פרויקט לדוגמה")) {
                     val nova = Project.sample()
                     saveProject(nova)

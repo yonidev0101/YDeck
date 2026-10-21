@@ -105,7 +105,7 @@ private fun BrandStep(actions: AppActions, onNext: () -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(tr("Get started", "בואו נתחיל"), color = NIGHT, fontSize = 15.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans,
                     modifier = Modifier.clip(RoundedCornerShape(99.dp)).background(Color.White).clickable(onClick = onNext).padding(horizontal = 28.dp, vertical = 14.dp))
-                Text(tr("Import from YDeck for Android", "ייבוא מ־YDeck לאנדרואיד"), color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans,
+                Text(tr("Restore a backup", "שחזור מגיבוי"), color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans,
                     modifier = Modifier.clip(RoundedCornerShape(99.dp)).clickable { actions.import() }.padding(horizontal = 18.dp, vertical = 14.dp))
             }
         }
