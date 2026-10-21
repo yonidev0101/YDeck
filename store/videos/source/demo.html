@@ -1,0 +1,403 @@
+<!doctype html>
+<!--
+  The demo: the mess that many projects make, and YDeck putting it in order, on its real screens. 30 s, 1920×1080, then the
+  landscape logo sting (Hebrew). No voice: the headlines carry it, since most people watch it muted.
+  The thread through it is the dot, YDeck's mark for a Claude session: a ring when it's open, indigo at work, amber when it
+  needs you, grey when it's gone (and green once nothing is open). It is born on each folder, loses its way in the mess, lines
+  up into order, walks the screens from item to item, and at the end lays out its own legend: which hook makes which dot.
+  window.render(t) draws the frame at t seconds; render.cjs films it (`node render.cjs demo`).
+  The screens are the app itself, drawn by desktop/src/test/.../RenderFilm.kt (`gradlew :desktop:test -Prender --tests "*RenderFilm"`)
+  at 3× into desktop/build/film-renders/; the camera moves over them, one headline at a time, the full stop the amber dot.
+    0.3  "עם AI, פרויקט חדש מתחיל בחצי שעה."   folders arrive, faster and faster, each with its dot: a ring, a session open
+    3.3  "אז עובדים על הכול במקביל."           most of the dots fill indigo and breathe: at work
+    6.3  "ואז כבר לא זוכרים מה קורה איפה?"     the dots go astray (amber, grey, wandering), questions over the folders
+    8.6  "YDeck עושה סדר."                     the dots leave the folders and line up, by state; Orbit opens into YDeck and
+                                               the line flies into its sidebar
+   11.6  "כל פרויקט זוכר איפה עצר."            the dot on the next step, then hopping down what's open in Orbit
+   14.5  "מה Claude עשה בסשן האחרון."          the Git tab, on the session's receipt and its diff
+   17.8  "מה נשאר פתוח, בכל הפרויקטים."       the dot hops the open loops: Orbit's, then Nova's server (indigo) and its .env key
+   21.6  "סוגרים את היום בלחיצה."              the button; the day's plan; nothing is open, and the dot turns green
+   25.6  "מתחבר ל־Claude Code שלכם."           the window goes; the dot walks its legend: SessionStart, UserPromptSubmit,
+                                               Notification, SessionEnd; under it, a plugin with hooks, nothing else changes
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face { font-family: Plex; src: url("../../../app/src/main/res/font/plex_sans_hebrew_medium.ttf"); font-weight: 500; }
+  @font-face { font-family: Plex; src: url("../../../app/src/main/res/font/plex_sans_hebrew_regular.ttf"); font-weight: 400; }
+  html, body { margin: 0; background: #0B0B0D; overflow: hidden; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c" width="1920" height="1080"></canvas>
+<script>
+const W = 1920, H = 1080;
+const g = document.getElementById('c').getContext('2d');
+const NIGHT = [11, 11, 13], PAPER = [244, 244, 245], MUTED = [139, 139, 147], AMBER = [245, 165, 36];
+const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const seg = (t, a, b) => clamp((t - a) / (b - a));
+const ease = x => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+const out3 = x => 1 - Math.pow(1 - x, 3);
+const lerp = (a, b, k) => a + (b - a) * k;
+const rgb = (c, a = 1) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+const DURATION = window.DURATION = 30.0;
+
+// ---------- the dot: YDeck's states of a Claude session (the app's colours, Look.kt) ----------
+// c the colour, h the hole: 1 a ring (open), 0 a full dot
+const DOT = {
+  open: { c: [185, 185, 194], h: 1 }, work: { c: [156, 151, 255], h: 0 }, wait: { c: AMBER, h: 0 },
+  gone: { c: [78, 78, 86], h: 0 }, clean: { c: [52, 199, 123], h: 0 }, note: { c: PAPER, h: 0 },
+};
+const mix = (a, b, k) => ({ c: a.c.map((v, i) => lerp(v, b.c[i], k)), h: lerp(a.h, b.h, k) });
+// A ring is a thick stroke; at h = 0 the stroke fills the circle. `cut` clears a margin around it, as the badges do.
+function dot(x, y, r, s, a = 1, cut = 0) {
+  if (a <= 0 || r <= 0) return;
+  g.save(); g.globalAlpha = a;
+  if (cut) { g.fillStyle = rgb(NIGHT); g.beginPath(); g.arc(x, y, r + cut, 0, Math.PI * 2); g.fill(); }
+  const lw = r * (1 - .56 * s.h);
+  g.strokeStyle = rgb(s.c.map(Math.round)); g.lineWidth = lw;
+  g.beginPath(); g.arc(x, y, r - lw / 2, 0, Math.PI * 2); g.stroke();
+  g.restore();
+}
+// a landing: a thin ring that opens from the dot and fades
+function halo(x, y, r, s, k, a = 1) {
+  if (k <= 0 || k >= 1) return;
+  g.save(); g.globalAlpha = a * (1 - k) * .55; g.strokeStyle = rgb(s.c.map(Math.round)); g.lineWidth = r * .18;
+  g.beginPath(); g.arc(x, y, r * (1.2 + 1.8 * out3(k)), 0, Math.PI * 2); g.stroke(); g.restore();
+}
+
+// ---------- the screens ----------
+const SRC = '../../../desktop/build/film-renders/';
+const IMG = {};
+const SCREENS = ['orbit', 'orbit-session', 'loops', 'closeday', 'loops-clear'];
+const FOLDERS = ['nova', 'pulse', 'atlas', 'ledger', 'kite', 'mira', 'sable', 'orbit', 'quill', 'fern', 'juno', 'rook'];
+const WORKS = ['nova', 'atlas', 'mira', 'orbit', 'quill', 'juno', 'kite', 'rook'];
+const NAMES = { nova: 'Nova', pulse: 'Pulse', atlas: 'Atlas', ledger: 'Ledger', kite: 'Kite', mira: 'Mira', sable: 'Sable', orbit: 'Orbit', quill: 'Quill', fern: 'Fern', juno: 'Juno', rook: 'Rook' };
+// the mess: [when, folder, its dot goes to, the question over it]
+const ASTRAY = [[6.6, 'pulse', 'wait', 'מה זה בכלל?'], [6.95, 'orbit', 'wait', 'איפה עצרתי?'], [7.25, 'ledger', 'gone', 'זה עלה ל־git?'],
+  [7.4, 'sable', 'gone'], [7.5, 'nova', 'work', 'מה חסר ב־env?'], [7.6, 'mira', 'wait'], [7.72, 'fern', 'gone', 'מה הצעד הבא?'],
+  [7.92, 'kite', 'open', 'השרת עוד רץ?']];
+const load = (key, file) => new Promise(r => { const i = new Image(); i.onload = () => { IMG[key] = i; r(); }; i.onerror = () => r(); i.src = SRC + file; });
+
+// The window: the screens are 3600×2340 (1200×780 at 3×). The camera puts image point (x, y) at the screen's centre
+// of attention, at s screen px per image px.
+const IW = 3600, IH = 2340, BASE = { x: 1800, y: 1170, s: 0.345 }, FOCUS = [960, 640];
+const SHOTS = [ // [from, to, camera]: the camera eases from the previous shot to this one over [from, to]
+  [9.2, 9.2, BASE],
+  [11.4, 12.4, { x: 1432, y: 1060, s: 0.62 }],            // where Orbit stopped: the next step, and what was done last time
+  [12.9, 13.7, { x: 1432, y: 1690, s: 0.62 }],            // what's open in it
+  [13.9, 14.5, BASE],                                     // back to the whole window: the screen changes like a tab
+  [14.9, 15.6, { x: 1150, y: 1080, s: 0.66 }],            // the session's receipt
+  [15.8, 17.1, { x: 900, y: 1500, s: 0.76 }],             // down its diff
+  [17.2, 17.8, BASE],
+  [18.3, 19.1, { x: 1490, y: 760, s: 0.56 }],             // Orbit's loops
+  [19.5, 20.5, { x: 1490, y: 1580, s: 0.56 }],            // Nova: the server, the .env key
+  [21.3, 22.2, { x: 1250, y: 620, s: 0.56 }],             // the button
+  [22.9, 23.8, { x: 1800, y: 1250, s: 0.4 }],             // the day's plan
+  [24.3, 25.3, { x: 1494, y: 720, s: 0.6 }],              // nothing is open
+];
+function camera(t) {
+  let c = SHOTS[0][2];
+  for (const [a, b, to] of SHOTS) {
+    if (t < a) break;
+    const k = b > a ? ease(seg(t, a, b)) : 1;
+    c = { x: lerp(c.x, to.x, k), y: lerp(c.y, to.y, k), s: lerp(c.s, to.s, k) };
+  }
+  // a slow drift, so no shot is ever quite still
+  return { ...c, s: c.s * (1 + .012 * Math.sin(t * .5)) };
+}
+const LAYERS = [ // [screen, in, out]: crossfades
+  ['orbit', 9.2, 14.65], ['orbit-session', 14.2, 18.0], ['loops', 17.55, 23.0], ['closeday', 22.8, 24.4], ['loops-clear', 24.2, 99],
+];
+// Where the window puts image point (x, y) on the screen at t, and how many screen px an image px is.
+function view(t) {
+  const c = camera(t);
+  // the folder opens into the window: from Orbit's icon to the full frame
+  const open = ease(seg(t, 9.2, 10.15));
+  const icon = iconAt(FOLDERS.indexOf('orbit'), t);
+  const sx = lerp(icon.size / (IW * c.s) * 1.2, 1, open);
+  return { c, open, sx, ox: lerp(icon.x, FOCUS[0], open), oy: lerp(icon.y, FOCUS[1], open), k: sx * c.s };
+}
+const toScreen = (v, x, y) => [v.ox + v.k * (x - v.c.x), v.oy + v.k * (y - v.c.y)];
+const WINDOW_OUT = [25.3, 25.9];
+
+function windowLayer(t) {
+  if (t < 9.2 || t > WINDOW_OUT[1]) return;
+  const v = view(t), c = v.c, open = v.open;
+  const fade = (1 - seg(t, ...WINDOW_OUT)) * out3(seg(t, 9.2, 9.6));
+  g.save();
+  g.translate(v.ox, v.oy); g.scale(v.sx, v.sx); g.translate(-FOCUS[0], -FOCUS[1]);
+  g.translate(FOCUS[0] - c.x * c.s, FOCUS[1] - c.y * c.s); g.scale(c.s, c.s);
+  // the window: a soft shadow, rounded, a hairline
+  const r = 22 / c.s * lerp(3, 1, open);
+  g.globalAlpha = fade;
+  g.shadowColor = 'rgba(0,0,0,.6)'; g.shadowBlur = 80 / c.s; g.shadowOffsetY = 24 / c.s;
+  g.fillStyle = '#0B0B0D'; g.beginPath(); g.roundRect(0, 0, IW, IH, r); g.fill();
+  g.shadowColor = 'transparent';
+  g.save(); g.beginPath(); g.roundRect(0, 0, IW, IH, r); g.clip();
+  for (const [key, a, b] of LAYERS) {
+    const al = seg(t, a, a + .45) * (1 - seg(t, b - .45, b));
+    if (al <= 0 || !IMG[key]) continue;
+    g.globalAlpha = fade * al;
+    g.drawImage(IMG[key], 0, 0, IW, Math.min(IH, IMG[key].height), 0, 0, IW, Math.min(IH, IMG[key].height));
+  }
+  g.restore();
+  g.globalAlpha = fade * .9; g.strokeStyle = 'rgba(255,255,255,.12)'; g.lineWidth = 2 / c.s;
+  g.beginPath(); g.roundRect(0, 0, IW, IH, r); g.stroke();
+  g.globalAlpha = 1;
+  guide(t, fade);
+  cursor(t);
+  g.restore();
+  g.globalAlpha = 1;
+}
+
+// ---------- the dot on the screens, in image px: it lands on what the headline is about ----------
+// [t, x, y, state, alpha, lands]: between two keys it eases (and hops, in a small arc, when it moves)
+const GUIDE = [
+  [11.3, 2754, 932, 'note', 0], [11.7, 2754, 932, 'note', 1, true], [12.9, 2754, 932, 'note', 1],          // the next step
+  [13.45, 2659, 1535, 'wait', 1, true], [13.7, 2659, 1737, 'wait', 1, true], [13.95, 2659, 1937, 'wait', 1, true], // open in Orbit
+  [14.25, 2659, 1937, 'wait', 0],
+  [18.3, 2659, 628, 'wait', 0], [18.55, 2659, 628, 'wait', 1, true], [18.85, 2659, 828, 'wait', 1, true],     // Orbit's loops
+  [19.15, 2659, 1028, 'wait', 1, true], [19.75, 2659, 1460, 'wait', 1, true],                               // Nova's
+  [20.05, 2659, 1652, 'work', 1, true], [20.35, 2659, 1852, 'wait', 1, true], [20.95, 2659, 1852, 'wait', 0],
+  [24.4, 1494, 470, 'clean', 0], [24.75, 1494, 470, 'clean', 1, true], [99, 1494, 470, 'clean', 1],        // nothing is open
+];
+const GUIDE_R = 17;
+function guideAt(t) {
+  if (t < GUIDE[0][0]) return null;
+  for (let i = 0; i < GUIDE.length - 1; i++) {
+    const [a, ax, ay, as, aa] = GUIDE[i], [b, bx, by, bs, ba] = GUIDE[i + 1];
+    if (t > b) continue;
+    const k = ease(seg(t, a, b)), moves = ax !== bx || ay !== by;
+    const arc = moves && aa > 0 && ba > 0 ? Math.sin(Math.PI * k) : 0;
+    return { x: lerp(ax, bx, k) - 46 * arc, y: lerp(ay, by, k), s: mix(DOT[as], DOT[bs], k), a: lerp(aa, ba, moves && aa > 0 && ba > 0 ? 1 : k), r: GUIDE_R * (1 + .25 * arc) };
+  }
+  return null;
+}
+function guide(t, fade) {
+  const d = guideAt(t);
+  // as the window goes, the dot leaves it (legend() carries it on)
+  if (!d || t >= WINDOW_OUT[0]) return;
+  for (const [at, x, y, s, , lands] of GUIDE) if (lands) halo(x, y, GUIDE_R, DOT[s], seg(t, at, at + .7), fade);
+  dot(d.x, d.y, d.r, d.s, d.a * fade, 7);
+}
+
+// ---------- the pointer, in image px ----------
+const BUTTON = [451, 191];                                // "סגירת היום" on the open-loops page
+function cursor(t) {
+  const a = seg(t, 21.8, 22.1) * (1 - seg(t, 23.1, 23.4));
+  if (a <= 0) return;
+  const k = ease(seg(t, 21.8, 22.5));
+  const x = lerp(1500, BUTTON[0] + 30, k), y = lerp(1000, BUTTON[1] + 20, k);
+  const press = 1 - .14 * Math.sin(Math.PI * seg(t, 22.55, 22.8));
+  // the click: a ring that opens from the button
+  const ring = seg(t, 22.6, 23.2);
+  if (ring > 0 && ring < 1) {
+    g.globalAlpha = (1 - ring) * .5; g.strokeStyle = rgb(PAPER); g.lineWidth = 6;
+    g.beginPath(); g.ellipse(BUTTON[0], BUTTON[1], 220 + 160 * out3(ring), 80 + 110 * out3(ring), 0, 0, Math.PI * 2); g.stroke();
+  }
+  g.save(); g.globalAlpha = a; g.translate(x, y); g.scale(4.6 * press, 4.6 * press);
+  g.beginPath(); g.moveTo(0, 0); g.lineTo(0, 17); g.lineTo(4.2, 13.2); g.lineTo(7, 19.5); g.lineTo(9.6, 18.4); g.lineTo(6.9, 12.3); g.lineTo(12.4, 12.3); g.closePath();
+  g.fillStyle = '#fff'; g.strokeStyle = '#111'; g.lineWidth = 1.1; g.lineJoin = 'round'; g.fill(); g.stroke();
+  g.restore();
+}
+
+// ---------- the folders ----------
+const COLS = 6, CELL = 230, ICON = 150;
+function iconAt(i, t) {
+  const col = i % COLS, row = Math.floor(i / COLS);
+  // right to left, as Explorer lays them out in Hebrew
+  let x = W / 2 + ((COLS - 1) / 2 - col) * CELL, y = 520 + row * 250;
+  // the camera leans in on Orbit before it opens
+  const lean = ease(seg(t, 8.4, 9.4)) * .16;
+  const o = { x: W / 2 + ((COLS - 1) / 2 - FOLDERS.indexOf('orbit') % COLS) * CELL, y: 770 };
+  x = o.x + (x - o.x) * (1 + lean); y = o.y + (y - o.y) * (1 + lean);
+  return { x, y, size: ICON * (1 + lean) };
+}
+// The projects arrive one after another, each sooner than the last: the k-th of ORDER at APPEAR(k).
+const ORDER = [7, 2, 9, 4, 0, 11, 5, 1, 8, 3, 10, 6];
+const APPEAR = k => .4 + 2.6 * Math.pow(k / 11, .55);
+const appearOf = id => APPEAR(ORDER.indexOf(FOLDERS.indexOf(id)));
+function folders(t) {
+  const gone = seg(t, 9.2, 9.9);
+  if (gone >= 1) return;
+  FOLDERS.forEach((id, i) => {
+    const p = iconAt(i, t), orbit = id === 'orbit';
+    const at = appearOf(id);
+    const inn = out3(seg(t, at, at + .5));
+    const back = orbit ? 0 : seg(t, 8.4, 9.0) * .7;
+    const a = inn * (1 - back) * (orbit ? 1 : 1 - gone);
+    if (a <= 0) return;
+    const s = p.size * (.9 + .1 * inn) * (1 + .08 * Math.sin(Math.PI * seg(t, at, at + .35)));
+    const x = p.x - s / 2, y = p.y - s / 2 + (1 - inn) * 24;
+    g.globalAlpha = a * (orbit ? 1 - seg(t, 9.5, 9.9) : 1);
+    if (IMG[id + '-none']) g.drawImage(IMG[id + '-none'], x, y, s, s);
+    g.globalAlpha = a * (1 - gone);
+    g.font = '400 26px Plex'; g.fillStyle = rgb(orbit && t > 8.4 ? PAPER : MUTED); g.textAlign = 'center'; g.direction = 'ltr';
+    g.fillText(NAMES[id], p.x, p.y + s / 2 + 44 * (s / ICON));
+    g.globalAlpha = 1;
+  });
+}
+
+// A folder's dot: born a ring with the folder, filled indigo when it goes to work, then astray in the mess.
+function folderDot(id, t) {
+  let s = DOT.open;
+  const w = WORKS.indexOf(id);
+  if (w >= 0) s = mix(s, DOT.work, seg(t, 3.4 + w * .16, 3.75 + w * .16));
+  for (const [at, f, to] of ASTRAY) if (f === id) s = mix(s, DOT[to], seg(t, at, at + .22));
+  return s;
+}
+const RANK = { wait: 0, work: 1, open: 2, gone: 3 };
+// in the line, by state: what needs you first (on the right, where Hebrew starts), then at work, open, gone
+const LINE = FOLDERS.map(id => {
+  let st = WORKS.includes(id) ? 'work' : 'open';
+  for (const [, f, to] of ASTRAY) if (f === id) st = to;
+  return { id, st };
+}).sort((a, b) => RANK[a.st] - RANK[b.st] || FOLDERS.indexOf(a.id) - FOLDERS.indexOf(b.id)).map(e => e.id);
+// where each project's dot sits in the window's sidebar (image px), for those the sidebar lists
+const SIDEBAR = { orbit: 661, nova: 779, pulse: 900, atlas: 1020, ledger: 1141, kite: 1261 };
+function folderDots(t) {
+  if (t > 10.3) return;
+  const v = t >= 9.2 ? view(t) : null;
+  FOLDERS.forEach((id, i) => {
+    const at = appearOf(id), inn = out3(seg(t, at + .15, at + .55));
+    if (inn <= 0) return;
+    const p = iconAt(i, t), sz = p.size * (.9 + .1 * inn);
+    const s = folderDot(id, t);
+    // on the folder, its badge's corner; breathing while at work; wandering off in the mess
+    const lost = 16 * seg(t, 6.4, 8.0) * (1 - seg(t, 8.4, 8.8));
+    let x = p.x + .33 * sz + lost * Math.sin(t * 2.3 + i * 2.9), y = p.y + .33 * sz + lost * Math.cos(t * 1.9 + i * 1.7) + (1 - inn) * 24;
+    const working = seg(s.c[2], 194, 255) * (1 - s.h);   // how indigo it is
+    let r = .12 * sz * (1 + .08 * Math.sin(t * 3.4 + i * 1.7) * working) * (.6 + .4 * inn);
+    let a = 1, cut = .045 * sz;
+    // into order: the dots leave the folders and line up under them
+    const k = ease(seg(t, 8.45 + LINE.indexOf(id) * .025, 9.05 + LINE.indexOf(id) * .025));
+    const lx = W / 2 + ((LINE.length - 1) / 2 - LINE.indexOf(id)) * 66, ly = 960;
+    x = lerp(x, lx, k); y = lerp(y, ly, k); r = lerp(r, 17, k); cut = lerp(cut, 0, k);
+    // and the line flies into YDeck's sidebar as the window opens (those it doesn't list fade on the way)
+    if (v) {
+      const q = ease(seg(t, 9.25 + LINE.indexOf(id) * .02, 10.05));
+      const [sx, sy] = toScreen(v, 2932, SIDEBAR[id] ?? 1400);
+      x = lerp(x, sx, q); y = lerp(y, sy, q); r = lerp(r, 7.5 * v.k, q);
+      a = id in SIDEBAR ? 1 - seg(t, 9.95, 10.25) : 1 - seg(t, 9.3, 9.75);
+    }
+    dot(x, y, r, s, a, cut);
+  });
+}
+// A question over a folder: a small dark pill on its top corner, the question mark amber.
+function asks(t) {
+  for (const [at, id, , s] of ASTRAY) {
+    if (!s) continue;
+    const inn = out3(seg(t, at, at + .4)), a = inn * (1 - seg(t, 8.3, 8.8));
+    if (a <= 0) continue;
+    const p = iconAt(FOLDERS.indexOf(id), t);
+    g.font = '400 27px Plex'; g.direction = 'rtl';
+    const body = s.slice(0, -1), bw = g.measureText(body).width, mw = g.measureText('?').width;
+    const pw = bw + mw + 44, ph = 54, cx = p.x - 34, cy = p.y - p.size / 2 + 4 - (1 - inn) * 16;
+    const sc = .85 + .15 * inn;
+    g.save(); g.globalAlpha = a; g.translate(cx, cy); g.scale(sc, sc);
+    g.shadowColor = 'rgba(0,0,0,.5)'; g.shadowBlur = 24; g.shadowOffsetY = 6;
+    g.fillStyle = '#1B1B20'; g.beginPath(); g.roundRect(-pw / 2, -ph / 2, pw, ph, ph / 2); g.fill();
+    g.shadowColor = 'transparent';
+    g.strokeStyle = 'rgba(255,255,255,.14)'; g.lineWidth = 1.5; g.stroke();
+    const left = -(bw + mw) / 2;
+    g.textAlign = 'right'; g.textBaseline = 'middle';
+    g.fillStyle = rgb(PAPER); g.fillText(body, left + mw + bw, 1);
+    g.fillStyle = rgb(AMBER); g.fillText('?', left + mw, 1);
+    g.restore();
+  }
+}
+
+// ---------- the end: the dot walks its legend, which hook makes which dot ----------
+const LEGEND = [[26.05, 'open', 'פתוח', 'SessionStart'], [26.75, 'work', 'עובד', 'UserPromptSubmit'],
+  [27.45, 'wait', 'מחכה לך', 'Notification'], [28.15, 'gone', 'נסגר', 'SessionEnd']];
+const slotX = k => W / 2 + (1.5 - k) * 280, SLOT_Y = 590;
+function legend(t) {
+  if (t < WINDOW_OUT[0]) return;
+  const end = 1 - seg(t, DURATION - .5, DURATION);
+  // the traveller: the green dot of "nothing open" leaves the window and becomes the first ring
+  let x, y, s, r;
+  const [from] = LEGEND[0];
+  if (t < from) {
+    const v = view(WINDOW_OUT[0]), [sx, sy] = toScreen(v, 1494, 470), k = ease(seg(t, WINDOW_OUT[0], from));
+    x = lerp(sx, slotX(0), k); y = lerp(sy, SLOT_Y, k) - 60 * Math.sin(Math.PI * k); s = mix(DOT.clean, DOT.open, k); r = lerp(GUIDE_R * v.k, 30, k);
+  } else {
+    let i = 0; while (i < LEGEND.length - 1 && t >= LEGEND[i + 1][0] - .35) i++;
+    const k = i > 0 ? ease(seg(t, LEGEND[i][0] - .35, LEGEND[i][0])) : 1;
+    const pi = Math.max(0, i - 1);
+    x = lerp(slotX(pi), slotX(i), k); y = SLOT_Y - 50 * Math.sin(Math.PI * k) * (i > 0 ? 1 : 0);
+    s = mix(DOT[LEGEND[pi][1]], DOT[LEGEND[i][1]], k); r = 30 * (1 + .15 * Math.sin(Math.PI * k));
+  }
+  LEGEND.forEach(([at, st, name, hook], k) => {
+    const inn = out3(seg(t, at - .05, at + .45));
+    if (inn <= 0) return;
+    // what stays behind on each step: the dot, smaller
+    dot(slotX(k), SLOT_Y, 20, DOT[st], end * seg(t, at + .3, at + .6));
+    halo(slotX(k), SLOT_Y, 30, DOT[st], seg(t, at, at + .7), end);
+    g.globalAlpha = inn * end; g.textAlign = 'center'; g.direction = 'rtl';
+    g.font = '500 40px Plex'; g.fillStyle = rgb(PAPER); g.fillText(name, slotX(k), SLOT_Y + 100 + (1 - inn) * 14);
+    g.direction = 'ltr'; g.font = '400 26px Consolas, monospace'; g.fillStyle = rgb(MUTED);
+    g.fillText(hook, slotX(k), SLOT_Y + 148 + (1 - inn) * 14);
+    g.globalAlpha = 1;
+  });
+  dot(x, y, r, s, end * (t < LEGEND[3][0] + .4 ? 1 : 1 - seg(t, LEGEND[3][0] + .4, LEGEND[3][0] + .8)), 0);
+}
+
+// ---------- the headlines (the last mark in amber: the dot, or the question) ----------
+const HEADS = [[0.3, 3.1, 'עם AI, פרויקט חדש מתחיל בחצי שעה.'], [3.3, 6.1, 'אז עובדים על הכול במקביל.'],
+  [6.3, 8.4, 'ואז כבר לא זוכרים מה קורה איפה?'], [8.6, 11.4, 'YDeck עושה סדר.'], [11.6, 14.3, 'כל פרויקט זוכר איפה עצר.'],
+  [14.5, 17.5, 'מה Claude עשה בסשן האחרון.'], [17.8, 21.3, 'מה נשאר פתוח, בכל הפרויקטים.'], [21.6, 25.3, 'סוגרים את היום בלחיצה.'],
+  [25.6, 29.7, 'מתחבר ל־Claude Code שלכם.']];
+// under the last line, what that connection is, in the muted voice
+const SUB = [26.0, 29.7, 'פלאגין עם hooks. כל השאר נשאר כמו שהיה'];
+function subline(t) {
+  const [a, b, s] = SUB, inn = out3(seg(t, a, a + .6)), alpha = inn * (1 - seg(t, b - .35, b));
+  if (alpha <= 0) return;
+  g.globalAlpha = alpha; g.font = '400 38px Plex'; g.direction = 'rtl'; g.textAlign = 'center'; g.fillStyle = rgb(MUTED);
+  g.fillText(s, W / 2, 228 + (1 - inn) * 18);
+  g.globalAlpha = 1;
+}
+function headline(t) {
+  for (const [a, b, s] of HEADS) {
+    const inn = out3(seg(t, a, a + .6)), gone = seg(t, b - .35, b), alpha = inn * (1 - gone);
+    if (alpha <= 0) continue;
+    const y = 150 + (1 - inn) * 26 - gone * 14, size = 70;
+    g.font = `500 ${size}px Plex`; g.direction = 'rtl'; g.textAlign = 'center'; g.textBaseline = 'alphabetic';
+    const mark = s.slice(-1), body = s.slice(0, -1);
+    const bw = g.measureText(body).width, mw = g.measureText(mark).width;
+    const left = W / 2 - (bw + mw) / 2;
+    g.globalAlpha = alpha;
+    g.fillStyle = rgb(PAPER); g.textAlign = 'right'; g.fillText(body, left + mw + bw, y);
+    g.fillStyle = rgb(AMBER);
+    if (mark === '.') { g.beginPath(); g.arc(left + mw / 2, y - 8, size / 11, 0, Math.PI * 2); g.fill(); }
+    else { g.textAlign = 'right'; g.fillText(mark, left + mw, y); }
+    g.globalAlpha = 1;
+  }
+}
+
+window.render = t => {
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.textBaseline = 'alphabetic';
+  g.fillStyle = rgb(NIGHT); g.fillRect(0, 0, W, H);
+  folders(t);
+  windowLayer(t);
+  folderDots(t);
+  asks(t);
+  // the night above the window, under the headline
+  const band = g.createLinearGradient(0, 0, 0, 300);
+  band.addColorStop(0, rgb(NIGHT, 1)); band.addColorStop(.55, rgb(NIGHT, .92)); band.addColorStop(1, rgb(NIGHT, 0));
+  g.fillStyle = band; g.fillRect(0, 0, W, 300);
+  legend(t);
+  headline(t);
+  subline(t);
+};
+window.ready = Promise.all([
+  document.fonts.load('500 40px Plex'), document.fonts.load('400 40px Plex'),
+  ...SCREENS.map(k => load(k, `app-${k}.png`)),
+  ...FOLDERS.map(id => load(`${id}-none`, `folder-${id}-none.png`)),
+]).then(() => { window.render(0); return true; });
+</script>
+</body>
+</html>
