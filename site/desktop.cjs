@@ -172,39 +172,58 @@ html[lang=he] .step h2,html[lang=he] .moment h2{letter-spacing:-.015em;line-heig
 .step.in li{opacity:1;transform:none}
 ${[1, 2, 3, 4].map(i => `.step li:nth-child(${i + 1}){transition-delay:${i * .12}s}`).join('')}
 .stage{position:sticky;top:0;height:100vh;display:flex;align-items:center;justify-content:center}
-.field{position:relative;width:min(440px,100%);height:460px}
-.fi{position:absolute;display:flex;align-items:center;gap:14px;inset-inline-start:var(--gx);top:var(--gy);margin-inline-start:-32px;margin-top:-32px;
+/* the projects, as File Explorer shows them: a window, its address, and the folders (YDeck's logo and dot on each) */
+.xp{width:min(480px,100%);border-radius:14px;overflow:hidden;background:#151518;border:1px solid rgba(255,255,255,.08);box-shadow:0 40px 100px -20px rgba(0,0,0,.7)}
+.xp-bar{display:flex;align-items:center;gap:9px;height:40px;padding:0 6px 0 14px;background:#1C1C20;font-size:13px;color:var(--soft)}
+html[dir=rtl] .xp-bar{padding:0 14px 0 6px}
+.xp-bar svg{width:18px;height:15px;flex:none}
+.xp-bar .ttl{flex:1}
+.xp-bar .wb{width:34px;text-align:center;color:var(--faint);font-size:12px;letter-spacing:0}
+.xp-addr{display:flex;align-items:center;gap:8px;margin:10px 12px 4px;padding:7px 12px;border-radius:8px;background:#0E0E11;border:1px solid rgba(255,255,255,.06);
+  font:400 12.5px 'IBM Plex Mono',monospace;color:var(--mute);direction:ltr}
+.xp-addr b{font-weight:400;color:var(--soft)}
+.xp-cols{display:flex;gap:12px;margin:8px 22px 0;padding-bottom:7px;border-bottom:1px solid rgba(255,255,255,.06);font-size:12px;color:var(--faint);opacity:0;transition:opacity .5s}
+.xp-cols span:first-child{flex:1}
+.xp-cols span:last-child{width:150px}
+.field{position:relative;width:100%;height:392px}
+.fi{position:absolute;display:flex;flex-direction:column;align-items:center;gap:6px;width:84px;inset-inline-start:var(--gx);top:var(--gy);margin-inline-start:-42px;margin-top:-42px;
   transition:inset-inline-start .9s cubic-bezier(.6,0,.2,1),top .9s cubic-bezier(.6,0,.2,1),margin .9s,transform .9s cubic-bezier(.6,0,.2,1),opacity .6s;transition-delay:calc(var(--i) * 28ms)}
-.tile{position:relative;flex:none;width:64px;height:64px;border-radius:17px;background:var(--tc);display:grid;place-items:center;font-weight:500;font-size:26px;color:#fff;
-  transition:width .9s cubic-bezier(.6,0,.2,1),height .9s cubic-bezier(.6,0,.2,1),border-radius .9s,font-size .9s,opacity .6s}
-.tile.dark{box-shadow:inset 0 0 0 1.5px #3A3A42}
-.bd{position:absolute;inset-inline-end:-6px;bottom:-6px;width:20px;height:20px;border-radius:50%;background:var(--night);display:grid;place-items:center;transition:width .9s,height .9s}
+/* a folder: Windows' yellow, a sheet in it, the project's logo on its front */
+.tile{position:relative;flex:none;width:66px;height:55px;transition:width .9s cubic-bezier(.6,0,.2,1),height .9s cubic-bezier(.6,0,.2,1),opacity .6s}
+.tile svg{display:block;width:100%;height:100%;overflow:visible}
+.lg{position:absolute;inset-inline-start:9%;bottom:11%;width:34%;aspect-ratio:1;border-radius:22%;background:var(--tc);display:grid;place-items:center;
+  font-style:normal;font-weight:500;font-size:11px;color:#fff;box-shadow:0 1px 2px rgba(0,0,0,.35);transition:opacity .5s}
+.lg.dark{box-shadow:inset 0 0 0 1px #3A3A42,0 1px 2px rgba(0,0,0,.35)}
+.bd{position:absolute;inset-inline-end:-5px;bottom:-4px;width:20px;height:20px;border-radius:50%;background:#151518;display:grid;place-items:center;transition:width .9s,height .9s}
 .bd::after{content:'';width:14px;height:14px;border-radius:50%;box-shadow:inset 0 0 0 4px var(--s-open);transition:box-shadow .45s,background .45s,width .9s,height .9s}
-.txt{display:flex;flex-direction:column;line-height:1.25;white-space:nowrap;opacity:0;max-width:0;overflow:hidden;transition:opacity .5s,max-width .9s}
-.txt b{font-weight:400;font-size:16px}
-.txt small{font-size:13px;color:var(--mute)}
-/* the field appears one project after another */
+.nm{font-size:12.5px;color:var(--soft);white-space:nowrap;transition:opacity .4s}
+.txt{display:flex;align-items:center;gap:12px;white-space:nowrap;opacity:0;max-width:0;overflow:hidden;transition:opacity .5s,max-width .9s}
+.txt b{font-weight:400;font-size:14.5px;width:150px}
+.txt small{font-size:13px;color:var(--mute);width:150px}
+/* the window appears, one folder after another */
 .js .field .fi{opacity:0;transform:scale(.6)}
 .field.in .fi{opacity:1;transform:none}
 /* at work: the dots fill indigo and breathe */
 .field[data-step=work] .fi.w .bd::after,.field[data-step=wait] .fi.mw .bd::after{box-shadow:inset 0 0 0 7px var(--s-work);animation:pulse 1.6s ease-in-out calc(var(--i) * -.3s) infinite}
 @keyframes pulse{50%{transform:scale(.8)}}
-/* the mess: they stray, and turn amber, grey */
+/* the mess: the folders stray, as on a crowded desktop, and turn amber, grey */
 .field[data-step=wait] .fi{transform:translate(calc(var(--mx) * 1px),calc(var(--my) * 1px)) rotate(calc(var(--mr) * 1deg))}
 .field[data-step=wait] .fi .tile{animation:stray 3.2s ease-in-out calc(var(--i) * -.4s) infinite}
-@keyframes stray{50%{transform:translate(6px,-5px) rotate(4deg)}}
+@keyframes stray{50%{transform:translate(5px,-4px) rotate(3deg)}}
 .field[data-step=wait] .fi.s-wait .bd::after,.field[data-step=note] .fi.s-wait .bd::after{box-shadow:inset 0 0 0 7px var(--s-wait)}
 .field[data-step=wait] .fi.s-gone .bd::after,.field[data-step=note] .fi.s-gone .bd::after{box-shadow:inset 0 0 0 7px var(--s-gone)}
-.field[data-step=wait] .fi.s-gone .tile{opacity:.4}
-/* in order: a list, by state, like YDeck's sidebar */
-.field[data-step=note] .fi{inset-inline-start:0;top:calc(var(--ly) * 38px + 20px);margin-inline-start:0;margin-top:-15px}
-.field[data-step=note] .tile{width:30px;height:30px;border-radius:8px;font-size:14px}
-.field[data-step=note] .bd{width:14px;height:14px;inset-inline-end:-4px;bottom:-4px}
-.field[data-step=note] .bd::after{width:9px;height:9px}
-.field[data-step=note] .fi.s-open .bd::after{box-shadow:inset 0 0 0 2.5px var(--s-open)}
+.field[data-step=wait] .fi.s-gone .tile{opacity:.45}
+/* in order: Explorer's details view, sorted by what needs you */
+.xp:has(.field[data-step=note]) .xp-cols{opacity:1}
+.field[data-step=note] .fi{flex-direction:row;gap:12px;width:auto;inset-inline-start:22px;top:calc(var(--ly) * 31px + 18px);margin-inline-start:0;margin-top:-12px}
+.field[data-step=note] .tile{width:26px;height:22px}
+.field[data-step=note] .lg{opacity:0}
+.field[data-step=note] .nm{display:none}
+.field[data-step=note] .bd{width:13px;height:13px;inset-inline-end:-4px;bottom:-3px}
+.field[data-step=note] .bd::after{width:8px;height:8px}
+.field[data-step=note] .fi.s-open .bd::after{box-shadow:inset 0 0 0 2px var(--s-open)}
 .field[data-step=note] .fi.s-work .bd::after{box-shadow:inset 0 0 0 5px var(--s-work)}
-.field[data-step=note] .txt{opacity:1;max-width:320px;transition-delay:.5s}
-.field[data-step=note] .txt b{font-size:15px}
+.field[data-step=note] .txt{opacity:1;max-width:340px;transition-delay:.5s}
 
 /* ── the moments: the real app, in cards ── */
 /* the words above, the card below at the app's own size (its text as large as on the screen) */
@@ -271,9 +290,7 @@ footer a:hover{color:var(--ink)}
   /* the projects stay on top while the steps scroll under them */
   .story{display:flex;flex-direction:column;gap:0}
   .stage{order:-1;position:sticky;top:56px;height:auto;padding:18px 0 28px;z-index:2;background:linear-gradient(var(--night) 82%,transparent)}
-  .field{width:100%;max-width:340px;height:300px;transform:scale(.7);transform-origin:top center;margin-bottom:-90px}
-  .field[data-step=note] .fi{top:calc(var(--ly) * 25px + 14px)}
-  .field[data-step=note] .txt small{display:none}
+  .xp{width:480px;max-width:none;transform:scale(.7);transform-origin:top center;margin-bottom:-146px}
   .steps{padding-top:0}
   .step{min-height:72vh}
   .moment{padding:12vh 0 0}
@@ -314,14 +331,26 @@ const SCRIPT = `<script>
 })();
 </script>`;
 
+// Windows' folder (back, a sheet, the front), drawn once; [id] tells the copies apart
+const FOLDER = id => `<svg viewBox="0 0 66 55" aria-hidden="true"><defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFD465"/><stop offset="1" stop-color="#F2AC2E"/></linearGradient></defs>` +
+  `<path d="M3 8a4 4 0 0 1 4-4h16l5 5h31a4 4 0 0 1 4 4v35a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z" fill="#D18E27"/><rect x="8" y="12" width="50" height="18" rx="2" fill="#F3EFE6"/>` +
+  `<path d="M3 19a4 4 0 0 1 4-4h52a4 4 0 0 1 4 4v29a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z" fill="url(#${id})"/></svg>`;
+
 function fieldHtml(c) {
+  const cols = c.lang === 'he' ? ['שם', 'מצב'] : ['Name', 'State'];
+  const title = c.lang === 'he' ? 'פרויקטים' : 'Projects';
+  return `<div class="xp" aria-hidden="true"><div class="xp-bar">${FOLDER('fh')}<span class="ttl">${title}</span><span class="wb">—</span><span class="wb">▢</span><span class="wb">✕</span></div>` +
+    `<div class="xp-addr">C:\\Users\\dana\\<b>Projects</b></div><div class="xp-cols"><span>${cols[0]}</span><span>${cols[1]}</span></div>` + fieldBody(c) + '</div>';
+}
+
+function fieldBody(c) {
   // in order: what needs you first, then at work, open, closed (as YDeck's sidebar sorts them)
   return `<div class="field" data-step="open">${FIELD.map(([name, color, st], i) => {
     const g = GRID[i], gx = 12.5 + (g % 4) * 25, gy = 14 + Math.floor(g / 4) * 33, [mx, my, mr] = STRAY[i];
     const cls = ['fi', `s-${st}`, WORKS.has(name) ? 'w' : '', WORKS.has(name) && st === 'work' ? 'mw' : ''].filter(Boolean).join(' ');
     return `<div class="${cls}" style="--i:${GRID.indexOf(i)};--gx:${gx}%;--gy:${gy}%;--mx:${mx};--my:${my};--mr:${mr};--ly:${i}">` +
-      `<b class="tile${color === '#2A2A30' ? ' dark' : ''}" style="--tc:${color}">${name[0]}<i class="bd"></i></b>` +
-      `<span class="txt"><b>${name}</b><small>${esc(c.states[st])}</small></span></div>`;
+      `<b class="tile">${FOLDER('f' + i)}<i class="lg${color === '#2A2A30' ? ' dark' : ''}" style="--tc:${color}">${name[0]}</i><i class="bd"></i></b>` +
+      `<span class="nm">${name}</span><span class="txt"><b>${name}</b><small>${esc(c.states[st])}</small></span></div>`;
   }).join('')}</div>`;
 }
 
