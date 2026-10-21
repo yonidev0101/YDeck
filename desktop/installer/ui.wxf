@@ -10,6 +10,12 @@
     <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1"/>
     <Property Id="ARPNOMODIFY" Value="1"/>
     <CustomAction Id="YdOpenApp" Directory="INSTALLDIR" ExeCommand="&quot;[INSTALLDIR]YDeck.exe&quot;" Return="asyncNoWait"/>
+    <!-- Uninstalling (not upgrading): YDeck takes back what it put outside its folder before its files go
+         (Uninstall.kt: the Claude Code plugin, Explorer's menu, the folder icons, starting with Windows). -->
+    <CustomAction Id="YdCleanUp" Directory="INSTALLDIR" ExeCommand="&quot;[INSTALLDIR]YDeck.exe&quot; --uninstall-cleanup" Execute="deferred" Impersonate="yes" Return="ignore"/>
+    <InstallExecuteSequence>
+      <Custom Action="YdCleanUp" Before="RemoveFiles">REMOVE~="ALL" AND NOT UPGRADINGPRODUCTCODE</Custom>
+    </InstallExecuteSequence>
 
     <UI Id="JpUI">
       <TextStyle Id="WixUI_Font_Normal" FaceName="Segoe UI" Size="9"/>

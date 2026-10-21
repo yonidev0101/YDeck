@@ -77,11 +77,12 @@ object Autostart {
     val enabled: Boolean
         get() = runCatching { Advapi32Util.registryValueExists(WinReg.HKEY_CURRENT_USER, RUN, NAME) }.getOrDefault(false)
 
+    /** Turning it off needs no launcher: it also runs as YDeck is uninstalled. */
     fun set(on: Boolean) {
-        val exe = launcher ?: return
+        val exe = launcher
         runCatching {
-            if (on) Advapi32Util.registrySetStringValue(WinReg.HKEY_CURRENT_USER, RUN, NAME, "\"$exe\" $BACKGROUND_ARG")
-            else if (enabled) Advapi32Util.registryDeleteValue(WinReg.HKEY_CURRENT_USER, RUN, NAME)
+            if (on && exe != null) Advapi32Util.registrySetStringValue(WinReg.HKEY_CURRENT_USER, RUN, NAME, "\"$exe\" $BACKGROUND_ARG")
+            else if (!on && enabled) Advapi32Util.registryDeleteValue(WinReg.HKEY_CURRENT_USER, RUN, NAME)
         }
     }
 }
@@ -98,8 +99,10 @@ object ExplorerMenu {
 
     val available get() = System.getProperty("jpackage.app-path") != null
 
+    /** Turning it off needs no launcher: it also runs as YDeck is uninstalled. */
     fun set(on: Boolean) {
-        val exe = System.getProperty("jpackage.app-path") ?: return
+        val exe = System.getProperty("jpackage.app-path")
+        if (on && exe == null) return
         runCatching {
             KEYS.forEach { k ->
                 if (on) {

@@ -22,6 +22,8 @@ import java.io.File
 private data class Ask(val n: Int, val folder: String?)
 
 fun main(args: Array<String>) {
+    // Run by the installer as YDeck is removed: take back what it put outside its folder, and nothing else.
+    if (Uninstall.ARG in args) { Uninstall.cleanUp(); return }
     val folder = ExplorerMenu.folderIn(args)
     val background = Autostart.BACKGROUND_ARG in args || folder != null
     val asks = MutableStateFlow(Ask(if (folder != null) 1 else 0, folder))

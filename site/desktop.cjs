@@ -1,9 +1,8 @@
 // The home of YDeck for the desktop, in English (/) and Hebrew (/he): its one promise (every project on one screen: what
-// Claude did, what waits for you, what isn't saved), the story of the demo film, told in the brand's dot.
+// Claude did, what waits for you, what isn't saved), the story of the demo film, and the real app in cards.
 // The dot is YDeck's mark for a Claude session (a ring when it's open, indigo at work, amber when it needs you, grey when
-// it's gone, green when nothing is open), and the page is built of it at three sizes: in the text (a headline's full stop,
-// a list's bullets, a kicker's state), beside it (the projects' dots, the dot that walks the real screens), and behind it
-// (one huge dot, fixed, that takes each section's state as it scrolls by). Called by build.cjs.
+// it's gone, green when nothing is open), in the text (a headline's full stop, a list's bullets, a kicker's state) and
+// beside it (the projects' dots); nothing moves behind the text. Called by build.cjs.
 const fs = require('fs'), path = require('path'), { execFileSync } = require('child_process');
 
 // The twelve projects of the film, and the state each one's dot ends in (demo.html's ASTRAY): in the mess, and in order.
@@ -35,10 +34,10 @@ const COPY = {
     ],
     states: { wait: 'Needs you', work: 'Claude is working', open: 'Claude is open', gone: 'Closed' },
     moments: [
-      ['wait', 'Now', 'Who needs you, and why.', 'The project that needs you first is on top: what Claude is waiting for, what it did last time, and what’s still open in it. Each line comes with what closes it.', 'loops'],
-      ['work', 'Receipts', 'What Claude did, exactly.', 'What you asked, and every file it touched, line by line. Keep it in one commit, or put it back exactly as it was.', 'orbit-session'],
-      ['note', 'Memory', 'Every project remembers where it stopped.', 'What it is, what was decided, what the last session did and what comes next. Claude writes it down at the end of the work, and every new session starts from there.', 'orbit'],
-      ['clean', 'The end of the day', 'Close the day in one click.', 'Claude commits what’s left, pushes, stops the servers and writes tomorrow’s next step. Then nothing is open.', 'loops-clear'],
+      ['wait', 'Now', 'Who needs you, and why.', 'The project that needs you first is on top: what Claude is waiting for, what it did last time, and what’s still open in it. Each line comes with what closes it.', 'now'],
+      ['work', 'Receipts', 'What Claude did, exactly.', 'What you asked, and every file it touched, line by line. Keep it in one commit, or put it back exactly as it was.', 'receipt'],
+      ['note', 'Memory', 'Every project remembers where it stopped.', 'What it is, what was decided, what the last session did and what comes next. Claude writes it down at the end of the work, and every new session starts from there.', 'memory'],
+      ['clean', 'The end of the day', 'Close the day in one click.', 'Claude commits what’s left, pushes, stops the servers and writes tomorrow’s next step. Then nothing is open.', 'clear'],
     ],
     howK: 'How it works', howH: 'A small plugin for Claude Code. Everything else stays as it was.',
     hooks: [['open', 'Open', 'SessionStart', 'Claude gets the project’s memory.'], ['work', 'At work', 'UserPromptSubmit', 'You asked for something, and it’s on it.'],
@@ -67,10 +66,10 @@ const COPY = {
     ],
     states: { wait: 'מחכה לך', work: 'Claude עובד', open: 'Claude פתוח', gone: 'נסגר' },
     moments: [
-      ['wait', 'עכשיו', 'מי מחכה לך, ולמה.', 'הפרויקט שצריך אותך ראשון נמצא למעלה: על מה Claude מחכה, מה הוא עשה בפעם הקודמת, ומה עוד פתוח בו. ליד כל שורה, הפעולה שסוגרת אותה.', 'loops'],
-      ['work', 'קבלות', 'מה Claude עשה, בדיוק.', 'מה ביקשת, וכל קובץ שהוא נגע בו, שורה אחרי שורה. שומרים בקומיט אחד, או מחזירים בדיוק למה שהיה.', 'orbit-session'],
-      ['note', 'זיכרון', 'כל פרויקט זוכר איפה עצר.', 'מה הפרויקט, מה הוחלט, מה נעשה בסשן האחרון ומה הצעד הבא. Claude כותב את זה בעצמו בסוף העבודה, וכל סשן חדש מתחיל משם.', 'orbit'],
-      ['clean', 'סוף היום', 'סוגרים את היום בלחיצה.', 'Claude עושה קומיט למה שנשאר, דוחף, עוצר את השרתים וכותב את הצעד הבא למחר. אחר כך שום דבר לא פתוח.', 'loops-clear'],
+      ['wait', 'עכשיו', 'מי מחכה לך, ולמה.', 'הפרויקט שצריך אותך ראשון נמצא למעלה: על מה Claude מחכה, מה הוא עשה בפעם הקודמת, ומה עוד פתוח בו. ליד כל שורה, הפעולה שסוגרת אותה.', 'now'],
+      ['work', 'קבלות', 'מה Claude עשה, בדיוק.', 'מה ביקשת, וכל קובץ שהוא נגע בו, שורה אחרי שורה. שומרים בקומיט אחד, או מחזירים בדיוק למה שהיה.', 'receipt'],
+      ['note', 'זיכרון', 'כל פרויקט זוכר איפה עצר.', 'מה הפרויקט, מה הוחלט, מה נעשה בסשן האחרון ומה הצעד הבא. Claude כותב את זה בעצמו בסוף העבודה, וכל סשן חדש מתחיל משם.', 'memory'],
+      ['clean', 'סוף היום', 'סוגרים את היום בלחיצה.', 'Claude עושה קומיט למה שנשאר, דוחף, עוצר את השרתים וכותב את הצעד הבא למחר. אחר כך שום דבר לא פתוח.', 'clear'],
     ],
     howK: 'איך זה עובד', howH: 'פלאגין קטן ל־Claude Code. כל השאר נשאר כמו שהיה.',
     hooks: [['open', 'פתוח', 'SessionStart', 'Claude מקבל את הזיכרון של הפרויקט.'], ['work', 'עובד', 'UserPromptSubmit', 'ביקשת משהו, והוא עובד על זה.'],
@@ -97,44 +96,14 @@ const amber = h => h.replace(/([.?])(\s*)$/, '<span class="p">$1</span>$2');
 // a dot in the text, in a state
 const dt = st => `<i class="dt ${st}" aria-hidden="true"></i>`;
 
-// The dot on each real screen: where it lands, in the screen's pixels (3600×2340, the Hebrew layout; the English one is
-// mirrored), and in which state. The same keys as demo.html's GUIDE.
-const GUIDE = {
-  orbit: [[2754, 932, 'note'], [2659, 1535, 'wait'], [2659, 1737, 'wait']],
-  loops: [[2659, 607, 'wait'], [2650, 758, 'note'], [2659, 932, 'wait'], [2659, 1134, 'wait'], [2659, 1913, 'work'], [2659, 2111, 'wait']],
-  'loops-clear': [[1494, 509, 'clean']],
-};
-const STATE_COLOR = { note: '#F4F4F5', wait: '#F5A524', work: '#9C97FF', clean: '#34C77B', open: '#B9B9C2', gone: '#4E4E56' };
-// Each walk loops: it lands on every key for its share of the time, then rests on the last.
-function guideCss() {
-  return Object.entries(GUIDE).map(([name, keys]) => ['he', 'en'].map(lang => {
-    const id = `g-${lang}-${name}`, n = keys.length, at = k => (8 + k * 70 / Math.max(1, n - 1)).toFixed(1);
-    const pos = ([x, y, st]) => `left:${((lang === 'en' ? 3600 - x : x) / 36).toFixed(2)}%;top:${(y / 23.4).toFixed(2)}%;background:${STATE_COLOR[st]}`;
-    const frames = [`0%{${pos(keys[0])};opacity:0}`, `${at(0)}%{${pos(keys[0])};opacity:1}`,
-      ...keys.slice(1).map((k, i) => `${at(i + 1)}%{${pos(k)};opacity:1}`), `96%{${pos(keys[n - 1])};opacity:1}`, `100%{${pos(keys[n - 1])};opacity:0}`];
-    return `@keyframes ${id}{${frames.join('')}}html[lang=${lang}] .shot.in .gd.${name}{animation:${id} ${n > 1 ? 2.2 + n * 1.1 : 5}s .4s cubic-bezier(.6,0,.2,1) infinite}` +
-      `html[lang=${lang}] .gd.${name}{${pos(keys[n - 1])}}`;
-  }).join('')).join('');
-}
-
-// On a phone a whole screen is too small to read: each moment shows the part of its screen it is about, larger.
-// [x, y, width] in the screen's pixels (the Hebrew layout; mirrored for English), at 5:4.
-const PHONE_CROP = { loops: [1450, 330, 1400], 'orbit-session': [130, 850, 1450], orbit: [1450, 850, 1400], 'loops-clear': [1150, 420, 1650] };
-function phoneCss() {
-  return Object.entries(PHONE_CROP).map(([name, [x, y, w]]) => ['he', 'en'].map(lang => {
-    const left = lang === 'en' ? 3600 - x - w : x;
-    return `html[lang=${lang}] .sh-${name} .sc{width:${(3600 / w * 100).toFixed(2)}%;left:-${(left / w * 100).toFixed(2)}%;margin-top:-${(y / w * 100).toFixed(2)}%}`;
-  }).join('')).join('');
-}
-
-// The dot behind, per section: [state, colour, hole (0 a full dot, .86 a thin ring), x from the inline start %, y %, size vmin, opacity].
-// It keeps to the corners: the top one on the side away from the text, and in the moments the corner away from the screen.
-const ORB = [
-  ['hero', 'open', .86, 90, 20, 30, .32], ['open', 'open', .86, 92, 18, 26, .3], ['work', 'work', 0, 92, 18, 22, .36],
-  ['wait', 'wait', 0, 92, 84, 22, .34], ['note', 'note', .86, 92, 18, 24, .2],
-  ['m0', 'wait', 0, 8, 86, 16, .34], ['m1', 'work', .8, 92, 16, 20, .34], ['m2', 'note', 0, 8, 86, 12, .22], ['m3', 'clean', 0, 92, 16, 16, .34],
-  ['gone', 'gone', .86, 92, 18, 24, .7], ['end', 'note', 0, 50, 88, 6, .18],
-];
+// Each moment shows the part of the real app it is about, as cards cropped from the screens (site/cards.cjs):
+// [card, sits behind, narrow]. Now has Nova behind Orbit, so it reads as a list of projects.
+const CARDS = { now: [['now-nova', true], ['now-orbit']], receipt: [['receipt', false, true]], memory: [['memory']], clear: [['clear']] };
+// On a phone a card shows the part that matters, larger: where it sits across the card, in the Hebrew layout (0 its left
+// edge, 100 its right; mirrored for English). Rows begin on the right; the diff's code reads from the left.
+const FOCUS = { 'now-orbit': 100, receipt: 0, memory: 100, clear: 50 };
+// the card's size, for the page to keep its room before the image loads (site/cards.cjs: the crop × 2/3)
+const CARD_SIZE = { 'now-orbit': [1680, 610], 'now-nova': [1680, 614], receipt: [960, 766], memory: [1740, 654], clear: [1660, 726] };
 
 const CSS = `
 :root{--night:#0B0B0D;--ink:#F4F4F5;--soft:#C8C8CE;--mute:#8B8B93;--faint:#5A5A62;--card:#131316;--line:#24242A;--amber:#F5A524;--indigo:#3D35E0;--indigo-t:#A7A3FF;--think:#6E66F8;--green:#34C77B;
@@ -179,18 +148,6 @@ html[lang=he] h1{letter-spacing:-.02em;line-height:1.08}
 @keyframes land{from{transform:scale(0)}to{transform:scale(1)}}
 /* a headline's full stop is the amber dot */
 .p{color:var(--amber)}
-
-/* ── the dot, behind: one small dot, fixed in a corner, in the state of the section in view (body[data-dot]).
-   Quiet on purpose: it moves corner to corner and changes state, and never sits behind what you read. ── */
-.orb{position:fixed;z-index:0;pointer-events:none;left:var(--x);top:var(--y);width:var(--d);height:var(--d);transform:translate(-50%,-50%);opacity:var(--o);
-  transition:left 1.6s cubic-bezier(.6,0,.2,1),right 1.6s cubic-bezier(.6,0,.2,1),top 1.6s cubic-bezier(.6,0,.2,1),width 1.4s cubic-bezier(.6,0,.2,1),height 1.4s cubic-bezier(.6,0,.2,1),opacity 1.2s}
-html[dir=rtl] .orb{left:auto;right:var(--x);transform:translate(50%,-50%)}
-.orb i{position:absolute;inset:0;border-radius:50%}
-.orb .core{background:var(--c);transition:background 1.2s}
-.orb .hole{background:var(--night);transform:scale(var(--h));transition:transform 1.4s cubic-bezier(.6,0,.2,1)}
-body[data-dot=work] .orb .core{animation:breathe 3.4s ease-in-out infinite}
-${ORB.map(([st, c, h, x, y, d, o]) => `body[data-dot=${st}] .orb{--c:var(--s-${c});--h:${h};--x:${x}%;--y:${y}%;--d:${d}vmin;--o:${o}}`).join('\n')}
-@keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(.965)}}
 
 /* ── the dot, in the text ── */
 .dt{display:inline-block;width:.5em;height:.5em;border-radius:50%;vertical-align:.06em;background:var(--c);flex:none}
@@ -249,16 +206,25 @@ ${[1, 2, 3, 4].map(i => `.step li:nth-child(${i + 1}){transition-delay:${i * .12
 .field[data-step=note] .txt{opacity:1;max-width:320px;transition-delay:.5s}
 .field[data-step=note] .txt b{font-size:15px}
 
-/* ── the moments: the real screens, with the dot walking them ── */
-.moment{min-height:100vh;display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);gap:64px;align-items:center;padding:10vh 0}
-.moment:nth-of-type(even){grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr)}
-.moment:nth-of-type(even) .copy{order:2}
-.shot{position:relative;border-radius:14px;overflow:hidden;border:1px solid rgba(255,255,255,.1);box-shadow:0 40px 120px rgba(0,0,0,.6);aspect-ratio:3600/2340;background:var(--card)}
-.shot .sc{position:absolute;inset:0;aspect-ratio:3600/2340}
-.shot img{display:block;width:100%;height:100%;object-fit:cover}
-.gd{position:absolute;width:1.5%;min-width:10px;aspect-ratio:1;border-radius:50%;transform:translate(-50%,-50%);box-shadow:0 0 0 4px var(--night),0 0 0 6px rgba(255,255,255,.14);opacity:0}
-.shot.in .gd{opacity:1}
-${guideCss()}
+/* ── the moments: the real app, in cards ── */
+/* the words above, the card below at the app's own size (its text as large as on the screen) */
+.moment{padding:16vh 0 4vh}
+.moment .copy{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:64px;align-items:end;margin-bottom:48px}
+.moment .copy .kicker{grid-column:1/-1}
+.moment .copy p{margin:0;padding-bottom:6px}
+/* a moment's visual: a quiet stage, lit faintly in the moment's state, and the real app's card(s) on it */
+.vis{--sc:var(--s-note);position:relative;padding:clamp(26px,4vw,60px);border-radius:28px;border:1px solid rgba(255,255,255,.06);overflow:hidden;
+  background:radial-gradient(90% 70% at 50% 0%,color-mix(in srgb,var(--sc) 13%,transparent),transparent 72%),linear-gradient(180deg,#121215,#0D0D10)}
+.vis.wait{--sc:var(--s-wait)}.vis.work{--sc:var(--s-work)}.vis.clean{--sc:var(--s-clean)}
+.card{position:relative;margin:0 auto;max-width:840px;border-radius:16px;overflow:hidden;background:#0B0B0D;border:1px solid rgba(255,255,255,.1);
+  box-shadow:0 1px 0 rgba(255,255,255,.06) inset,0 30px 80px -20px rgba(0,0,0,.75),0 0 0 1px rgba(0,0,0,.5)}
+.card img{display:block;width:100%;height:auto}
+.card.narrow{max-width:640px}
+.card.behind{position:absolute;left:50%;width:min(840px,calc(100% - 2 * clamp(26px,4vw,60px)));top:calc(clamp(26px,4vw,60px) - 16px);transform:translateX(-50%) scale(.93);transform-origin:top;opacity:.4;filter:saturate(.6)}
+.card.behind + .card{margin-top:52px}
+.js .vis .card{transition:transform 1.1s cubic-bezier(.2,.7,.2,1) .15s,opacity 1.1s cubic-bezier(.2,.7,.2,1) .15s}
+.js .vis:not(.in) .card:not(.behind){transform:translateY(18px)}
+.js .vis:not(.in) .card.behind{transform:translateX(-50%) scale(.93) translateY(30px);opacity:0}
 
 /* ── how it works: the legend of the dot ── */
 .how{padding:18vh 0 12vh;text-align:center}
@@ -302,8 +268,6 @@ footer a:hover{color:var(--ink)}
 .js .rise.d1{transition-delay:.12s}.js .rise.d2{transition-delay:.24s}
 @media (max-width:860px){
   .nav nav{display:none}
-  /* on a phone the dot keeps to the bottom corner, half off the screen, away from the text and the projects on top */
-  .orb{--x:100%!important;--y:96%!important;--d:30vmin!important}
   /* the projects stay on top while the steps scroll under them */
   .story{display:flex;flex-direction:column;gap:0}
   .stage{order:-1;position:sticky;top:56px;height:auto;padding:18px 0 28px;z-index:2;background:linear-gradient(var(--night) 82%,transparent)}
@@ -312,11 +276,16 @@ footer a:hover{color:var(--ink)}
   .field[data-step=note] .txt small{display:none}
   .steps{padding-top:0}
   .step{min-height:72vh}
-  .moment,.moment:nth-of-type(even){grid-template-columns:minmax(0,1fr);gap:36px;min-height:0;padding:12vh 0}
-  .moment:nth-of-type(even) .copy{order:0}
-  .shot{aspect-ratio:5/4}
-  .shot .sc{inset:auto;top:0}
-  ${phoneCss()}
+  .moment{padding:12vh 0 0}
+  .moment .copy{grid-template-columns:minmax(0,1fr);margin-bottom:32px}
+  .moment .copy p{margin-top:20px}
+  /* on a phone a card shows its start, larger: the names and what's open, where a line begins */
+  .vis{padding:18px;border-radius:22px}
+  .card.behind{display:none}
+  .card.behind + .card{margin-top:0}
+  .card{aspect-ratio:1.12}
+  .card img{width:100%;height:100%;object-fit:cover;object-position:var(--fx) 50%}
+  html[lang=en] .card img{object-position:calc(100% - var(--fx)) 50%}
   .legend{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:48px}
   .legend::before{display:none}
   .facts{grid-template-columns:minmax(0,1fr);gap:32px}
@@ -326,7 +295,6 @@ footer a:hover{color:var(--ink)}
   .ring.live .arc,.ring.live .dot,.ring.live .spin{animation:none}
   .js .rise,.js .step li,.js .legend div,.js .field .fi{opacity:1;transform:none;transition:none}
   *{animation:none!important;transition:none!important;scroll-behavior:auto}
-  .shot .gd{opacity:1}
 }
 `;
 
@@ -335,7 +303,7 @@ footer a:hover{color:var(--ink)}
 const SCRIPT = `<script>
 (() => {
   const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { threshold: 0.3 });
-  document.querySelectorAll('.rise, .step, .field, .shot, .legend').forEach(el => io.observe(el));
+  document.querySelectorAll('.rise, .step, .field, .vis, .legend').forEach(el => io.observe(el));
   const field = document.querySelector('.field');
   const mid = new IntersectionObserver(es => es.forEach(e => {
     if (!e.isIntersecting) return;
@@ -375,7 +343,6 @@ function html(c, siteUrl, email, fonts) {
 <link href="${fonts}" rel="stylesheet">
 <style>${CSS}</style>
 <script>document.documentElement.classList.add('js')</script></head><body data-dot="hero">
-<div class="orb" aria-hidden="true"><i class="core"></i><i class="hole"></i></div>
 <header class="nav"><div class="wrap">
 <a class="brand" href="${c.home}">${RING(22)}YDeck</a>
 <nav><a href="#how">${c.nav[0]}</a><a href="${privacy}">${c.nav[1]}</a><a href="${c.other}" lang="${c.lang === 'en' ? 'he' : 'en'}">${c.otherLabel}</a></nav>
@@ -401,9 +368,9 @@ ${list ? `<ul>${list.map((t, i) => `<li>${dt(i === 0 ? 'gone' : i === 4 ? 'work'
 </div>
 
 <div class="wrap">
-${c.moments.map(([st, k, h, p, screen], i) => `<section class="moment" data-dot="m${i}">
+${c.moments.map(([st, k, h, p, vis], i) => `<section class="moment" data-dot="m${i}">
 <div class="copy rise"><div class="kicker">${dt(st)}${esc(k)}</div><h2>${amber(esc(h))}</h2><p>${esc(p)}</p></div>
-<div class="shot rise d1 sh-${screen}"><div class="sc"><img src="/media/screen-${c.lang}-${screen}.jpg" alt="" loading="lazy" width="1800" height="1170">${GUIDE[screen] ? `<i class="gd ${screen}"></i>` : ''}</div></div>
+<div class="vis ${st}">${CARDS[vis].map(([card, behind, narrow]) => `<figure class="card${behind ? ' behind' : ''}${narrow ? ' narrow' : ''}" style="--fx:${FOCUS[card] ?? 100}%"${behind ? ' aria-hidden="true"' : ''}><img src="/media/card-${c.lang}-${card}.jpg" alt="" loading="lazy" width="${CARD_SIZE[card][0]}" height="${CARD_SIZE[card][1]}"></figure>`).join('')}</div>
 </section>`).join('\n')}
 </div>
 
@@ -433,7 +400,7 @@ ${SCRIPT}
 </body></html>`;
 }
 
-/** Writes / and /he/, their screens (site/src/screens, rendered by RenderFilm.kt), and their share images from the logo sting's last frame. */
+/** Writes / and /he/, their cards (site/src/cards, cropped by cards.cjs from RenderFilm.kt's screens), and their share images from the logo sting's last frame. */
 function build({ DIST, ROOT, EMAIL, SITE_URL }) {
   const fonts = 'https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500&family=IBM+Plex+Sans+Hebrew:wght@300;400;500&family=IBM+Plex+Mono:wght@400&display=swap';
   for (const c of Object.values(COPY)) {
@@ -441,9 +408,9 @@ function build({ DIST, ROOT, EMAIL, SITE_URL }) {
     fs.mkdirSync(path.dirname(out), { recursive: true });
     fs.writeFileSync(out, html(c, SITE_URL, EMAIL, fonts));
   }
-  const screens = path.join(__dirname, 'src/screens');
+  const cards = path.join(__dirname, 'src/cards');
   fs.mkdirSync(path.join(DIST, 'media'), { recursive: true });
-  for (const f of fs.readdirSync(screens)) fs.copyFileSync(path.join(screens, f), path.join(DIST, 'media', 'screen-' + f));
+  for (const f of fs.readdirSync(cards)) fs.copyFileSync(path.join(cards, f), path.join(DIST, 'media', 'card-' + f));
   const stills = path.join(ROOT, 'store/brand/logo/out');
   for (const [lang, file] of [['en', 'sting-end.png'], ['he', 'sting-end-he.png']]) {
     const src = path.join(stills, file);

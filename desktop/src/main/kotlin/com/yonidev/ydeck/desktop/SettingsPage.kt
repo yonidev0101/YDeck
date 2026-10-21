@@ -246,9 +246,9 @@ private fun About() {
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Image(painterResource("icons/app.png"), null, Modifier.size(72.dp).clip(RoundedCornerShape(18.dp)))
         Text("YDeck", color = c.fg, fontSize = 30.sp, fontWeight = FontWeight.SemiBold, fontFamily = PlexSans, letterSpacing = (-0.8).sp)
-        PageTitle(tr("Nothing left open.", "שום דבר לא נשאר פתוח."), 26)
-        Text(tr("Your agents work. YDeck keeps track of what they did, what changed, and what still needs you, across every project.",
-            "הסוכנים עובדים. YDeck זוכר מה הם עשו, מה השתנה ומה עוד מחכה לך, בכל הפרויקטים."),
+        PageTitle(tr("Every project. One screen.", "כל הפרויקטים. מסך אחד."), 26)
+        Text(tr("Where every project stands: what Claude did, what waits for you, and what isn't saved.",
+            "איפה כל פרויקט עומד: מה Claude עשה, מה מחכה לך, ומה לא נשמר."),
             color = c.muted, fontSize = 15.sp, lineHeight = 23.sp, fontFamily = PlexSans, modifier = Modifier.widthIn(max = 520.dp))
         Mono(tr("Version ${AppInfo.version} for Windows", "גרסה ⁦${AppInfo.version}⁩ ל־Windows"))
         Spacer(Modifier.height(6.dp))
@@ -257,5 +257,43 @@ private fun About() {
             Spacer(Modifier.width(4.dp))
             Text(tr("Made by YoniDev", "נבנה ע״י YoniDev"), color = c.faint, fontSize = 13.sp, fontFamily = PlexSans)
         }
+        UninstallRow()
     }
+}
+
+/** Uninstalling YDeck: what goes and what stays, and YDeck's own data only if asked (see [Uninstall]). */
+@Composable
+private fun UninstallRow() {
+    val c = LocalDeck.current
+    // Asking Windows Installer takes a moment: off the UI thread.
+    var available by remember { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(Unit) { available = kotlinx.coroutines.withContext(Dispatchers.IO) { Uninstall.available } }
+    if (!available) return
+    var ask by remember { mutableStateOf(false) }
+    var withData by remember { mutableStateOf(false) }
+    var failed by remember { mutableStateOf(false) }
+    Spacer(Modifier.height(18.dp))
+    TextAction(tr("Uninstall YDeck…", "הסרת YDeck…")) { ask = true }
+    if (failed) Text(tr("Windows' uninstaller didn't open. Uninstall YDeck from Settings › Apps.", "מסיר ההתקנה של Windows לא נפתח. אפשר להסיר את YDeck מהגדרות Windows ← אפליקציות."),
+        color = c.danger, fontSize = 13.sp, fontFamily = PlexSans)
+    if (ask) androidx.compose.material3.AlertDialog(
+        onDismissRequest = { ask = false },
+        title = { Text(tr("Uninstall YDeck?", "להסיר את YDeck?"), fontFamily = PlexSans) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Text(tr("YDeck takes back everything it added: the plugin in Claude Code, “Open in YDeck” on the right-click menu, the icons on your project folders, and starting with Windows. Then Windows' uninstaller opens.",
+                    "YDeck יסיר את כל מה שהוסיף: הפלאגין ב־Claude Code, ״פתיחה ב־YDeck״ בלחיצה ימנית, האייקונים על תיקיות הפרויקטים, וההפעלה עם Windows. אחר כך ייפתח מסיר ההתקנה של Windows."),
+                    fontSize = 14.sp, lineHeight = 21.sp, fontFamily = PlexSans)
+                Text(tr("Your code, your folders and the projects' .ydeck files stay as they are.", "הקוד, התיקיות וקובצי ה־.ydeck שבפרויקטים נשארים כמו שהם."),
+                    color = c.muted, fontSize = 13.sp, lineHeight = 19.sp, fontFamily = PlexSans)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Toggle(withData) { withData = it }
+                    Spacer(Modifier.width(10.dp))
+                    Text(tr("Also delete YDeck's data (the projects list and settings)", "למחוק גם את הנתונים של YDeck (רשימת הפרויקטים וההגדרות)"), fontSize = 13.sp, fontFamily = PlexSans)
+                }
+            }
+        },
+        confirmButton = { androidx.compose.material3.TextButton({ ask = false; failed = !Uninstall.start(withData) }) { Text(tr("Uninstall", "הסרה"), color = c.danger, fontFamily = PlexSans) } },
+        dismissButton = { androidx.compose.material3.TextButton({ ask = false }) { Text(tr("Cancel", "ביטול"), color = c.fg, fontFamily = PlexSans) } },
+    )
 }
