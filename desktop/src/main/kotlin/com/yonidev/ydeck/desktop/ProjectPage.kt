@@ -196,10 +196,39 @@ private fun Overview(p: Project, local: Local, dark: Boolean, actions: AppAction
         if (dir == null) { ConnectFolder(p, actions); return@Column }
         Column(Modifier.widthIn(max = 860.dp), verticalArrangement = Arrangement.spacedBy(32.dp)) {
             LiveAgent(local, dark)
+            OfferFill(p, local, dir)
             NextStep(p, local, dir)
             LoopsCard(p, local)
             Memory(p, local, dir)
         }
+    }
+}
+
+/**
+ * Once, on a project whose folder YDeck has just met: Claude can fill in the rest (what it is, a summary, a next step,
+ * links, commands). Taken or not, it isn't offered again; it stays in the details and the "..." menu.
+ */
+@Composable
+private fun OfferFill(p: Project, local: Local, dir: java.io.File) {
+    if (local.fillOffered || Tools.claude == null) return
+    val bare = remember(dir) { ProjectFiles.readShared(dir)?.summary.isNullOrBlank() }
+    if (!bare) return
+    val c = LocalDeck.current
+    fun offered() = saveLocal(p, Settings.state.value.localOf(p.id).copy(fillOffered = true))
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(c.accentTint).padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        GlyphIcon(Glyph.SPARKLE, 18.dp, c.accentText)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(tr("Let Claude fill in the rest?", "ש־Claude ימלא את השאר?"), color = c.fg, fontSize = 15.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans)
+            Text(tr("It reads the folder, changes nothing, and suggests what it is, a summary, a next step, links and commands.",
+                "הוא קורא את התיקייה, לא משנה בה כלום, ומציע מה הפרויקט, תקציר, צעד הבא, קישורים ופקודות."),
+                color = c.muted, fontSize = 13.sp, lineHeight = 19.sp, fontFamily = PlexSans)
+        }
+        Spacer(Modifier.width(12.dp))
+        TextAction(tr("Not now", "לא עכשיו")) { offered() }
+        Spacer(Modifier.width(4.dp))
+        Pill(tr("Fill in", "מילוי"), Tone.PRIMARY, Glyph.SPARKLE, small = true) { offered(); ClaudeFill.start(p, dir); Nav.set(Screen.Details(p.id)) }
     }
 }
 

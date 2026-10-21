@@ -57,6 +57,8 @@ data class Local(
     val files: List<String> = emptyList(),
     /** "The next step": one line the developer leaves for themself, shown where the project's state is. */
     val note: String = "",
+    /** "Fill in with Claude" was offered on the project's page (taken or not), so it isn't offered again. */
+    val fillOffered: Boolean = false,
 ) {
     val dir: File? get() = folder?.let(::File)?.takeIf { it.isDirectory }
     val isEmpty: Boolean get() = folder == null && commands.isEmpty() && files.isEmpty() && note.isBlank()

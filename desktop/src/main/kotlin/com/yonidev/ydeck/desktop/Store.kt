@@ -179,6 +179,7 @@ object Settings {
                             put("commands", JSONArray().apply { l.commands.forEach { c -> put(JSONObject().put("label", c.label).put("line", c.line)) } })
                             put("files", JSONArray(l.files))
                             if (l.note.isNotBlank()) put("note", l.note)
+                            if (l.fillOffered) put("fillOffered", true)
                         })
                     }
                 })
@@ -224,6 +225,7 @@ object Settings {
                         commands = (0 until cmds.length()).map { i -> cmds.getJSONObject(i).let { Command(it.optString("label"), it.optString("line")) } }.filter { it.line.isNotBlank() },
                         files = (0 until files.length()).map { files.getString(it) },
                         note = l.optString("note"),
+                        fillOffered = l.optBoolean("fillOffered"),
                     )
                 }
             } ?: emptyMap(),

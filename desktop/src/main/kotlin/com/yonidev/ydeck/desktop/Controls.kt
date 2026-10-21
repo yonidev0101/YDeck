@@ -287,7 +287,7 @@ fun GroupScope.StateRow(dot: Color, text: String, detail: String? = null, detail
 
 /** A label over a rounded field; [ltr] for addresses, codes and commands. */
 @Composable
-fun Field(title: String?, value: String, onChange: (String) -> Unit, placeholder: String = "", ltr: Boolean = false, modifier: Modifier = Modifier) {
+fun Field(title: String?, value: String, onChange: (String) -> Unit, placeholder: String = "", ltr: Boolean = false, modifier: Modifier = Modifier, lines: Int = 1) {
     val c = LocalDeck.current
     Column(modifier.fillMaxWidth()) {
         if (title != null) Text(title, color = c.muted, fontSize = 13.sp, fontFamily = PlexSans, modifier = Modifier.padding(bottom = 6.dp))
@@ -295,7 +295,7 @@ fun Field(title: String?, value: String, onChange: (String) -> Unit, placeholder
             val style = TextStyle(color = c.fg, fontSize = 14.sp, fontFamily = if (ltr) PlexMono else PlexSans, textDirection = if (ltr) TextDirection.Ltr else TextDirection.Content)
             if (value.isEmpty()) Text(placeholder, style = style.copy(color = c.faint))
             CompositionLocalProvider(LocalLayoutDirection provides if (ltr) LayoutDirection.Ltr else LocalLayoutDirection.current) {
-                BasicTextField(value, onChange, singleLine = true, textStyle = style, cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth())
+                BasicTextField(value, onChange, singleLine = lines == 1, minLines = lines, textStyle = if (lines > 1) style.copy(lineHeight = 21.sp) else style, cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth())
             }
         }
     }
