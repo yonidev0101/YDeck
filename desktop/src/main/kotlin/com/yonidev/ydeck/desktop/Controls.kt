@@ -118,6 +118,9 @@ fun GlyphIcon(g: Glyph, size: Dp = 18.dp, tint: Color = LocalDeck.current.fg) {
 fun dirOf(text: String): TextDirection =
     if (text.any { it in '\u0590'..'\u05FF' }) TextDirection.Rtl else TextDirection.Content
 
+/** A prompt or a commit message in quotes: Hebrew ones in ״gershayim״, which don't turn around right to left. */
+fun quoted(text: String): String = if (text.any { it in '\u0590'..'\u05FF' }) "\u05F4$text\u05F4" else "“$text”"
+
 /** A page's title: the brand's light display face. */
 @Composable
 fun PageTitle(text: String, size: Int = 34) {

@@ -252,7 +252,7 @@ private fun LiveAgent(local: Local, dark: Boolean) {
             Text(ago(session.workStart), color = c.muted, fontSize = 12.sp, fontFamily = PlexSans)
         }
         if (session.detail.isNotBlank()) Text(
-            if (session.mode == ClaudeMode.WORKING) "“${session.detail}”" else session.detail, color = c.fg, fontSize = 14.sp, lineHeight = 21.sp, fontFamily = PlexSans,
+            if (session.mode == ClaudeMode.WORKING) quoted(session.detail) else session.detail, color = c.fg, fontSize = 14.sp, lineHeight = 21.sp, fontFamily = PlexSans,
             maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 18.dp, top = 6.dp), style = TextStyle(textDirection = TextDirection.Content),
         )
     }

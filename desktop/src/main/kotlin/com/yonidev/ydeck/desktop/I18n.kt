@@ -27,8 +27,16 @@ object I18n {
     val rtl: Boolean get() = lang == Lang.HE
 }
 
-/** The string in the current language. */
-fun tr(en: String, he: String): String = if (I18n.lang == Lang.HE) he else en
+/**
+ * The string in the current language. A Hebrew sentence that opens with a Latin word ("Claude עובד", "YDeck קורא…")
+ * starts with a right-to-left mark, so it reads right to left everywhere it shows, not by its first letter.
+ */
+fun tr(en: String, he: String): String = if (I18n.lang == Lang.HE) rtl(he) else en
+
+private fun rtl(he: String): String {
+    val first = he.firstOrNull { it.isLetter() } ?: return he
+    return if (first !in '\u0590'..'\u05FF' && he.any { it in '\u0590'..'\u05FF' }) "\u200F" + he else he
+}
 
 /** "1 link" / "3 links", "קישור אחד" / "3 קישורים". */
 fun count(n: Int, oneEn: String, manyEn: String, oneHe: String, manyHe: String): String =

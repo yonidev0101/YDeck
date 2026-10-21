@@ -132,7 +132,7 @@ fun QuickLook(p: Project, dark: Boolean, onClose: () -> Unit, onOpen: (Project) 
                     Text(claudeText(session), color = if (waiting) c.amberText else claudeColor(session.mode, dark), fontSize = 13.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans, modifier = Modifier.weight(1f))
                     Text(ago(session.workStart), color = c.muted, fontSize = 12.sp, fontFamily = PlexSans)
                 }
-                if (session.detail.isNotBlank()) Text(if (waiting) session.detail else "“${session.detail}”", color = c.fg, fontSize = 13.sp, lineHeight = 19.sp, fontFamily = PlexSans,
+                if (session.detail.isNotBlank()) Text(if (waiting) session.detail else quoted(session.detail), color = c.fg, fontSize = 13.sp, lineHeight = 19.sp, fontFamily = PlexSans,
                     maxLines = 2, overflow = TextOverflow.Ellipsis, style = TextStyle(textDirection = TextDirection.Content))
             }
         }

@@ -96,10 +96,10 @@ private fun BrandStep(actions: AppActions, onNext: () -> Unit) {
             Spacer(Modifier.height(20.dp))
             Text("YDeck", color = Color(0xFFF4F4F5), fontSize = 30.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans, letterSpacing = (-0.6).sp)
             Spacer(Modifier.height(34.dp))
-            Text(tr("Nothing left open.", "שום דבר לא נשאר פתוח."), color = Color(0xFFF4F4F5), fontSize = 58.sp, lineHeight = 66.sp, fontFamily = Display, fontWeight = FontWeight.Light, textAlign = TextAlign.Center)
+            Text(tr("Every project. One screen.", "כל הפרויקטים. מסך אחד."), color = Color(0xFFF4F4F5), fontSize = 58.sp, lineHeight = 66.sp, fontFamily = Display, fontWeight = FontWeight.Light, textAlign = TextAlign.Center)
             Spacer(Modifier.height(18.dp))
-            Text(tr("Every project on one screen: what Claude Code did, what waits for you, and what isn't saved.",
-                "כל הפרויקטים במסך אחד: מה Claude Code עשה, מה מחכה לך, ומה לא נשמר."),
+            Text(tr("What Claude Code did, what waits for you, and what isn't saved yet, in every project, without going window to window.",
+                "מה Claude Code עשה, מה מחכה לך ומה עוד לא נשמר, בכל הפרויקטים, בלי לעבור בין חלונות."),
                 color = Color(0xFFB4B4BB), fontSize = 17.sp, lineHeight = 26.sp, fontFamily = PlexSans, textAlign = TextAlign.Center)
             Spacer(Modifier.height(36.dp))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -210,7 +210,7 @@ private fun Surfaces(project: Project?, actions: AppActions, onDone: () -> Unit)
             Spacer(Modifier.height(32.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                 SurfaceCard(Modifier.weight(1f), tr("With Claude Code", "עם Claude Code"), tr("When Claude works, needs you, and what it did. A plugin named “ydeck” that talks only to YDeck on this PC.",
-                    "מתי Claude עובד, מתי הוא מחכה לך, ומה הוא עשה. פלאגין בשם ‏“ydeck” שמדבר רק עם YDeck במחשב הזה."),
+                    "מתי Claude עובד, מתי הוא מחכה לך, ומה הוא עשה. פלאגין בשם ‏״ydeck״ שמדבר רק עם YDeck במחשב הזה."),
                     claude, { claude = it }, enabled = Tools.claude != null) {
                     Column(Modifier.fillMaxSize().background(Color(0xFF0B0B0C)).padding(horizontal = 24.dp), verticalArrangement = Arrangement.spacedBy(9.dp, Alignment.CenterVertically)) {
                         Mono("> claude", Color(0xFF8A8A90), 11)
@@ -222,7 +222,7 @@ private fun Surfaces(project: Project?, actions: AppActions, onDone: () -> Unit)
                 }
                 SurfaceCard(Modifier.weight(1f), tr("On the desktop", "על שולחן העבודה"), tr("A glass widget: what's open, what's at work, and every console one click away.", "ווידג'ט זכוכית: מה פתוח, מה בעבודה, וכל קונסולה בלחיצה."), widget, { widget = it }) {
                     Box(Modifier.fillMaxSize().background(Color(0xFFDCD9F7)), contentAlignment = Alignment.Center) {
-                        if (project != null) Box(Modifier.width(250.dp)) { WidgetPreview(project, false) } else GlyphIcon(Glyph.WIDGET, 40.dp, INDIGO)
+                        if (project != null) Box(Modifier.width(250.dp)) { WidgetPreview(project, false, Settings.state.value.localOf(project.id)) } else GlyphIcon(Glyph.WIDGET, 40.dp, INDIGO)
                     }
                 }
                 SurfaceCard(Modifier.weight(1f), tr("In File Explorer", "בסייר הקבצים"), tr("A strip in the project's folder, and Open in YDeck on right-click.", "פס בתיקיית הפרויקט, ו״פתיחה ב־YDeck״ בלחיצה ימנית."), explorer, { explorer = it }) {

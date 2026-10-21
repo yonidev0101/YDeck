@@ -225,7 +225,7 @@ private fun AllSaved(git: GitInfo? = null) {
         Spacer(Modifier.width(10.dp))
         Column {
             Text(tr("Nothing to commit. Everything is saved.", "אין מה לשמור. הכול שמור."), color = c.muted, fontSize = 14.sp, fontFamily = PlexSans)
-            if (git != null && git.lastAt > 0) Text(tr("Last commit: ", "הקומיט האחרון: ") + "“${git.lastSubject}” · ${ago(git.lastAt)}", color = c.faint, fontSize = 12.sp,
+            if (git != null && git.lastAt > 0) Text(tr("Last commit: ", "הקומיט האחרון: ") + quoted(git.lastSubject) + " · ${ago(git.lastAt)}", color = c.faint, fontSize = 12.sp,
                 fontFamily = PlexSans, maxLines = 1, overflow = TextOverflow.Ellipsis, style = TextStyle(textDirection = TextDirection.Content))
         }
     }
@@ -478,7 +478,7 @@ fun CommitBox(key: String, dir: File, chosen: List<GitChange>?, compact: Boolean
             Row(verticalAlignment = Alignment.CenterVertically) {
                 GlyphIcon(Glyph.CHECK, 14.dp, c.liveText)
                 Spacer(Modifier.width(6.dp))
-                Text(tr("Committed: “$subject”", "נשמר: “$subject”"), color = c.muted, fontSize = 12.sp, fontFamily = PlexSans, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                Text(tr("Committed: ", "נשמר: ") + quoted(subject), color = c.muted, fontSize = 12.sp, fontFamily = PlexSans, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false), style = TextStyle(textDirection = TextDirection.Content))
                 if (git != null && git.hasRemote && git.ahead > 0 && git.behind == 0 && git.upstream != null) TextAction(tr("Push now", "לדחוף עכשיו"), accent = true, enabled = busy == null) {
                     error = null

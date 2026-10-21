@@ -66,7 +66,7 @@ object Loops {
             if (open != null) add(Loop(LoopKind.SESSION,
                 tr("${open.agent.label}'s session: " + count(inSession, "file not committed", "files not committed", "", ""),
                     if (inSession == 1) "קובץ אחד מהסשן של ${open.agent.label} לא נשמר" else "$inSession קבצים מהסשן של ${open.agent.label} לא נשמרו"),
-                "“${open.title}” · ${ago(open.endAt, now)}", open.id))
+                quoted(open.title) + " · " + ago(open.endAt, now), open.id))
             val rest = git.changes - inSession
             if (rest > 0) add(Loop(LoopKind.UNCOMMITTED, count(rest, if (open != null) "other uncommitted change" else "uncommitted change",
                 if (open != null) "other uncommitted changes" else "uncommitted changes", if (open != null) "עוד שינוי אחד לא שמור" else "שינוי אחד לא שמור",
@@ -277,7 +277,7 @@ private fun NowProject(r: NowRow, pulse: Pulse?, dark: Boolean) {
             // What Claude is on now (its prompt, or its question), then what it did last time, then what's open.
             if (live != null) Item {
                 ClaudeDot(live.mode, dark, 7.dp)
-                Text(if (live.mode == ClaudeMode.WORKING) "“${live.detail}”" else live.detail, color = c.fg, fontSize = 14.sp, fontFamily = PlexSans, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                Text(if (live.mode == ClaudeMode.WORKING) quoted(live.detail) else live.detail, color = c.fg, fontSize = 14.sp, fontFamily = PlexSans, maxLines = 2, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f), style = TextStyle(textDirection = TextDirection.Content))
                 Text(ago(live.workStart), color = c.faint, fontSize = 12.sp, fontFamily = PlexSans)
             }

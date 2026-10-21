@@ -43,6 +43,7 @@ object AppInfo {
         runCatching { Properties().apply { load(AppInfo::class.java.getResourceAsStream("/build.properties")) }.getProperty("version") }.getOrNull() ?: "dev"
     }
     const val SITE = "https://ydeck-app.pages.dev"
+    const val REPO = "https://github.com/yonidev0101/YDeck"
 }
 
 @Composable
@@ -189,7 +190,7 @@ private fun ClaudeSettings(deck: Deck) {
                 "‏.ydeck.json של הפרויקט (תקציר, החלטות, קישורים, גרסאות), שנכנס ל־git עם הקוד, והבלוק של YDeck בקובץ AGENTS.md אם כבר קיים. כבוי לריפו של עבודה או צוות: נכתב רק .ydeck.local.json האישי, שלא נכנס ל־git.")) { Toggle(s.repoFiles) { on -> Settings.update { it.copy(repoFiles = on) } } }
         }
         Note(tr("What's installed: a plugin named “ydeck” in Claude Code, added with Claude Code's own commands. Its hooks tell YDeck on this computer (127.0.0.1 only, with a key) when a prompt is sent, when Claude waits or is done, and when a session ends; at a session's start they hand Claude the project's context below. Nothing goes to the internet. Turning this off removes it.",
-            "מה מותקן: פלאגין בשם ‏“ydeck” ב־Claude Code, שמותקן בפקודות של Claude Code עצמו. ה־hooks שלו מודיעים ל־YDeck במחשב הזה בלבד (127.0.0.1, עם מפתח) כשנשלחת בקשה, כש־Claude מחכה או מסיים, וכשסשן נגמר; בתחילת סשן הם נותנים ל־Claude את ההקשר של הפרויקט שלמטה. שום דבר לא יוצא לאינטרנט. כיבוי מסיר אותו."))
+            "מה מותקן: פלאגין בשם ‏״ydeck״ ב־Claude Code, שמותקן בפקודות של Claude Code עצמו. ה־hooks שלו מודיעים ל־YDeck במחשב הזה בלבד (127.0.0.1, עם מפתח) כשנשלחת בקשה, כש־Claude מחכה או מסיים, וכשסשן נגמר; בתחילת סשן הם נותנים ל־Claude את ההקשר של הפרויקט שלמטה. שום דבר לא יוצא לאינטרנט. כיבוי מסיר אותו."))
         if (installed) Briefing(deck)
         error?.let { Text(it, color = c.danger, fontSize = 12.sp, fontFamily = PlexSans, modifier = Modifier.padding(start = 4.dp, top = 8.dp)) }
         Note(tr("Claude keeps the project's summary, decisions, links and releases in .ydeck.json, shared through the repository.", "Claude שומר את התקציר, ההחלטות, הקישורים והגרסאות של הפרויקט ב־.ydeck.json, שמשותף דרך הריפו."))
@@ -252,10 +253,13 @@ private fun About() {
         Text(tr("Where every project stands: what Claude did, what waits for you, and what isn't saved.",
             "איפה כל פרויקט עומד: מה Claude עשה, מה מחכה לך, ומה לא נשמר."),
             color = c.muted, fontSize = 15.sp, lineHeight = 23.sp, fontFamily = PlexSans, modifier = Modifier.widthIn(max = 520.dp))
-        Mono(tr("Version ${AppInfo.version} for Windows", "גרסה ⁦${AppInfo.version}⁩ ל־Windows"))
+        // Plain text, not monospace: a Hebrew line in a left-to-right face turns around.
+        Text(tr("Version ${AppInfo.version} for Windows · free and open source", "גרסה ${AppInfo.version} ל־Windows · חינם וקוד פתוח"), color = c.muted, fontSize = 13.sp, fontFamily = PlexSans)
         Spacer(Modifier.height(6.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Pill(tr("Website", "אתר"), Tone.SOFT, Glyph.GLOBE) { runCatching { Desktop.getDesktop().browse(URI(AppInfo.SITE)) } }
+            Pill(tr("Source on GitHub", "הקוד ב־GitHub"), Tone.SOFT, Glyph.CODE) { runCatching { Desktop.getDesktop().browse(URI(AppInfo.REPO)) } }
+            Pill(tr("Release notes", "מה חדש"), Tone.SOFT, Glyph.DOC) { runCatching { Desktop.getDesktop().browse(URI(AppInfo.REPO + "/releases")) } }
             Spacer(Modifier.width(4.dp))
             Text(tr("Made by YoniDev", "נבנה ע״י YoniDev"), color = c.faint, fontSize = 13.sp, fontFamily = PlexSans)
         }

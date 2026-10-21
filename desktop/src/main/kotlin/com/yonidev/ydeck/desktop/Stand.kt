@@ -46,7 +46,7 @@ fun standOf(p: Project, local: Local): Stand {
     fun stand(mode: StandMode, title: String, detail: String) = Stand(mode, title, detail, session, loops, next, handoff)
     return when {
         session?.mode == ClaudeMode.WAITING -> stand(StandMode.WAITING, claudeText(session), session.detail)
-        session?.mode == ClaudeMode.WORKING -> stand(StandMode.WORKING, claudeText(session), session.detail.takeIf { it.isNotBlank() }?.let { tr("“$it”", "״$it״") }.orEmpty())
+        session?.mode == ClaudeMode.WORKING -> stand(StandMode.WORKING, claudeText(session), session.detail.takeIf { it.isNotBlank() }?.let(::quoted).orEmpty())
         loops.isNotEmpty() -> stand(StandMode.OPEN, loops.first().title,
             if (loops.size > 1) tr("And ${loops.size - 1} more open", if (loops.size == 2) "ועוד דבר אחד פתוח" else "ועוד ${loops.size - 1} דברים פתוחים") else then)
         git != null -> stand(StandMode.SAVED, tr("All saved", "הכול שמור"), then.ifBlank { git.describe() + if (git.lastAt > 0) " · " + ago(git.lastAt) else "" })
