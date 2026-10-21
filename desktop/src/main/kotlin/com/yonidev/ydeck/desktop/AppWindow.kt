@@ -223,26 +223,28 @@ private fun androidx.compose.foundation.layout.ColumnScope.ProjectsNav(deck: Dec
     Spacer(Modifier.height(14.dp))
     GroupLabel(tr("Projects", "פרויקטים"), Modifier.padding(start = 6.dp))
     val selected = (route as? Screen.Project)?.id ?: (route as? Screen.Details)?.id
-    LazyColumn(Modifier.weight(1f, fill = false)) {
-        itemsIndexed(deck.projects, key = { _, p -> p.id }) { i, p ->
-            ContextMenuArea(items = {
-                buildList {
-                    if (i > 0) add(ContextMenuItem(tr("Move up", "הזזה למעלה")) { moveProject(i, i - 1) })
-                    if (i < deck.projects.lastIndex) add(ContextMenuItem(tr("Move down", "הזזה למטה")) { moveProject(i, i + 1) })
-                    add(ContextMenuItem(tr("Add a widget to the desktop", "ווידג'ט על שולחן העבודה")) { actions.addWidget(p) })
-                    add(ContextMenuItem(tr("Details", "פרטים")) { Nav.set(Screen.Details(p.id)) })
-                    add(ContextMenuItem(tr("Delete", "מחיקה")) { actions.delete(p) })
-                }
-            }) { ProjectNavRow(p, p.id == selected) { Nav.set(Screen.Project(p.id)) } }
+    // The projects and "New project" under them take the height, so Settings stays at the bottom.
+    Column(Modifier.weight(1f)) {
+        LazyColumn(Modifier.weight(1f, fill = false)) {
+            itemsIndexed(deck.projects, key = { _, p -> p.id }) { i, p ->
+                ContextMenuArea(items = {
+                    buildList {
+                        if (i > 0) add(ContextMenuItem(tr("Move up", "הזזה למעלה")) { moveProject(i, i - 1) })
+                        if (i < deck.projects.lastIndex) add(ContextMenuItem(tr("Move down", "הזזה למטה")) { moveProject(i, i + 1) })
+                        add(ContextMenuItem(tr("Add a widget to the desktop", "ווידג'ט על שולחן העבודה")) { actions.addWidget(p) })
+                        add(ContextMenuItem(tr("Details", "פרטים")) { Nav.set(Screen.Details(p.id)) })
+                        add(ContextMenuItem(tr("Delete", "מחיקה")) { actions.delete(p) })
+                    }
+                }) { ProjectNavRow(p, p.id == selected) { Nav.set(Screen.Project(p.id)) } }
+            }
+        }
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { Nav.set(Screen.NewProject()) }.padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) { GlyphIcon(Glyph.PLUS, 18.dp, c.muted) }
+            Spacer(Modifier.width(10.dp))
+            Text(tr("New project", "פרויקט חדש"), color = c.muted, fontSize = 14.sp, fontFamily = PlexSans)
         }
     }
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { Nav.set(Screen.NewProject()) }.padding(horizontal = 10.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) { GlyphIcon(Glyph.PLUS, 18.dp, c.muted) }
-        Spacer(Modifier.width(10.dp))
-        Text(tr("New project", "פרויקט חדש"), color = c.muted, fontSize = 14.sp, fontFamily = PlexSans)
-    }
-    Spacer(Modifier.weight(1f))
     NavRow(Glyph.GEAR, tr("Settings", "הגדרות"), false) { Nav.set(Screen.Settings()) }
 }
 
