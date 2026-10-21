@@ -106,8 +106,13 @@ fun isDark(): Boolean = when (Settings.state.collectAsState().value.appearance) 
 @Composable
 fun DeckTheme(dark: Boolean, content: @Composable () -> Unit) {
     val c = if (dark) Dark else Light
-    val scheme = if (dark) darkColorScheme(primary = c.accent, background = c.bg, surface = c.surface, onSurface = c.fg)
-    else lightColorScheme(primary = c.accent, background = c.bg, surface = c.surface, onSurface = c.fg)
+    // Material's own surfaces (its dialogs and menus) are tinted lavender by default: here they're YDeck's.
+    val scheme = (if (dark) darkColorScheme() else lightColorScheme()).copy(
+        primary = c.accent, background = c.bg, onBackground = c.fg, surface = c.surface, onSurface = c.fg,
+        surfaceVariant = c.surface2, onSurfaceVariant = c.muted, outline = c.line, outlineVariant = c.line, surfaceTint = c.surface,
+        surfaceContainerLowest = c.surface, surfaceContainerLow = c.surface, surfaceContainer = c.surface,
+        surfaceContainerHigh = c.surface, surfaceContainerHighest = c.surface2, surfaceBright = c.surface, surfaceDim = c.surface2,
+    )
     MaterialTheme(colorScheme = scheme, typography = MaterialTheme.typography.let { t ->
         t.copy(
             bodyLarge = t.bodyLarge.copy(fontFamily = PlexSans), bodyMedium = t.bodyMedium.copy(fontFamily = PlexSans),
@@ -116,7 +121,8 @@ fun DeckTheme(dark: Boolean, content: @Composable () -> Unit) {
     }) {
         // A new language redraws everything inside (plain functions call tr too).
         androidx.compose.runtime.key(Settings.state.collectAsState().value.language) {
-            CompositionLocalProvider(LocalDeck provides c, LocalLayoutDirection provides if (I18n.rtl) LayoutDirection.Rtl else LayoutDirection.Ltr) { content() }
+            CompositionLocalProvider(LocalDeck provides c, LocalLayoutDirection provides if (I18n.rtl) LayoutDirection.Rtl else LayoutDirection.Ltr,
+                androidx.compose.foundation.LocalContextMenuRepresentation provides remember(c) { DeckContextMenu(c) }) { content() }
         }
     }
 }

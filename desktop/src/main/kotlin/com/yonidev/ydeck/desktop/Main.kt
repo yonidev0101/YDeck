@@ -1,6 +1,7 @@
 package com.yonidev.ydeck.desktop
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -8,14 +9,12 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.window.ApplicationScope
-import androidx.compose.ui.window.Notification
-import androidx.compose.ui.window.Tray
 import androidx.compose.ui.window.application
-import androidx.compose.ui.window.rememberTrayState
 import kotlinx.coroutines.flow.MutableStateFlow
+import java.awt.Point
 import java.awt.Toolkit
+import java.awt.TrayIcon
 import java.io.File
 
 /** Something asked of the running app: show its window ([folder] null), or open a folder from Explorer's menu. */
@@ -109,21 +108,25 @@ private fun ApplicationScope.App(background: Boolean, asks: MutableStateFlow<Ask
         Settings.setWidget(WidgetSpec("w" + System.currentTimeMillis().toString(36), (p ?: Repo.deck.value.projects.firstOrNull())?.id, x, y, 380f, 234f))
     }
 
+    // The icon by the clock (TrayMenu.kt), and where its menu was asked for.
+    var trayMenu by remember { mutableStateOf<Point?>(null) }
+    val tray = remember { AppTray.icon(onOpen = { open() }, onMenu = { trayMenu = it }) }
+    DisposableEffect(Unit) { onDispose { AppTray.remove(tray) } }
+    fun notify(title: String, text: String) { tray?.displayMessage(title, text, TrayIcon.MessageType.NONE) }
+
     // Claude Code waiting for the user, or done with a long task, in a project: a Windows notification.
-    val tray = rememberTrayState()
     LaunchedEffect(Unit) {
         ClaudeLink.alerts.collect { a ->
             if (!Settings.state.value.claudeAlerts) return@collect
             val p = Settings.projectAt(File(a.cwd))?.let { Repo.deck.value.byId(it.first) } ?: return@collect
             val title = if (a.mode == ClaudeMode.WAITING) tr("${p.name}: Claude needs you", "${p.name}: Claude מחכה לך") else tr("${p.name}: Claude finished", "${p.name}: Claude סיים")
-            tray.sendNotification(Notification(title, a.detail.ifBlank { " " }, Notification.Type.None))
+            notify(title, a.detail.ifBlank { " " })
         }
     }
     // The phone opened Claude Code here: always said, so it never happens unseen.
     LaunchedEffect(Unit) {
         PhoneLink.opened.collect { name ->
-            tray.sendNotification(Notification(tr("$name: Claude opened from the phone", "$name: Claude נפתח מהטלפון"),
-                tr("Turn this off in Settings → Phone.", "אפשר לכבות בהגדרות ← טלפון."), Notification.Type.None))
+            notify(tr("$name: Claude opened from the phone", "$name: Claude נפתח מהטלפון"), tr("Turn this off in Settings → Phone.", "אפשר לכבות בהגדרות ← טלפון."))
         }
     }
 
@@ -132,21 +135,20 @@ private fun ApplicationScope.App(background: Boolean, asks: MutableStateFlow<Ask
 
     // Everything else redraws in a newly chosen language.
     key(settings.language) {
-        Tray(
-            state = tray,
-            icon = painterResource("icons/app.png"),
-            tooltip = "YDeck",
-            onAction = { open() },
-            menu = {
-                Item(tr("Open YDeck", "פתיחת YDeck"), onClick = { open() })
-                Item(tr("Search (${Hotkey.LABEL})", "חיפוש (${Hotkey.LABEL})"), onClick = { palette = true })
-                Item(tr("New widget on the desktop", "ווידג'ט חדש על שולחן העבודה"), onClick = { addWidget(null) })
-                Item(tr("Close the day", "סגירת היום"), onClick = { open(Screen.CloseDay) })
-                Item(tr("Settings", "הגדרות"), onClick = { open(Screen.Settings()) })
-                Separator()
-                Item(tr("Quit", "יציאה"), onClick = ::exitApplication)
-            },
-        )
+        trayMenu?.let { at ->
+            key(at) {
+                TrayMenuWindow(at, listOf(
+                    listOf(
+                        TrayItem(Glyph.EXTERNAL, tr("Open YDeck", "פתיחת YDeck")) { open() },
+                        TrayItem(Glyph.SEARCH, tr("Search", "חיפוש"), Hotkey.LABEL) { palette = true },
+                        TrayItem(Glyph.WIDGET, tr("New widget on the desktop", "ווידג'ט חדש על שולחן העבודה")) { addWidget(null) },
+                        TrayItem(Glyph.MOON, tr("Close the day", "סגירת היום")) { open(Screen.CloseDay) },
+                        TrayItem(Glyph.GEAR, tr("Settings", "הגדרות")) { open(Screen.Settings()) },
+                    ),
+                    listOf(TrayItem(Glyph.POWER, tr("Quit", "יציאה")) { AppTray.remove(tray); exitApplication() }),
+                ), dark, onClose = { trayMenu = null })
+            }
+        }
 
         val widgetActions = WidgetActions(
             open = { p, a -> Chrome.open(p, a) },

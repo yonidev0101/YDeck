@@ -94,7 +94,7 @@ compose.desktop {
             targetFormats(TargetFormat.Msi)
             packageName = "YDeck"
             packageVersion = desktopVersion
-            description = "YDeck - nothing left open"
+            description = "YDeck"
             vendor = "YoniDev"
             copyright = "© YoniDev"
             modules("java.desktop", "java.logging", "java.naming", "java.net.http", "java.prefs", "jdk.unsupported", "jdk.crypto.ec", "jdk.crypto.mscapi", "jdk.httpserver")
@@ -138,7 +138,7 @@ tasks.register("distribute") {
         val pb = ProcessBuilder(
             jpackage.absolutePath, "--type", "msi", "--app-image", appImage.absolutePath,
             "--name", "YDeck", "--app-version", desktopVersion, "--vendor", "YoniDev", "--copyright", "© YoniDev",
-            "--description", "YDeck - nothing left open", "--icon", project.file("icons/ydeck.ico").absolutePath,
+            "--description", "YDeck", "--icon", project.file("icons/ydeck.ico").absolutePath,
             "--win-menu", "--win-menu-group", "YDeck", "--win-shortcut", "--win-per-user-install",
             "--win-upgrade-uuid", "8c3d2f6e-4b71-4f0a-9a52-7d1e6b3c9f24",
             // Only so jpackage links WiX's UI library; ui.wxf replaces its screens (there is no folder picker).

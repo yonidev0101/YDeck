@@ -185,9 +185,8 @@ class AppActions(
 
     /** A logo from an image file (see [Logos]). */
     fun chooseLogo(projectId: String): String? {
-        val d = FileDialog(window, tr("Choose a logo", "בחירת לוגו"), FileDialog.LOAD).apply { file = "*.png;*.jpg;*.jpeg;*.webp;*.bmp"; isVisible = true }
-        val name = d.file ?: return null
-        return Logos.fromFile(projectId, File(d.directory, name))
+        val f = fileDialog(window, tr("Choose a logo", "בחירת לוגו"), tr("Images", "תמונות") to "*.png;*.jpg;*.jpeg;*.webp;*.bmp") ?: return null
+        return Logos.fromFile(projectId, f)
     }
 }
 
@@ -358,8 +357,10 @@ fun saveLocal(p: Project, next: Local) {
 
 /** Windows' own folder dialog look (Swing with the system look and feel), in the reading direction. */
 private fun chooser(window: ComposeWindow?, title: String, mode: Int): File? {
+    val desktop = File(System.getProperty("user.home"), "Desktop")
+    try { return SystemPicker.pick(window, title, mode == javax.swing.JFileChooser.DIRECTORIES_ONLY, desktop) } catch (_: Throwable) {}
     runCatching { javax.swing.UIManager.setLookAndFeel(javax.swing.UIManager.getSystemLookAndFeelClassName()) }
-    val c = javax.swing.JFileChooser(File(System.getProperty("user.home"), "Desktop")).apply {
+    val c = javax.swing.JFileChooser(desktop).apply {
         dialogTitle = title
         fileSelectionMode = mode
         applyComponentOrientation(if (I18n.rtl) java.awt.ComponentOrientation.RIGHT_TO_LEFT else java.awt.ComponentOrientation.LEFT_TO_RIGHT)
@@ -367,16 +368,23 @@ private fun chooser(window: ComposeWindow?, title: String, mode: Int): File? {
     return if (c.showDialog(window, tr("Choose", "בחירה")) == javax.swing.JFileChooser.APPROVE_OPTION) c.selectedFile else null
 }
 
+private val BACKUPS get() = tr("YDeck backups", "גיבויים של YDeck") to "*.json"
+
+/** A file to open (or with [save], to save as): Windows' own dialog ([SystemPicker]), else AWT's. */
+private fun fileDialog(window: ComposeWindow?, title: String, types: Pair<String, String>, save: String? = null): File? {
+    try { return SystemPicker.pick(window, title, types = types, save = save) } catch (_: Throwable) {}
+    val d = FileDialog(window, title, if (save != null) FileDialog.SAVE else FileDialog.LOAD).apply { file = save ?: types.second; isVisible = true }
+    return d.file?.let { File(d.directory, it) }
+}
+
 private fun exportTo(window: ComposeWindow, deck: Deck) {
-    val d = FileDialog(window, tr("Export a backup", "ייצוא גיבוי"), FileDialog.SAVE).apply { file = "ydeck-backup-${LocalDate.now()}.json"; isVisible = true }
-    val name = d.file ?: return
-    runCatching { File(d.directory, if (name.endsWith(".json")) name else "$name.json").writeText(Repo.exportJson(deck)) }
+    val f = fileDialog(window, tr("Export a backup", "ייצוא גיבוי"), BACKUPS, save = "ydeck-backup-${LocalDate.now()}.json") ?: return
+    runCatching { (if (f.name.endsWith(".json")) f else File(f.path + ".json")).writeText(Repo.exportJson(deck)) }
 }
 
 private fun importFrom(window: ComposeWindow): Deck? {
-    val d = FileDialog(window, tr("Import a backup", "ייבוא גיבוי"), FileDialog.LOAD).apply { file = "*.json"; isVisible = true }
-    val name = d.file ?: return null
-    return runCatching { Repo.importJson(File(d.directory, name).readText()) }.getOrNull()?.takeIf { it.projects.isNotEmpty() }
+    val f = fileDialog(window, tr("Import a backup", "ייבוא גיבוי"), BACKUPS) ?: return null
+    return runCatching { Repo.importJson(f.readText()) }.getOrNull()?.takeIf { it.projects.isNotEmpty() }
 }
 
 /** The window's content for a [route]: the first run, or the sidebar and its page (drawn also for the renders). */
