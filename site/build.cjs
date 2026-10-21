@@ -99,6 +99,7 @@ ${body}
 <nav><a href="/download">הורדה</a><a href="/privacy">מדיניות פרטיות</a><a href="mailto:${EMAIL}">${EMAIL}</a></nav>
 </div></footer>
 ${script}
+${require('./stats.cjs')}
 </body></html>`;
   const out = path.join(DIST, file);
   fs.mkdirSync(path.dirname(out), { recursive: true });

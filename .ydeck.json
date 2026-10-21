@@ -3,6 +3,10 @@
   "summaryAt": "2026-10-21T17:36:43.449Z",
   "decisions": [
     {
+      "text": "נתוני שימוש אנונימיים: מופעלים כברירת מחדל אבל מוצגים בבירור בפתיחה (ולמי שהתקין קודם, כרטיס חד־פעמי ב\"עכשיו\"), ושום דבר לא נשלח לפני שהבחירה הוצגה. נשלח רק: מזהה אקראי, תאריך, גרסה, שפה, טווח פרויקטים, האם Claude Code מחובר, ואילו חלקים שימשו; אף פעם לא שמות, נתיבים, קוד, קישורים או בקשות. השרת stats/ (Worker עם Durable Object אחד) לא שומר IP. האתר סופר כניסות בלי עוגיות",
+      "date": "2026-10-22"
+    },
+    {
       "text": "The strip in File Explorer and the widgets lead with where the project stands, as Now says it (Claude waiting or at work, what is open, or all saved and the next step); links and tools come after. A widget can hold every project: Now on the desktop.",
       "date": "2026-10-22"
     },
@@ -87,9 +91,18 @@
     {
       "label": "Play Console",
       "url": "https://play.google.com/console/u/0/developers/6108778237367048830/app/4972736304934963389/app-dashboard"
+    },
+    {
+      "label": "Stats worker",
+      "url": "https://ydeck-stats.yonidev-cloud.workers.dev"
     }
   ],
   "releases": [
+    {
+      "version": "Windows 1.18.5",
+      "date": "2026-10-22",
+      "note": "נתוני שימוש אנונימיים (מוצגים בפתיחה, כרטיס חד־פעמי למי שכבר מותקן, מתג בהגדרות), כפתור שליחת משוב, וספירת כניסות באתר בלי עוגיות"
+    },
     {
       "version": "Windows 1.18.4",
       "date": "2026-10-22",

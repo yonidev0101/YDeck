@@ -293,7 +293,7 @@ object PhoneLink {
         // Sent again now and then even when nothing changed, so the phone knows this is still current (Claude's state
         // shown there would otherwise stay as it was when the computer went to sleep).
         if (hash != lastSent || System.currentTimeMillis() - lastSentAt >= HEARTBEAT_MS) {
-            if (relay.putState(p.seal("state", plain))) { lastSent = hash; lastSentAt = System.currentTimeMillis(); sentAt = lastSentAt } else offline = true
+            if (relay.putState(p.seal("state", plain))) { UsageStats.mark(UsageStats.Feature.PHONE); lastSent = hash; lastSentAt = System.currentTimeMillis(); sentAt = lastSentAt } else offline = true
         }
         val m = relay.meta()
         // Only what this learned changes: a code put on screen meanwhile stays.

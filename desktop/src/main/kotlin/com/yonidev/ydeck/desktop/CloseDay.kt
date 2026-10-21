@@ -290,6 +290,7 @@ private const val UNKNOWN = "unknown"
 object CloseWithClaude {
     /** Ends [open] (its `claude` and what it started), then opens Claude Code on the latest conversation with the command. */
     fun start(p: Project, dir: File, open: List<ClaudeSession>) = Thread {
+        UsageStats.mark(UsageStats.Feature.CLOSE_DAY)
         open.forEach { s -> s.proc?.takeIf(Callers::alive)?.let { end(it.pid) } }
         val resume = open.maxByOrNull { it.since }?.id ?: Claude.conversations(dir, 1).firstOrNull()?.id
         Tools.claudeIn(dir, p.name, resume = resume, prompt = "/ydeck:${ClaudePlugin.CLOSE_DAY}")

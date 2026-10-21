@@ -1,0 +1,15 @@
+# Anonymous usage counts for YDeck (see src/index.js). Deploy like the relay, inside this folder:
+#   "../../yonidev-cloud/node_modules/.bin/wrangler" deploy
+# The report's key: "../../yonidev-cloud/node_modules/.bin/wrangler" secret put REPORT_KEY
+name = "ydeck-stats"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+[[durable_objects.bindings]]
+name = "STATS"
+class_name = "Stats"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Stats"]

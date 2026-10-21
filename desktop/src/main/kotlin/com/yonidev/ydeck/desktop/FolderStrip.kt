@@ -240,6 +240,7 @@ fun ApplicationScope.FolderStripWindow(attach: Attach?, deck: Deck, dark: Boolea
     Window(onCloseRequest = {}, state = state, visible = attach != null && deck.byId(attach.projectId) != null, title = "YDeck", undecorated = true, transparent = true,
         resizable = false, focusable = false, alwaysOnTop = false, icon = androidx.compose.ui.res.painterResource("icons/app.png")) {
         LaunchedEffect(Unit) { window.setAutoRequestFocus(false); FolderStrip.adopt(window) }
+        LaunchedEffect(attach != null) { if (attach != null) UsageStats.mark(UsageStats.Feature.STRIP) }
         LaunchedEffect(a.x, a.y, a.w) {
             state.position = WindowPosition(a.x.dp, a.y.dp)
             state.size = DpSize(a.w.dp, a.h.dp)

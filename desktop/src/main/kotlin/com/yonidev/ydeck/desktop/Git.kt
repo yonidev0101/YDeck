@@ -275,6 +275,7 @@ object GitOps {
     /** Commits [paths] (null: everything), new files included. */
     fun commit(dir: File, message: String, paths: List<String>?): String? = doing(dir, Op.COMMIT) {
         if (message.isBlank()) return tr("Write a message first", "קודם כותבים הודעה")
+        UsageStats.mark(UsageStats.Feature.COMMIT)
         val msg = File.createTempFile("ydeck-commit", ".txt").apply { writeText(message.trim() + "\n", Charsets.UTF_8); deleteOnExit() }
         try {
             // A merge is committed whole; a long list goes by "everything" too (Windows' command line has a limit).
@@ -287,6 +288,7 @@ object GitOps {
     }
 
     fun push(dir: File): String? = doing(dir, Op.PUSH) {
+        UsageStats.mark(UsageStats.Feature.PUSH)
         val info = Git.state.value[dir.path] ?: Git.read(dir)
         if (info?.hasRemote != true) return tr("This repository has no server yet (a remote, like GitHub)", "לריפו הזה עוד אין שרת (remote, כמו GitHub)")
         val r = Git.run(dir, if (info.upstream == null) listOf("push", "-u", "origin", "HEAD") else listOf("push"), seconds = 120, interactive = true)

@@ -118,6 +118,7 @@ object GitFocus {
     val receipt = MutableStateFlow<String?>(null)
 
     fun open(p: Project, receiptId: String?) {
+        if (receiptId != null) UsageStats.mark(UsageStats.Feature.RECEIPT)
         receipt.value = receiptId
         Nav.set(Screen.Project(p.id, Tab.GIT))
     }
@@ -187,6 +188,7 @@ fun LoopsCard(p: Project, local: Local) {
 @Composable
 fun LoopsPage(deck: Deck) {
     val c = LocalDeck.current
+    androidx.compose.runtime.LaunchedEffect(Unit) { UsageStats.mark(UsageStats.Feature.NOW) }
     val dark = c == Dark
     val settings by Settings.state.collectAsState()
     val pulses by Pulses.state.collectAsState()
@@ -207,6 +209,13 @@ fun LoopsPage(deck: Deck) {
                 }
                 Spacer(Modifier.width(16.dp))
                 if (busy.any { it.loops.isNotEmpty() }) Pill(tr("Close the day", "סגירת היום"), Tone.DARK, Glyph.MOON) { Nav.set(Screen.CloseDay) }
+            }
+            // Installs from before the first run asked: the choice about usage counts, once. Nothing is sent before it.
+            if (!settings.statsAsked && settings.welcomed) UsageStatsChoice(settings.usageStats, {}) {
+                Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Pill(tr("Keep it on", "להשאיר פועל"), Tone.PRIMARY, small = true) { Settings.update { it.copy(usageStats = true, statsAsked = true) } }
+                    TextAction(tr("Turn off", "לכבות")) { Settings.update { it.copy(usageStats = false, statsAsked = true) } }
+                }
             }
             busy.forEach { r -> NowProject(r, pulses[r.local.folder], dark) }
             if (busy.isEmpty()) Column(Modifier.fillMaxWidth().padding(vertical = 40.dp), horizontalAlignment = Alignment.CenterHorizontally) {

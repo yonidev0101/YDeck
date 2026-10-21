@@ -44,6 +44,12 @@ object AppInfo {
     }
     const val SITE = "https://ydeck-app.pages.dev"
     const val REPO = "https://github.com/yonidev0101/YDeck"
+
+    /** A new GitHub issue, its body started with the version and Windows (nothing else about the PC). */
+    fun feedback(): String {
+        val body = "\n\n---\nYDeck $version · ${System.getProperty("os.name")} ${System.getProperty("os.version")}"
+        return "$REPO/issues/new?body=" + java.net.URLEncoder.encode(body, Charsets.UTF_8).replace("+", "%20")
+    }
 }
 
 @Composable
@@ -101,6 +107,9 @@ private fun General() {
             Toggle(s.siteIcons) { on -> Settings.update { it.copy(siteIcons = on) } }
         }
         Setting(tr("Check for new commits on the server", "בדיקת קומיטים חדשים בשרת"), hint = tr("Every 10 minutes, quietly (git fetch). Nothing in your folders changes.", "כל 10 דקות, בשקט (git fetch). שום דבר בתיקיות לא משתנה.")) { Toggle(s.gitFetch) { on -> Settings.update { it.copy(gitFetch = on) } } }
+        Setting(tr("Anonymous usage counts", "נתוני שימוש אנונימיים"), hint = tr("Once a day: the version, the language, how many projects (a range), whether Claude Code is connected, and which parts were used. Never names, paths, code, links or prompts.", "פעם ביום: גרסה, שפה, כמה פרויקטים (טווח), אם Claude Code מחובר, ובאילו חלקים השתמשת. אף פעם לא שמות, נתיבים, קוד, קישורים או בקשות ל־Claude.")) {
+            Toggle(s.usageStats && s.statsAsked) { on -> Settings.update { it.copy(usageStats = on, statsAsked = true) } }
+        }
     }
     }
 }
@@ -260,6 +269,7 @@ private fun About() {
             Pill(tr("Website", "אתר"), Tone.SOFT, Glyph.GLOBE) { runCatching { Desktop.getDesktop().browse(URI(AppInfo.SITE)) } }
             Pill(tr("Source on GitHub", "הקוד ב־GitHub"), Tone.SOFT, Glyph.CODE) { runCatching { Desktop.getDesktop().browse(URI(AppInfo.REPO)) } }
             Pill(tr("Release notes", "מה חדש"), Tone.SOFT, Glyph.DOC) { runCatching { Desktop.getDesktop().browse(URI(AppInfo.REPO + "/releases")) } }
+            Pill(tr("Send feedback", "שליחת משוב"), Tone.TINT, Glyph.EDIT) { runCatching { Desktop.getDesktop().browse(URI(AppInfo.feedback())) } }
             Spacer(Modifier.width(4.dp))
             Text(tr("Made by YoniDev", "נבנה ע״י YoniDev"), color = c.faint, fontSize = 13.sp, fontFamily = PlexSans)
         }

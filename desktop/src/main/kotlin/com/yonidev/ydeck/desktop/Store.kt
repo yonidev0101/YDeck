@@ -139,6 +139,14 @@ object Settings {
         val appearance: String = "dark",
         /** The first run was shown (or skipped). */
         val welcomed: Boolean = false,
+        /** Anonymous usage counts, once the choice was shown ([statsAsked]): see [UsageStats]. */
+        val usageStats: Boolean = true,
+        /** The choice about usage counts was shown: on the first run, or once on Now for those who came before it. */
+        val statsAsked: Boolean = false,
+        /** This install's random id for the counts (no link to anything else), made on first use. */
+        val statsId: String = "",
+        /** The install was counted once. */
+        val statsInstalled: Boolean = false,
     ) {
         fun localOf(projectId: String?): Local = projectId?.let { local[it] } ?: Local()
     }
@@ -171,6 +179,10 @@ object Settings {
                 put("appearance", s.appearance)
                 put("appearanceV2", true)
                 put("welcomed", s.welcomed)
+                put("usageStats", s.usageStats)
+                put("statsAsked", s.statsAsked)
+                put("statsId", s.statsId)
+                put("statsInstalled", s.statsInstalled)
                 put("local", JSONObject().apply {
                     s.local.filterValues { !it.isEmpty }.forEach { (id, l) ->
                         put(id, JSONObject().apply {
@@ -214,6 +226,10 @@ object Settings {
             appearance = if (!o.has("appearanceV2") && o.optString("appearance", "system") == "system") "dark" else o.optString("appearance", "dark"),
             // Someone who already has projects has no need of the first run.
             welcomed = o.optBoolean("welcomed", o.optJSONArray("widgets")?.length()?.let { it > 0 } ?: false),
+            usageStats = o.optBoolean("usageStats", true),
+            statsAsked = o.optBoolean("statsAsked", false),
+            statsId = o.optString("statsId"),
+            statsInstalled = o.optBoolean("statsInstalled", false),
             local = o.optJSONObject("local")?.let { all ->
                 all.keys().asSequence().associateWith { id ->
                     val l = all.getJSONObject(id)

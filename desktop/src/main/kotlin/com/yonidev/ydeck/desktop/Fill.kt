@@ -59,6 +59,7 @@ object ClaudeFill {
     /** Starts reading in the background (from a menu: the details page shows the result when it comes). */
     fun start(p: Project, dir: File) {
         if (p.id in _busy.value) return
+        UsageStats.mark(UsageStats.Feature.FILL)
         _busy.update { it + p.id }
         _results.update { it - p.id }
         Settings.state.value.localOf(p.id).takeIf { !it.fillOffered }?.let { saveLocal(p, it.copy(fillOffered = true)) }

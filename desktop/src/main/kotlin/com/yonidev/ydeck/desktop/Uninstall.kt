@@ -14,6 +14,7 @@ object Uninstall {
 
     /** Everything YDeck put outside its folder, taken back. Each step on its own, so one failing doesn't stop the rest. */
     fun cleanUp() {
+        runCatching { UsageStats.uninstalled() }
         runCatching { Autostart.set(false) }
         runCatching { ExplorerMenu.set(false) }
         runCatching { if (ClaudePlugin.installed) ClaudePlugin.set(false) }

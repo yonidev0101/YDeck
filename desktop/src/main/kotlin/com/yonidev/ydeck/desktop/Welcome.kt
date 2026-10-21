@@ -199,6 +199,7 @@ private fun Surfaces(project: Project?, actions: AppActions, onDone: () -> Unit)
     var widget by remember { mutableStateOf(true) }
     var explorer by remember { mutableStateOf(false) }
     var claude by remember { mutableStateOf(Tools.claude != null) }
+    var stats by remember { mutableStateOf(Settings.state.value.usageStats) }
     val name = project?.name ?: tr("your projects", "הפרויקטים")
     Box(Modifier.fillMaxSize().background(c.bg)) {
         Column(Modifier.align(Alignment.Center).widthIn(max = 1080.dp).padding(horizontal = 64.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -242,8 +243,11 @@ private fun Surfaces(project: Project?, actions: AppActions, onDone: () -> Unit)
                     }
                 }
             }
-            Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.height(20.dp))
+            UsageStatsChoice(stats, { stats = it })
+            Spacer(Modifier.height(22.dp))
             Pill(tr("Start using YDeck", "מתחילים לעבוד"), Tone.PRIMARY) {
+                Settings.update { it.copy(usageStats = stats, statsAsked = true) }
                 if (widget && project != null && Settings.state.value.widgets.isEmpty()) actions.addWidget(project)
                 Settings.update { it.copy(companion = explorer, explorerMenu = explorer) }
                 Thread { ExplorerMenu.set(explorer) }.start()

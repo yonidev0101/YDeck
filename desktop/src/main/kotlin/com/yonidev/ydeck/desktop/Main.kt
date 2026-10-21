@@ -31,6 +31,7 @@ fun main(args: Array<String>) {
     FolderStrip.start()
     ClaudeLink.start()
     PhoneLink.start()
+    UsageStats.start()
     // A session that ends in a project's folder: its .ydeck files and its git state, at once rather than in 20 seconds.
     ClaudeLink.onStop = { cwd ->
         Thread {
@@ -84,6 +85,7 @@ private fun ApplicationScope.App(background: Boolean, asks: MutableStateFlow<Ask
     }
     val hotkey by Hotkey.presses.collectAsState()
     LaunchedEffect(hotkey) { if (hotkey > 0) palette = !palette }
+    LaunchedEffect(palette) { if (palette) UsageStats.mark(UsageStats.Feature.SEARCH) }
     // Where every project folder stands (git, Claude Code, a dev server, .env), now and every 20 seconds.
     // Keyed by the folders only: typing a note (also in settings.local) doesn't start a new round.
     val folders = settings.local.values.mapNotNull { it.folder }.distinct().sorted()
@@ -145,6 +147,7 @@ private fun ApplicationScope.App(background: Boolean, asks: MutableStateFlow<Ask
                         TrayItem(Glyph.WIDGET, tr("New widget on the desktop", "ווידג'ט חדש על שולחן העבודה")) { addWidget(null) },
                         TrayItem(Glyph.MOON, tr("Close the day", "סגירת היום")) { open(Screen.CloseDay) },
                         TrayItem(Glyph.GEAR, tr("Settings", "הגדרות")) { open(Screen.Settings()) },
+                        TrayItem(Glyph.EDIT, tr("Send feedback", "שליחת משוב")) { runCatching { java.awt.Desktop.getDesktop().browse(java.net.URI(AppInfo.feedback())) } },
                     ),
                     listOf(TrayItem(Glyph.POWER, tr("Quit", "יציאה")) { AppTray.remove(tray); exitApplication() }),
                 ), dark, onClose = { trayMenu = null })

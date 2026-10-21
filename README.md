@@ -51,7 +51,14 @@ projects' `.ydeck` files stay as they are.
 
 ## Privacy
 
-No account, no analytics, no server. Your projects and settings live in `%APPDATA%\YDeck`. The optional Android
+No account, no ads. Your projects and settings live in `%APPDATA%\YDeck`, and nothing about them leaves your computer.
+
+**Anonymous usage counts**, shown on the first run and off with one switch (Settings → General): once a day, a random
+id made on your PC, the version, the language, how many projects as a range, whether Claude Code is connected, and
+which parts were used that day. Never names, paths, code, links or prompts, and no stored IP address. What the app
+sends: [`UsageStats.kt`](desktop/src/main/kotlin/com/yonidev/ydeck/desktop/UsageStats.kt); what the server keeps:
+[`stats/src/index.js`](stats/src/index.js). The website counts page views without cookies.
+ The optional Android
 companion syncs through an end-to-end encrypted relay (AES-256-GCM; the key exists only in the QR code the phone scans).
 Details: <https://ydeck-app.pages.dev/privacy>.
 
@@ -71,6 +78,7 @@ JDK 21 (Android Studio's bundled one works).
 | `app/` | The Android companion: Kotlin, Jetpack Compose and Glance widgets. |
 | `shared/` | Code and assets both apps use. |
 | `relay/` | The phone ↔ computer relay: a Cloudflare Worker with a Durable Object per pair. |
+| `stats/` | The anonymous usage counts: a Cloudflare Worker with one SQLite Durable Object. |
 | `site/` | The website (Cloudflare Pages). |
 | `store/` | Brand, films, store listing. |
 

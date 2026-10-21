@@ -426,6 +426,7 @@ ${RING(72)}
 <a href="${privacy}">${c.foot[0]}</a><a href="${android}">${c.foot[1]}</a><a href="${beta}">${c.foot[2]}</a><a href="/code-signing">Code signing policy</a><a href="${c.other}">${c.otherLabel}</a><a href="mailto:${email}">${email}</a>
 </div></footer>
 ${SCRIPT}
+${require('./stats.cjs')}
 </body></html>`;
 }
 

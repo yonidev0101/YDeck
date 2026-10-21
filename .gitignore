@@ -39,3 +39,7 @@ desktop.ini
 
 # early drafts kept on disk, out of git
 store/ads/archive/
+
+# stats worker
+stats/.dev.vars
+stats/.wrangler/
