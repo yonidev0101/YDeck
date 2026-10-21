@@ -113,7 +113,7 @@ private fun DrawScope.drawWords(t: Float, measurer: TextMeasurer) {
     }
     val lk = p3out(seg(t, 2.7f, 0.5f))
     if (lk <= 0f) return
-    val line = measurer.measure(tr("Every project. One screen.", "כל הפרויקטים. מסך אחד."),
+    val line = measurer.measure(tr("Nothing left open.", "שום דבר לא נשאר פתוח."),
         TextStyle(color = MUTED.copy(alpha = lk), fontFamily = PlexSans, fontSize = (nameSize * 0.42f).toSp()))
     translate(g.cx - line.size.width / 2f, top + name.size.height + nameSize * 0.35f + (1f - lk) * 6f) { drawText(line) }
 }

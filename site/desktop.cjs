@@ -18,12 +18,12 @@ const WORKS = new Set(['Nova', 'Atlas', 'Mira', 'Orbit', 'Quill', 'Juno', 'Kite'
 const COPY = {
   en: {
     lang: 'en', dir: 'ltr', locale: 'en_US', home: '/', other: '/he', otherLabel: 'עברית',
-    title: 'YDeck · Every project. One screen.',
+    title: 'YDeck · Nothing left open.',
     desc: 'YDeck shows on one screen where every project stands: what Claude Code did, what waits for you, and what isn’t saved. Free and open source, for Windows.',
     nav: ['How it works', 'Privacy'], beta: 'Download for Windows',
     eyebrow: 'For developers who work with Claude Code',
-    h1: 'Every project. One screen.',
-    lead: 'Open your computer and see at once where every project stands: what Claude did, what waits for you, and what isn’t saved.',
+    h1: 'Nothing left open.',
+    lead: 'Every project on one screen: open your computer and see at once what Claude did, what waits for you, and what isn’t saved.',
     how: 'See how it works',
     steps: [
       ['open', 'Open', 'With Claude Code, a new project starts in half an hour.', 'There used to be two or three projects a year. Now every idea is a folder with a repo by the same evening.'],
@@ -45,17 +45,17 @@ const COPY = {
     facts: [['Claude writes the memory.', 'Where things stand and what’s next go to a personal file (.ydeck.local.json); decisions and links to one in the repo (.ydeck.json). The instructions are shown in Settings, and the repo file can be turned off.'],
       ['YDeck reads git itself.', 'What isn’t saved, what isn’t pushed, which key is missing. Nothing is sent anywhere.']],
     pr: [['On your machine.', 'Your code never leaves it. No account, no server of ours.'], ['No AI of its own.', 'It works with the agents you already use: Claude Code, and Codex through the sessions it writes.'], ['Never destructive.', 'Nothing it does throws work away. Everything can be undone.'], ['Free.', 'For every developer, on Windows. Mac is next.']],
-    endA: 'Every project. One screen.', endB: 'Free and open source, for Windows.',
+    endA: 'Nothing left open.', endB: 'Free and open source, for Windows.',
     foot: ['Privacy', 'YDeck for Android', 'Download'],
   },
   he: {
     lang: 'he', dir: 'rtl', locale: 'he_IL', home: '/he/', other: '/', otherLabel: 'English',
-    title: 'YDeck · כל הפרויקטים. מסך אחד.',
+    title: 'YDeck · שום דבר לא נשאר פתוח.',
     desc: 'YDeck מראה במסך אחד איפה כל פרויקט עומד: מה Claude Code עשה, מה מחכה לך, ומה לא נשמר. חינם וקוד פתוח, ל־Windows.',
     nav: ['איך זה עובד', 'פרטיות'], beta: 'הורדה ל־Windows',
     eyebrow: 'למפתחים שעובדים עם Claude Code',
-    h1: 'כל הפרויקטים. מסך אחד.',
-    lead: 'פותחים את המחשב ורואים בבת אחת איפה כל פרויקט עומד: מה Claude עשה, מה מחכה לך, ומה לא נשמר.',
+    h1: 'שום דבר לא נשאר פתוח.',
+    lead: 'כל הפרויקטים במסך אחד: פותחים את המחשב ורואים בבת אחת מה Claude עשה, מה מחכה לך, ומה לא נשמר.',
     how: 'איך זה עובד',
     steps: [
       ['open', 'פתוח', 'עם Claude Code, פרויקט חדש מתחיל בחצי שעה.', 'פעם היו שניים־שלושה פרויקטים בשנה. היום כל רעיון הופך לתיקייה עם ריפו, עוד באותו ערב.'],
@@ -77,7 +77,7 @@ const COPY = {
     facts: [['Claude כותב את הזיכרון.', 'איפה עומדים ומה הלאה נכתבים לקובץ אישי (.ydeck.local.json), והחלטות וקישורים לקובץ שבריפו (.ydeck.json). ההוראות גלויות בהגדרות, ואת הקובץ שבריפו אפשר לכבות.'],
       ['YDeck קורא את git בעצמו.', 'מה לא נשמר, מה לא נדחף, ואיזה מפתח חסר. שום דבר לא נשלח לשום מקום.']],
     pr: [['על המחשב שלך.', 'הקוד לא יוצא ממנו. בלי חשבון, בלי שרת שלנו.'], ['בלי AI משלו.', 'עובד עם הסוכנים שכבר יש לך: Claude Code, ו־Codex דרך הסשנים שהוא כותב.'], ['אף פעם לא הורס.', 'שום דבר שהוא עושה לא זורק עבודה. הכול אפשר לבטל.'], ['חינם.', 'לכל מפתח, ב־Windows. Mac בדרך.']],
-    endA: 'כל הפרויקטים. מסך אחד.', endB: 'חינם וקוד פתוח, ל־Windows.',
+    endA: 'שום דבר לא נשאר פתוח.', endB: 'חינם וקוד פתוח, ל־Windows.',
     foot: ['פרטיות', 'YDeck לאנדרואיד', 'הורדה'],
   },
 };

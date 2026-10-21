@@ -1,6 +1,6 @@
 # YDeck
 
-**Every project. One screen.** For developers who run Claude Code in several projects at once.
+**Nothing left open.** Every project on one screen, for developers who run Claude Code in several projects at once.
 
 YDeck is a free, open-source Windows app that shows where every project stands: what Claude Code did, where it's
 waiting for you, and what isn't saved yet. No more going window to window to find the terminal that asked "Do you want

@@ -16,7 +16,7 @@
    14.5  "שרת שנשאר דולק, מפתח שחסר ב־env."               Nova: its dev server, the key missing in .env
    17.3  "לחיצה, ורואים מה בדיוק השתנה."                    Review: the session's receipt and its diff
    21.2  "ובסוף היום, סוגרים הכול בלחיצה."                  Close the day; nothing is open, the green dot
-   25.7  the end card: "כל הפרויקטים. מסך אחד." and what YDeck is, in one line
+   25.7  the end card: "שום דבר לא נשאר פתוח." and what YDeck is, in one line
 -->
 <html>
 <head>
@@ -210,7 +210,7 @@ function endCard(t) {
   const x = lerp(sx, W / 2, k), y = lerp(sy, 330, k) - 50 * Math.sin(Math.PI * k), r = lerp(13 * v.k, 22, k);
   g.globalAlpha = end; g.fillStyle = rgb(STATE.clean); g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
   halo(W / 2, 330, 22, STATE.clean, seg(t, WINDOW_OUT[0] + .9, WINDOW_OUT[0] + 1.7), end);
-  const lines = [[26.2, 'כל הפרויקטים. מסך אחד.', '500 92px Plex', PAPER, 500], [26.8, 'מה Claude עשה, מה מחכה לך, ומה לא נשמר', '400 40px Plex', MUTED, 590],
+  const lines = [[26.2, 'שום דבר לא נשאר פתוח.', '500 92px Plex', PAPER, 500], [26.8, 'כל הפרויקטים במסך אחד: מה Claude עשה, מה מחכה לך, ומה לא נשמר', '400 40px Plex', MUTED, 590],
     [27.4, 'YDeck · חינם וקוד פתוח · ל־Claude Code ב־Windows', '400 32px Plex', MUTED, 700], [27.7, 'ydeck-app.pages.dev', `400 32px ${MONO}`, PAPER, 760]];
   for (const [at, s, font, c, ly] of lines) {
     const inn = out3(seg(t, at, at + .6));

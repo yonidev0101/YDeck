@@ -96,10 +96,10 @@ private fun BrandStep(actions: AppActions, onNext: () -> Unit) {
             Spacer(Modifier.height(20.dp))
             Text("YDeck", color = Color(0xFFF4F4F5), fontSize = 30.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans, letterSpacing = (-0.6).sp)
             Spacer(Modifier.height(34.dp))
-            Text(tr("Every project. One screen.", "כל הפרויקטים. מסך אחד."), color = Color(0xFFF4F4F5), fontSize = 58.sp, lineHeight = 66.sp, fontFamily = Display, fontWeight = FontWeight.Light, textAlign = TextAlign.Center)
+            Text(tr("Nothing left open.", "שום דבר לא נשאר פתוח."), color = Color(0xFFF4F4F5), fontSize = 58.sp, lineHeight = 66.sp, fontFamily = Display, fontWeight = FontWeight.Light, textAlign = TextAlign.Center)
             Spacer(Modifier.height(18.dp))
-            Text(tr("What Claude Code did, what waits for you, and what isn't saved yet, in every project, without going window to window.",
-                "מה Claude Code עשה, מה מחכה לך ומה עוד לא נשמר, בכל הפרויקטים, בלי לעבור בין חלונות."),
+            Text(tr("Every project on one screen: what Claude Code did, what waits for you, and what isn't saved.",
+                "כל הפרויקטים במסך אחד: מה Claude Code עשה, מה מחכה לך, ומה לא נשמר."),
                 color = Color(0xFFB4B4BB), fontSize = 17.sp, lineHeight = 26.sp, fontFamily = PlexSans, textAlign = TextAlign.Center)
             Spacer(Modifier.height(36.dp))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {

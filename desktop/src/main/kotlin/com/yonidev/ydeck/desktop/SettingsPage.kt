@@ -249,9 +249,9 @@ private fun About() {
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Image(painterResource("icons/app.png"), null, Modifier.size(72.dp).clip(RoundedCornerShape(18.dp)))
         Text("YDeck", color = c.fg, fontSize = 30.sp, fontWeight = FontWeight.SemiBold, fontFamily = PlexSans, letterSpacing = (-0.8).sp)
-        PageTitle(tr("Every project. One screen.", "כל הפרויקטים. מסך אחד."), 26)
-        Text(tr("Where every project stands: what Claude did, what waits for you, and what isn't saved.",
-            "איפה כל פרויקט עומד: מה Claude עשה, מה מחכה לך, ומה לא נשמר."),
+        PageTitle(tr("Nothing left open.", "שום דבר לא נשאר פתוח."), 26)
+        Text(tr("Every project on one screen: what Claude did, what waits for you, and what isn't saved.",
+            "כל הפרויקטים במסך אחד: מה Claude עשה, מה מחכה לך, ומה לא נשמר."),
             color = c.muted, fontSize = 15.sp, lineHeight = 23.sp, fontFamily = PlexSans, modifier = Modifier.widthIn(max = 520.dp))
         // Plain text, not monospace: a Hebrew line in a left-to-right face turns around.
         Text(tr("Version ${AppInfo.version} for Windows · free and open source", "גרסה ${AppInfo.version} ל־Windows · חינם וקוד פתוח"), color = c.muted, fontSize = 13.sp, fontFamily = PlexSans)
