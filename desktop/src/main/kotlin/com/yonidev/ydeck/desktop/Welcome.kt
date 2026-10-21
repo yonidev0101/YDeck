@@ -60,7 +60,7 @@ fun WelcomeFlow(deck: Deck, actions: AppActions, startStep: Int = 1) {
 
 private fun finish(p: Project?) {
     Settings.update { it.copy(welcomed = true) }
-    Nav.set(p?.let { Screen.Project(it.id) } ?: homeRoute(Repo.deck.value))
+    Nav.set(homeRoute(Repo.deck.value))
 }
 
 @Composable
@@ -98,8 +98,8 @@ private fun BrandStep(actions: AppActions, onNext: () -> Unit) {
             Spacer(Modifier.height(34.dp))
             Text(tr("Nothing left open.", "שום דבר לא נשאר פתוח."), color = Color(0xFFF4F4F5), fontSize = 58.sp, lineHeight = 66.sp, fontFamily = Display, fontWeight = FontWeight.Light, textAlign = TextAlign.Center)
             Spacer(Modifier.height(18.dp))
-            Text(tr("Your agents work. YDeck keeps track of what they did, what changed, and what still needs you, across every project.",
-                "הסוכנים עובדים. YDeck זוכר מה הם עשו, מה השתנה ומה עוד מחכה לך, בכל הפרויקטים."),
+            Text(tr("Every project on one screen: what Claude Code did, what waits for you, and what isn't saved.",
+                "כל הפרויקטים במסך אחד: מה Claude Code עשה, מה מחכה לך, ומה לא נשמר."),
                 color = Color(0xFFB4B4BB), fontSize = 17.sp, lineHeight = 26.sp, fontFamily = PlexSans, textAlign = TextAlign.Center)
             Spacer(Modifier.height(36.dp))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -192,12 +192,12 @@ private fun FirstProject(project: Project?, actions: AppActions, onProject: (Pro
     }
 }
 
-/** 3: where the project shows: on the desktop, in File Explorer, with Claude Code. */
+/** 3: where the project shows: with Claude Code (the heart of it), on the desktop, and, off unless chosen, in File Explorer. */
 @Composable
 private fun Surfaces(project: Project?, actions: AppActions, onDone: () -> Unit) {
     val c = LocalDeck.current
     var widget by remember { mutableStateOf(true) }
-    var explorer by remember { mutableStateOf(true) }
+    var explorer by remember { mutableStateOf(false) }
     var claude by remember { mutableStateOf(Tools.claude != null) }
     val name = project?.name ?: tr("your projects", "הפרויקטים")
     Box(Modifier.fillMaxSize().background(c.bg)) {
@@ -209,6 +209,17 @@ private fun Surfaces(project: Project?, actions: AppActions, onDone: () -> Unit)
             Text(tr("Turn any off now or later, in Settings.", "אפשר לכבות כל אחד עכשיו או אחר כך, בהגדרות."), color = c.muted, fontSize = 15.sp, fontFamily = PlexSans)
             Spacer(Modifier.height(32.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                SurfaceCard(Modifier.weight(1f), tr("With Claude Code", "עם Claude Code"), tr("When Claude works, needs you, and what it did. A plugin named “ydeck” that talks only to YDeck on this PC.",
+                    "מתי Claude עובד, מתי הוא מחכה לך, ומה הוא עשה. פלאגין בשם ‏“ydeck” שמדבר רק עם YDeck במחשב הזה."),
+                    claude, { claude = it }, enabled = Tools.claude != null) {
+                    Column(Modifier.fillMaxSize().background(Color(0xFF0B0B0C)).padding(horizontal = 24.dp), verticalArrangement = Arrangement.spacedBy(9.dp, Alignment.CenterVertically)) {
+                        Mono("> claude", Color(0xFF8A8A90), 11)
+                        Mono(tr("> add the Stripe webhook", "> תוסיף webhook של Stripe"), Color(0xFFF4F4F5), 11)
+                        Mono("✻ Working…", Color(0xFFD97757), 11)
+                        Text(tr("YDeck knows: ${project?.name ?: "the project"}", "YDeck יודע: ${project?.name ?: "הפרויקט"}"), color = Color(0xFF0B0B0C), fontSize = 11.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans,
+                            modifier = Modifier.padding(top = 6.dp).clip(RoundedCornerShape(99.dp)).background(Color.White).padding(horizontal = 10.dp, vertical = 4.dp))
+                    }
+                }
                 SurfaceCard(Modifier.weight(1f), tr("On the desktop", "על שולחן העבודה"), tr("A glass widget: what's open, what's at work, and every console one click away.", "ווידג'ט זכוכית: מה פתוח, מה בעבודה, וכל קונסולה בלחיצה."), widget, { widget = it }) {
                     Box(Modifier.fillMaxSize().background(Color(0xFFDCD9F7)), contentAlignment = Alignment.Center) {
                         if (project != null) Box(Modifier.width(250.dp)) { WidgetPreview(project, false) } else GlyphIcon(Glyph.WIDGET, 40.dp, INDIGO)
@@ -228,17 +239,6 @@ private fun Surfaces(project: Project?, actions: AppActions, onDone: () -> Unit)
                                 GlyphIcon(Glyph.CODE, 13.dp, Color(0xFF0B0B0C)); Spacer(Modifier.width(6.dp)); GlyphIcon(Glyph.CLAUDE, 13.dp, Color(0xFFD97757))
                             }
                         }
-                    }
-                }
-                SurfaceCard(Modifier.weight(1f), tr("With Claude Code", "עם Claude Code"), tr("See when Claude works or needs you. Claude gets the project and keeps it current. Adds a plugin named “ydeck” to Claude Code; it talks only to YDeck on this computer, and Settings removes it.",
-                    "רואים מתי Claude עובד או מחכה לך. Claude מכיר את הפרויקט ומעדכן אותו. מוסיף ל־Claude Code פלאגין בשם ‏“ydeck” שמדבר רק עם YDeck במחשב הזה, ואפשר להסיר אותו בהגדרות."),
-                    claude, { claude = it }, enabled = Tools.claude != null) {
-                    Column(Modifier.fillMaxSize().background(Color(0xFF0B0B0C)).padding(horizontal = 24.dp), verticalArrangement = Arrangement.spacedBy(9.dp, Alignment.CenterVertically)) {
-                        Mono("> claude", Color(0xFF8A8A90), 11)
-                        Mono(tr("> add the Stripe webhook", "> תוסיף webhook של Stripe"), Color(0xFFF4F4F5), 11)
-                        Mono("✻ Working…", Color(0xFFD97757), 11)
-                        Text(tr("YDeck knows: ${project?.name ?: "the project"}", "YDeck יודע: ${project?.name ?: "הפרויקט"}"), color = Color(0xFF0B0B0C), fontSize = 11.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans,
-                            modifier = Modifier.padding(top = 6.dp).clip(RoundedCornerShape(99.dp)).background(Color.White).padding(horizontal = 10.dp, vertical = 4.dp))
                     }
                 }
             }

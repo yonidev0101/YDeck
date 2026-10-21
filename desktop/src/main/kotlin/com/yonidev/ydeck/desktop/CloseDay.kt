@@ -230,7 +230,7 @@ private fun DayClosed(plans: List<DayPlan>, nexts: Map<String, String>) {
                 }
             }
             Spacer(Modifier.height(22.dp))
-            TextAction(tr("Back to open loops", "חזרה למה שפתוח"), accent = true) { Nav.set(Screen.Loops) }
+            TextAction(tr("Back to Now", "חזרה לעכשיו"), accent = true) { Nav.set(Screen.Loops) }
         }
     }
 }

@@ -71,7 +71,7 @@ sealed class Screen {
     data class NewProject(val folder: String? = null) : Screen()
     data class Settings(val section: SettingsSection = SettingsSection.GENERAL) : Screen()
     data object Welcome : Screen()
-    /** Every project's open loops. */
+    /** Now, the home page: where every project stands, and every project's open loops. */
     data object Loops : Screen()
     /** Closing the day: everything open, closed in one go. */
     data object CloseDay : Screen()
@@ -87,11 +87,11 @@ object Nav {
     fun set(r: Screen) { _route.value = r }
 }
 
-/** Where the window opens: the first run, else the first project, else a new one. */
+/** Where the window opens: the first run, else Now (every project at once), else a new project. */
 fun homeRoute(deck: Deck): Screen = when {
     !Settings.state.value.welcomed && deck.projects.isEmpty() -> Screen.Welcome
     deck.projects.isEmpty() -> Screen.NewProject()
-    else -> Screen.Project(deck.projects.first().id)
+    else -> Screen.Loops
 }
 
 @Composable
@@ -220,7 +220,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.ProjectsNav(deck: Dec
     }
     Spacer(Modifier.height(12.dp))
     val open = openLoopCount(deck)
-    NavRow(Glyph.CHECK, tr("Open loops", "מה פתוח"), route is Screen.Loops || route is Screen.CloseDay, badge = open.takeIf { it > 0 }?.toString()) { Nav.set(Screen.Loops) }
+    NavRow(Glyph.CHECK, tr("Now", "עכשיו"), route is Screen.Loops || route is Screen.CloseDay, badge = open.takeIf { it > 0 }?.toString()) { Nav.set(Screen.Loops) }
     Spacer(Modifier.height(14.dp))
     GroupLabel(tr("Projects", "פרויקטים"), Modifier.padding(start = 6.dp))
     val selected = (route as? Screen.Project)?.id ?: (route as? Screen.Details)?.id

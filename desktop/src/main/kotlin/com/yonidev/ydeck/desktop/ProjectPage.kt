@@ -44,8 +44,9 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 /*
- * A project's home: its header (logo, name, where it stands, the editor and Claude) and four tabs. Overview is where
- * you pick up from; Links, Files and Commands hold the rest (ProjectTabs.kt).
+ * A project's home: its header (logo, name, where it stands, the editor and Claude) and its tabs. Overview is where
+ * you pick up from, Git what changed, Links the consoles; Files and Commands show once there's something in them, and
+ * are always in the menu (ProjectTabs.kt).
  */
 
 private val CLAUDE_ORANGE = Color(0xFFD97757)
@@ -88,7 +89,6 @@ private fun Header(p: Project, local: Local, actions: AppActions) {
             val editor = Tools.quick(dir).getOrNull(1)?.takeIf { it.kind != ToolKind.AGENT && it.kind != ToolKind.TERMINAL }
             if (editor != null) { Pill(editor.label.removePrefix("Android "), Tone.SOFT, Glyph.CODE) { Tools.launch(editor, dir, p.name) }; Spacer(Modifier.width(8.dp)) }
             Tools.claude?.let { claude -> Pill("Claude", Tone.DARK, Glyph.CLAUDE, CLAUDE_ORANGE) { Tools.launch(claude, dir, p.name) }; Spacer(Modifier.width(8.dp)) }
-            if (Tools.claude != null) { CloseWithClaude(p, dir); Spacer(Modifier.width(8.dp)) }
         }
         var menu by remember { mutableStateOf(false) }
         Box {
@@ -99,6 +99,8 @@ private fun Header(p: Project, local: Local, actions: AppActions) {
                     MenuItem(Glyph.CLAUDE, tr("New Claude conversation", "שיחה חדשה עם Claude")) { menu = false; Tools.launch(claude, dir, p.name, fresh = true) }
                 }
                 MenuItem(Glyph.EDIT, tr("Details", "פרטים")) { menu = false; Nav.set(Screen.Details(p.id)) }
+                MenuItem(Glyph.DOC, tr("Files", "קבצים")) { menu = false; Nav.set(Screen.Project(p.id, Tab.FILES)) }
+                MenuItem(Glyph.PLAY, tr("Commands", "פקודות")) { menu = false; Nav.set(Screen.Project(p.id, Tab.COMMANDS)) }
                 // Claude reads the folder and suggests what's missing; the details page shows what it found.
                 if (dir != null && Tools.claude != null) MenuItem(Glyph.SPARKLE, tr("Fill in with Claude", "מילוי פרטים עם Claude")) {
                     menu = false; ClaudeFill.start(p, dir); Nav.set(Screen.Details(p.id))
@@ -165,9 +167,9 @@ private fun Tabs(p: Project, tab: Tab, local: Local) {
                 Tab.OVERVIEW to tr("Overview", "סקירה"),
                 Tab.GIT to "Git" + (local.folder?.let { Git.state.collectAsState().value[it] }?.changes?.takeIf { it > 0 }?.let { "  $it" } ?: ""),
                 Tab.LINKS to tr("Links", "קישורים") + (p.actions.size.takeIf { it > 0 }?.let { "  $it" } ?: ""),
-                Tab.FILES to tr("Files", "קבצים"),
-                Tab.COMMANDS to tr("Commands", "פקודות") + (local.commands.size.takeIf { it > 0 }?.let { "  $it" } ?: ""),
-            ).forEach { (t, label) ->
+                (Tab.FILES to tr("Files", "קבצים")).takeIf { local.files.isNotEmpty() || tab == Tab.FILES },
+                (Tab.COMMANDS to tr("Commands", "פקודות") + (local.commands.size.takeIf { it > 0 }?.let { "  $it" } ?: "")).takeIf { local.commands.isNotEmpty() || tab == Tab.COMMANDS },
+            ).filterNotNull().forEach { (t, label) ->
                 val on = t == tab
                 Column(Modifier.width(androidx.compose.foundation.layout.IntrinsicSize.Max).clickable { Nav.set(Screen.Project(p.id, t)) }, horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(label, color = if (on) c.fg else c.muted, fontSize = 14.sp, fontWeight = if (on) FontWeight.Medium else FontWeight.Normal, fontFamily = PlexSans,

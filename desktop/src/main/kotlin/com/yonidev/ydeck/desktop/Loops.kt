@@ -163,7 +163,7 @@ fun GroupScope.LoopRow(p: Project, local: Local, loop: Loop) {
 @Composable
 fun LoopsCard(p: Project, local: Local) {
     val c = LocalDeck.current
-    val loops = loopsOf(local)
+    val loops = loopsOf(local).filter { it.kind != LoopKind.AGENT }
     if (loops.isEmpty()) {
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.paper).padding(horizontal = 18.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             GlyphIcon(Glyph.CHECK, 16.dp, c.liveText)
@@ -174,61 +174,120 @@ fun LoopsCard(p: Project, local: Local) {
     }
     Column {
         Section(tr("Open", "פתוח") + "  ${loops.size}") {
-            if (Tools.claude != null && local.dir != null) TextAction(tr("Go over it with Claude", "לעבור על זה עם Claude"), accent = true) { goOver(p, local, loops) }
+            local.dir?.let { CloseWithClaude(p, it, small = true) }
         }
         Group { loops.forEach { LoopRow(p, local, it) } }
     }
 }
 
-/** Every project's open loops on one page: the end of the day is closing them. */
+/*
+ * The home page, Now: where every project stands, the one that needs you first. Claude waiting, then Claude at work,
+ * then something left open (each with what closes it), then, folded into one quiet list, what is all saved.
+ */
 @Composable
 fun LoopsPage(deck: Deck) {
     val c = LocalDeck.current
+    val dark = c == Dark
     val settings by Settings.state.collectAsState()
+    val pulses by Pulses.state.collectAsState()
+    val rows = deck.projects.mapNotNull { p ->
+        val local = settings.localOf(p.id)
+        if (local.folder == null) return@mapNotNull null
+        NowRow(p, local, claudeIn(local.folder), loopsOf(local).filter { it.kind != LoopKind.AGENT })
+    }
+    val (busy, calm) = rows.sortedBy { it.rank }.partition { it.rank < 3 }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 44.dp, vertical = 30.dp)) {
         Column(Modifier.widthIn(max = 820.dp), verticalArrangement = Arrangement.spacedBy(26.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    PageTitle(tr("Open loops", "מה פתוח"))
+                    PageTitle(tr("Now", "עכשיו"))
                     Spacer(Modifier.height(6.dp))
-                    Text(tr("Everything that waits for you, in every project. Close them, and keep nothing in your head.",
-                        "כל מה שמחכה לך, בכל הפרויקטים. סוגרים, ולא מחזיקים כלום בראש."), color = c.muted, fontSize = 14.sp, lineHeight = 21.sp, fontFamily = PlexSans)
+                    Text(tr("Where every project stands: what Claude is doing, what waits for you, and what isn't saved.",
+                        "איפה כל פרויקט עומד: מה Claude עושה, מה מחכה לך, ומה לא נשמר."), color = c.muted, fontSize = 14.sp, lineHeight = 21.sp, fontFamily = PlexSans)
                 }
                 Spacer(Modifier.width(16.dp))
-                Pill(tr("Close the day", "סגירת היום"), Tone.DARK, Glyph.MOON) { Nav.set(Screen.CloseDay) }
+                if (busy.any { it.loops.isNotEmpty() }) Pill(tr("Close the day", "סגירת היום"), Tone.DARK, Glyph.MOON) { Nav.set(Screen.CloseDay) }
             }
-            var any = false
-            deck.projects.forEach { p ->
-                val local = settings.localOf(p.id)
-                val loops = loopsOf(local)
-                if (loops.isEmpty()) return@forEach
-                any = true
-                val next = local.note.ifBlank { Pulses.state.value[local.folder]?.suggestion.orEmpty() }
-                Column {
-                    // The project (it opens), its next step under its name, and settling it all with Claude.
-                    Row(Modifier.padding(bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Row(Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).clickable { Nav.set(Screen.Project(p.id)) }.padding(start = 4.dp, end = 8.dp, top = 2.dp, bottom = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically) {
-                            Logo(p, 28.dp)
-                            Spacer(Modifier.width(12.dp))
-                            Column {
-                                Text(p.name, color = c.fg, fontSize = 15.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans)
-                                if (next.isNotBlank()) Text(tr("Next: ", "הבא: ") + next, color = c.faint, fontSize = 12.sp, fontFamily = PlexSans, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                    style = TextStyle(textDirection = TextDirection.Content))
-                            }
-                        }
-                        if (Tools.claude != null && local.dir != null) TextAction(tr("Go over it with Claude", "לעבור על זה עם Claude"), accent = true) { goOver(p, local, loops) }
-                    }
-                    Group { loops.forEach { LoopRow(p, local, it) } }
-                }
-            }
-            if (!any) Column(Modifier.fillMaxWidth().padding(vertical = 60.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                GlyphIcon(Glyph.CHECK, 30.dp, c.liveText)
-                Spacer(Modifier.height(14.dp))
+            busy.forEach { r -> NowProject(r, pulses[r.local.folder], dark) }
+            if (busy.isEmpty()) Column(Modifier.fillMaxWidth().padding(vertical = 40.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Dot(CLEAN_DOT, 14.dp)
+                Spacer(Modifier.height(16.dp))
                 Text(tr("Nothing open", "אין שום דבר פתוח"), color = c.fg, fontSize = 18.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans)
                 Spacer(Modifier.height(4.dp))
                 Text(tr("Every change is committed, pushed, and no agent is waiting.", "כל שינוי שמור ודחוף, ואף סוכן לא מחכה."), color = c.muted, fontSize = 14.sp, fontFamily = PlexSans)
             }
+            // The calm ones, one line each: all saved, and where they'll pick up.
+            if (calm.isNotEmpty()) Group(tr("All saved", "הכול שמור")) {
+                calm.forEach { r ->
+                    val next = r.local.note.ifBlank { pulses[r.local.folder]?.suggestion.orEmpty() }
+                    Item({ Nav.set(Screen.Project(r.p.id)) }) {
+                        Logo(r.p, 22.dp)
+                        Text(r.p.name, color = c.fg, fontSize = 14.sp, fontFamily = PlexSans)
+                        Text(next, color = c.faint, fontSize = 12.sp, fontFamily = PlexSans, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f), style = TextStyle(textDirection = TextDirection.Content))
+                        Dot(CLEAN_DOT)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** A project on Now: Claude waiting comes first, then at work, then something open, then all saved. */
+private class NowRow(val p: Project, val local: Local, val session: ClaudeSession?, val loops: List<Loop>) {
+    val rank = when {
+        session?.mode == ClaudeMode.WAITING -> 0
+        session?.mode == ClaudeMode.WORKING -> 1
+        loops.isNotEmpty() -> 2
+        else -> 3
+    }
+}
+
+/** A project that needs a look: where Claude is in it, what it did last time, what's open, and closing it for today. */
+@Composable
+private fun NowProject(r: NowRow, pulse: Pulse?, dark: Boolean) {
+    val c = LocalDeck.current
+    val next = r.local.note.ifBlank { pulse?.suggestion.orEmpty() }
+    val handoff = pulse?.handoff?.takeIf { it.done.isNotBlank() }
+    val live = r.session?.takeIf { (it.mode == ClaudeMode.WORKING || it.mode == ClaudeMode.WAITING) && it.detail.isNotBlank() }
+    Column {
+        Row(Modifier.padding(bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).clickable { Nav.set(Screen.Project(r.p.id)) }.padding(start = 4.dp, end = 8.dp, top = 2.dp, bottom = 2.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Logo(r.p, 28.dp)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f, fill = false)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(r.p.name, color = c.fg, fontSize = 15.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans)
+                        r.session?.takeIf { it.mode != ClaudeMode.DONE }?.let { s ->
+                            Spacer(Modifier.width(12.dp))
+                            ClaudeDot(s.mode, dark, 7.dp)
+                            Spacer(Modifier.width(7.dp))
+                            Text(claudeText(s), color = if (s.mode == ClaudeMode.OPEN) c.muted else claudeColor(s.mode, dark), fontSize = 13.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans)
+                        }
+                    }
+                    if (next.isNotBlank()) Text(tr("Next: ", "הבא: ") + next, color = c.faint, fontSize = 12.sp, fontFamily = PlexSans, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        style = TextStyle(textDirection = TextDirection.Content))
+                }
+            }
+            if (r.loops.isNotEmpty()) r.local.dir?.let { CloseWithClaude(r.p, it, small = true) }
+        }
+        if (live == null && handoff == null && r.loops.isEmpty()) return@Column
+        Group {
+            // What Claude is on now (its prompt, or its question), then what it did last time, then what's open.
+            if (live != null) Item {
+                ClaudeDot(live.mode, dark, 7.dp)
+                Text(if (live.mode == ClaudeMode.WORKING) "“${live.detail}”" else live.detail, color = c.fg, fontSize = 14.sp, fontFamily = PlexSans, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f), style = TextStyle(textDirection = TextDirection.Content))
+                Text(ago(live.workStart), color = c.faint, fontSize = 12.sp, fontFamily = PlexSans)
+            }
+            if (handoff != null) Item {
+                GlyphIcon(Glyph.CLAUDE, 13.dp, c.faint)
+                Text(tr("Last time: ", "בפעם הקודמת: ") + handoff.done, color = c.muted, fontSize = 13.sp, fontFamily = PlexSans, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f), style = TextStyle(textDirection = TextDirection.Content))
+                Text(ago(handoff.at), color = c.faint, fontSize = 12.sp, fontFamily = PlexSans)
+            }
+            r.loops.forEach { LoopRow(r.p, r.local, it) }
         }
     }
 }
