@@ -3,6 +3,10 @@
   "summaryAt": "2026-10-21T17:36:43.449Z",
   "decisions": [
     {
+      "text": "The strip in File Explorer and the widgets lead with where the project stands, as Now says it (Claude waiting or at work, what is open, or all saved and the next step); links and tools come after. A widget can hold every project: Now on the desktop.",
+      "date": "2026-10-22"
+    },
+    {
       "text": "ההבטחה האחת של YDeck: \"כל הפרויקטים. מסך אחד.\" (מה Claude עשה, מה מחכה לך, ומה לא נשמר). מסך הבית הוא \"עכשיו\", שממיין את הפרויקטים לפי מי צריך אותך קודם; קישורים, קבצים, פקודות, Git, הטלפון והפס בסייר הקבצים הם משניים ולא חלק מההבטחה. האתר והסרטון בנויים סביבה, כי המסר הקודם (שפת הנקודה, המטאפורה) לא הסביר מה הכלי נותן",
       "date": "2026-10-21"
     },

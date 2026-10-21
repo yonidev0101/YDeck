@@ -57,8 +57,8 @@ import java.io.Writer
 
 /*
  * The project inside File Explorer: when a project's folder (or any folder in it) is open in Explorer, a small strip
- * of the project sits at the bottom of that window: its state, its editor and Claude Code, a running dev server, its
- * first links. It follows that window: it moves with it, hides when it is minimised or closed, stays under other
+ * of the project sits at the bottom of that window. It says first where the project stands, as Now does (Claude
+ * waiting or at work, what's open, or all saved and the next step), then its editor, Claude Code and git. It follows that window: it moves with it, hides when it is minimised or closed, stays under other
  * apps that cover it, and never takes the focus from it.
  */
 
@@ -267,47 +267,40 @@ fun FolderStripCard(p: Project, a: Attach, dark: Boolean, actions: StripActions)
         Box(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 14.dp).shadow(5.dp, shape).clip(shape)
             .background(glass(p.color, dark).copy(alpha = 1f)).border(1.dp, if (dark) Color.White.copy(alpha = 0.10f) else Color.Black.copy(alpha = 0.08f), shape)) {
             BoxWithConstraints(Modifier.fillMaxSize()) {
-                val wide = maxWidth >= 430.dp
+                val local = Settings.state.collectAsState().value.localOf(p.id).let { if (it.folder == null) it.copy(folder = a.folder) else it }
+                val stand = standOf(p, local)
                 Row(Modifier.fillMaxSize().padding(start = 10.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Logo(p, 28.dp)
                     Spacer(Modifier.width(9.dp))
                     Column(Modifier.weight(1f)) {
                         Text(p.name, color = c.fg, style = TextStyle(fontFamily = PlexSans, fontWeight = FontWeight.Medium, fontSize = 13.5.sp, lineHeight = 17.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        val claude = claudeIn(a.folder)
+                        // Where it stands, then what goes with it (Claude's question, the next open thing, the next step).
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            when {
-                                // Claude Code at work comes first, then git, then the account.
-                                claude != null -> {
-                                    ClaudeDot(claude.mode, dark)
-                                    Spacer(Modifier.width(5.dp))
-                                    Text(claudeText(claude), color = if (claude.mode == ClaudeMode.DONE) c.muted else claudeColor(claude.mode, dark),
-                                        style = TextStyle(fontFamily = PlexSans, fontWeight = FontWeight.Medium, fontSize = 11.sp, lineHeight = 14.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                }
-                                git != null -> {
-                                    Box(Modifier.size(6.dp).clip(RoundedCornerShape(3.dp)).background(if (git.changes > 0) CHANGED_DOT else CLEAN_DOT))
-                                    Spacer(Modifier.width(5.dp))
-                                    Text(git.describe() + (if (git.lastAt > 0) " · " + (if (I18n.rtl) "\u200F${ago(git.lastAt)}\u200F" else ago(git.lastAt)) else ""), color = c.muted,
-                                        style = TextStyle(fontFamily = PlexSans, fontSize = 11.sp, lineHeight = 14.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                }
-                                else -> Text(Chrome.describe(p), color = c.muted, style = TextStyle(fontFamily = PlexSans, fontSize = 11.sp, lineHeight = 14.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            }
+                            StandDot(stand, dark, 6.dp)
+                            Spacer(Modifier.width(5.dp))
+                            val lit = stand.mode == StandMode.WAITING || stand.mode == StandMode.WORKING
+                            val line = stand.title + (if (stand.detail.isNotBlank()) " · " + stand.detail else "")
+                            Text(line,
+                                color = if (lit) standColor(stand, dark) else c.muted,
+                                style = TextStyle(fontFamily = PlexSans, fontWeight = if (lit) FontWeight.Medium else FontWeight.Normal, fontSize = 11.sp, lineHeight = 14.sp,
+                                    textDirection = dirOf(line)), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
                     pulse?.port?.let { port -> LivePill(port, dark) { actions.open(p, "http://localhost:$port") } }
-                    // Explorer is already open here: the editor, Claude Code and a terminal.
-                    listOfNotNull(Tools.studio?.takeIf { Tools.isAndroid(dir) } ?: Tools.vscode ?: Tools.cursor, Tools.claude, Tools.terminal).forEach { t ->
+                    // Something open: how much, and a click shows it on the project's page, with what closes it.
+                    if (stand.loops.isNotEmpty()) StripButton(tr("What's open in ${p.name}", "מה פתוח ב־${p.name}"), dark, { actions.edit(p) }) {
+                        Box(Modifier.clip(RoundedCornerShape(99.dp)).background(CHANGED_DOT.copy(alpha = if (dark) 0.22f else 0.18f)).padding(horizontal = 7.dp, vertical = 2.dp)) {
+                            Text("${stand.loops.size}", color = if (dark) Color(0xFFFFC56B) else Color(0xFF9A5B00), style = TextStyle(fontFamily = PlexSans, fontWeight = FontWeight.SemiBold, fontSize = 11.sp))
+                        }
+                    }
+                    // Explorer is already open here: the editor and Claude Code (a terminal is in "more").
+                    listOfNotNull(Tools.studio?.takeIf { Tools.isAndroid(dir) } ?: Tools.vscode ?: Tools.cursor, Tools.claude).forEach { t ->
                         val tip = when {
                             t.kind == ToolKind.AGENT && pulse?.claudeAt != null -> tr("Continue with Claude · ${ago(pulse.claudeAt)}", "המשך עם Claude · ${ago(pulse.claudeAt)}")
                             t.kind == ToolKind.AGENT -> "Claude Code"
                             else -> t.label
                         }
                         StripButton(tip, dark, { actions.tool(p, t) }) { ToolMark(t, 18.dp, dark) }
-                    }
-                    if (p.actions.isNotEmpty()) {
-                        Box(Modifier.padding(horizontal = 4.dp).size(1.dp, 22.dp).background(if (dark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.10f)))
-                        p.actions.take(if (wide) 3 else 1).forEach { act ->
-                            StripButton(act.label, dark, { actions.link(p, act) }) { ServiceMark(act.service, act.faviconHost, 18.dp, dark) }
-                        }
                     }
                     // Git: its sheet, with a dot while something waits (changes to commit, commits to push or pull).
                     if (git != null) StripButton("Git · " + gitWords(git), dark, { actions.git(p, a) }) {

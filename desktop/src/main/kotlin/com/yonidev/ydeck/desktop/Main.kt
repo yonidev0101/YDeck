@@ -99,13 +99,14 @@ private fun ApplicationScope.App(background: Boolean, asks: MutableStateFlow<Ask
     // A project without a logo takes its site's icon, once (removing it in the details then sticks).
     LaunchedEffect(deck) { Logos.fillFromSites(deck) }
 
+    /** A project's widget; without a project, Now's widget (every project at once). */
     fun addWidget(p: Project?) {
         val screen = Toolkit.getDefaultToolkit().screenSize
         val scale = java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().defaultScreenDevice.defaultConfiguration.defaultTransform.scaleX.toFloat()
         val n = Settings.state.value.widgets.size
         val x = screen.width / scale - 380f - 24f - n * 24f
         val y = 24f + n * 230f % ((screen.height / scale) - 260f)
-        Settings.setWidget(WidgetSpec("w" + System.currentTimeMillis().toString(36), (p ?: Repo.deck.value.projects.firstOrNull())?.id, x, y, 380f, 234f))
+        Settings.setWidget(WidgetSpec("w" + System.currentTimeMillis().toString(36), p?.id ?: NOW_WIDGET, x, y, 380f, if (p == null) 300f else 234f))
     }
 
     // The icon by the clock (TrayMenu.kt), and where its menu was asked for.
@@ -180,7 +181,7 @@ private fun ApplicationScope.App(background: Boolean, asks: MutableStateFlow<Ask
         panel?.let { pn ->
             key(pn) {
                 PanelWindow(pn, deck, dark, onClose = { panel = null },
-                    onPick = { spec, p -> Settings.setWidget(spec.copy(project = p.id)); panel = null },
+                    onPick = { spec, id -> Settings.setWidget(spec.copy(project = id)); panel = null },
                     onEdit = { p -> open(Screen.Project(p.id)) },
                     onGit = { p -> open(Screen.Project(p.id, Tab.GIT)) })
             }

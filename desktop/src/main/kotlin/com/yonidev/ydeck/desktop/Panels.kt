@@ -62,10 +62,10 @@ sealed class Panel {
 
 /** A floating card next to the widget it came from; it closes when it loses focus, like the phone's bottom sheet. */
 @Composable
-fun ApplicationScope.PanelWindow(panel: Panel, deck: Deck, dark: Boolean, onClose: () -> Unit, onPick: (WidgetSpec, Project) -> Unit, onEdit: (Project) -> Unit, onGit: (Project) -> Unit) {
+fun ApplicationScope.PanelWindow(panel: Panel, deck: Deck, dark: Boolean, onClose: () -> Unit, onPick: (WidgetSpec, String) -> Unit, onEdit: (Project) -> Unit, onGit: (Project) -> Unit) {
     val w = Panel.WIDTH
     val h = when (panel) {
-        is Panel.Pick -> (96f + 64f * deck.projects.size).coerceAtMost(520f)
+        is Panel.Pick -> (96f + 64f * (deck.projects.size + 1)).coerceAtMost(520f)
         is Panel.Git -> Panel.GIT_HEIGHT
         else -> Panel.MORE_HEIGHT
     }
@@ -92,7 +92,7 @@ fun ApplicationScope.PanelWindow(panel: Panel, deck: Deck, dark: Boolean, onClos
             Box(Modifier.fillMaxSize().padding(14.dp).shadow(6.dp, shape).clip(shape).background(c.surface).border(1.dp, c.line, shape)) {
                 when (panel) {
                     is Panel.More -> deck.byId(panel.projectId)?.let { QuickLook(it, dark, onClose, onEdit) }
-                    is Panel.Pick -> Picker(deck, panel.spec.project, onPick = { onPick(panel.spec, it) })
+                    is Panel.Pick -> Picker(deck, panel.spec.project, onPick = { onPick(panel.spec, it.id) }, onPickNow = { onPick(panel.spec, NOW_WIDGET) })
                     is Panel.Git -> deck.byId(panel.projectId)?.let { GitSheet(it, dark, onClose, onGit) }
                 }
             }
@@ -206,11 +206,23 @@ private fun QuickTile(item: QuickItem, dark: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun Picker(deck: Deck, currentId: String?, onPick: (Project) -> Unit) {
+private fun Picker(deck: Deck, currentId: String?, onPick: (Project) -> Unit, onPickNow: () -> Unit) {
     val c = LocalDeck.current
     Column(Modifier.fillMaxSize().padding(vertical = 14.dp)) {
         Text(tr("Projects", "פרויקטים"), color = c.fg, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, fontFamily = PlexSans, modifier = Modifier.padding(horizontal = 18.dp, vertical = 6.dp))
         LazyColumn {
+            // Every project at once: Now on the desktop.
+            item(key = NOW_WIDGET) {
+                Row(Modifier.fillMaxWidth().height(60.dp).clickable { onPickNow() }.padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource("icons/app.png"), null, Modifier.size(34.dp).clip(RoundedCornerShape(9.dp)))
+                    Column(Modifier.weight(1f)) {
+                        Text(tr("All projects", "כל הפרויקטים"), color = c.fg, fontSize = 15.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans)
+                        Text(tr("Now: what needs you, in every project", "עכשיו: מה מחכה לך, בכל הפרויקטים"), color = c.muted, fontSize = 12.sp, fontFamily = PlexSans)
+                    }
+                    if (currentId == NOW_WIDGET) GlyphIcon(Glyph.CHECK, 18.dp, c.accentText)
+                }
+            }
             items(deck.projects, key = { it.id }) { p ->
                 Row(Modifier.fillMaxWidth().height(60.dp).clickable { onPick(p) }.padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)) {

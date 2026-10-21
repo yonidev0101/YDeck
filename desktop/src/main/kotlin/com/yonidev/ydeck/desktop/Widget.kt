@@ -3,6 +3,7 @@ package com.yonidev.ydeck.desktop
 import androidx.compose.foundation.ContextMenuArea
 import androidx.compose.foundation.ContextMenuItem
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.TooltipArea
 import androidx.compose.foundation.TooltipPlacement
 import androidx.compose.foundation.background
@@ -37,6 +38,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
@@ -67,6 +69,9 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.draganddrop.DragAndDropEvent
 import androidx.compose.ui.draganddrop.DragAndDropTarget
 import androidx.compose.ui.draganddrop.awtTransferable
+
+/** The widget whose "project" is every project: Now on the desktop. */
+const val NOW_WIDGET = "*now"
 
 /** The shadow's room around the card inside the transparent window. */
 private val EDGE = 10.dp
@@ -133,7 +138,7 @@ fun ApplicationScope.WidgetWindow(spec: WidgetSpec, deck: Deck, dark: Boolean, a
                 Settings.setWidget(spec.copy(x = p.x.value, y = p.y.value, w = size.width.value, h = size.height.value))
             }
         }
-        val project = deck.byId(spec.project) ?: deck.projects.firstOrNull()
+        val project = if (spec.project == NOW_WIDGET) null else deck.byId(spec.project) ?: deck.projects.firstOrNull()
         DeckTheme(dark) {
             WidgetFrame(spec, deck, project, dark, actions) { Win32.sendToBack(window) }
         }
@@ -145,7 +150,8 @@ fun ApplicationScope.WidgetWindow(spec: WidgetSpec, deck: Deck, dark: Boolean, a
 private fun WindowScope.WidgetFrame(spec: WidgetSpec, deck: Deck, project: Project?, dark: Boolean, actions: WidgetActions, back: () -> Unit) {
     val hover = remember { MutableInteractionSource() }
     val hovered by hover.collectIsHoveredAsState()
-    val color = project?.color ?: 0xFF000000.toInt()
+    // Now's widget is in YDeck's own ink, not a project's colour.
+    val color = project?.color ?: (if (dark) 0xFF0B0B0C else 0xFFF4F4F6).toInt()
     val settings by Settings.state.collectAsState()
     val local = settings.localOf(project?.id)
     ContextMenuArea(items = {
@@ -156,7 +162,7 @@ private fun WindowScope.WidgetFrame(spec: WidgetSpec, deck: Deck, project: Proje
                 local.commands.forEach { c -> add(ContextMenuItem(tr("Run: ${c.label.ifBlank { c.line }}", "הרצה: ${c.label.ifBlank { c.line }}")) { actions.run(project, c) }) }
             }
             if (project != null) add(ContextMenuItem(tr("Open ${project.name}", "פתיחת ${project.name}")) { actions.edit(project) })
-            if (deck.projects.size > 1) add(ContextMenuItem(tr("Another project", "פרויקט אחר")) { actions.pick(spec) })
+            if (deck.projects.size > 1 || spec.project == NOW_WIDGET) add(ContextMenuItem(tr("Another project", "פרויקט אחר")) { actions.pick(spec) })
             add(ContextMenuItem(tr("Size: wide", "גודל: רחב")) { actions.resize(spec, 360f, 214f) })
             add(ContextMenuItem(tr("Size: small square", "גודל: ריבוע קטן")) { actions.resize(spec, 214f, 214f) })
             add(ContextMenuItem(tr("Size: one row", "גודל: שורה אחת")) { actions.resize(spec, 380f, 84f) })
@@ -180,9 +186,13 @@ private fun WindowScope.WidgetFrame(spec: WidgetSpec, deck: Deck, project: Proje
     }
 }
 
-/** The card's content for its size: one row, a small square, or the wide header with one or two rows (DeckWidget.kt). */
+/**
+ * The card's content for its size: one row, a small square, or the wide card. Each leads with where the project stands
+ * (as Now says it), its links underneath. The all-projects widget ([NOW_WIDGET]) is Now itself, on the desktop.
+ */
 @Composable
 fun WidgetLayout(spec: WidgetSpec, deck: Deck, project: Project?, dark: Boolean, actions: WidgetActions, back: () -> Unit) {
+    if (spec.project == NOW_WIDGET) { NowWidget(deck, dark, actions, back); return }
     if (project == null) { Empty(dark); return }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val w = maxWidth
@@ -227,31 +237,19 @@ private const val MORE = -1
 
 @Composable
 private fun Wide(spec: WidgetSpec, deck: Deck, p: Project, dark: Boolean, w: Dp, h: Dp, actions: WidgetActions, back: () -> Unit) {
-    Column(Modifier.fillMaxSize().padding(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 10.dp)) {
+    val local = LocalPreviewLocal.current ?: Settings.state.collectAsState().value.localOf(p.id)
+    val stand = standOf(p, local)
+    Column(Modifier.fillMaxSize().padding(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 8.dp)) {
         Row(Modifier.fillMaxWidth().height(38.dp), verticalAlignment = Alignment.CenterVertically) {
             Row(Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).clickable { actions.pick(spec) }, verticalAlignment = Alignment.CenterVertically) {
                 Logo(p, 30.dp)
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Text(p.name, color = ink(dark), style = TextStyle(fontFamily = PlexSans, fontWeight = FontWeight.Medium, fontSize = 15.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    val git = gitOf(p)
-                    val claude = claudeOf(p)
-                    // Claude Code at work comes first; then git; then the account.
-                    if (claude != null) Row(verticalAlignment = Alignment.CenterVertically) {
-                        ClaudeDot(claude.mode, dark)
-                        Spacer(Modifier.width(5.dp))
-                        Text(claudeText(claude), color = if (claude.mode == ClaudeMode.DONE) muted(dark) else claudeColor(claude.mode, dark),
-                            style = TextStyle(fontFamily = PlexSans, fontWeight = FontWeight.Medium, fontSize = 11.sp, lineHeight = 14.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                    else if (git != null) Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(6.dp).clip(RoundedCornerShape(3.dp)).background(if (git.changes > 0) CHANGED_DOT else CLEAN_DOT))
-                        Spacer(Modifier.width(5.dp))
-                        Text(git.describe(), color = muted(dark), style = TextStyle(fontFamily = PlexSans, fontSize = 11.sp, lineHeight = 14.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                    else Text(Chrome.describe(p), color = muted(dark), style = TextStyle(fontFamily = PlexSans, fontSize = 11.sp, lineHeight = 14.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    StandLine(stand, dark)
                 }
             }
-            val dir = (LocalPreviewLocal.current ?: Settings.state.collectAsState().value.localOf(p.id)).dir
+            val dir = local.dir
             if (dir != null) {
                 Pulses.state.collectAsState().value[dir.path]?.port?.takeIf { w >= 330.dp }?.let { port ->
                     LivePill(port, dark) { actions.open(p, DeckAction(Catalog.LINK, "http://localhost:$port", "localhost")); back() }
@@ -261,41 +259,150 @@ private fun Wide(spec: WidgetSpec, deck: Deck, p: Project, dark: Boolean, w: Dp,
                 Spacer(Modifier.width(2.dp))
             }
         }
-        val rows = if (h >= 190.dp) 2 else 1
-        val showLabels = (h - 70.dp) / rows >= 62.dp
-        Spacer(Modifier.height(4.dp))
-        slots(p, rows * 4).chunked(4).forEach { row ->
-            Row(Modifier.fillMaxWidth().weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                row.forEach { slot -> Slot(spec, p, slot, dark, showLabels, 26.dp, actions, back) }
-            }
+        Spacer(Modifier.height(8.dp))
+        // What goes with the stand, as much as the height allows; a click opens the project.
+        Column(Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(14.dp)).clickable { actions.edit(p); back() }.padding(horizontal = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            StandBody(stand, dark, lines = ((h.value - 14f - 38f - 8f - 52f) / 20f).toInt().coerceIn(1, 5))
+        }
+        val marks = ((w.value - 28f) / 52f).toInt().coerceIn(3, 7)
+        Row(Modifier.fillMaxWidth().height(44.dp), verticalAlignment = Alignment.CenterVertically) {
+            slots(p, marks).forEach { slot -> Slot(spec, p, slot, dark, false, 22.dp, actions, back) }
         }
     }
+}
+
+/**
+ * The stand under the name: its dot and its words, in Claude's colour while it waits or works. Over a list of what's
+ * open it says how much ([Stand.headline]); alone ([alone]), what it is.
+ */
+@Composable
+private fun StandLine(stand: Stand, dark: Boolean, alone: Boolean = false) {
+    val lit = stand.mode == StandMode.WAITING || stand.mode == StandMode.WORKING
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        StandDot(stand, dark, 6.dp)
+        Spacer(Modifier.width(5.dp))
+        val text = if (alone) stand.title else stand.headline
+        Text(text, color = if (lit) standColor(stand, dark) else muted(dark),
+            style = TextStyle(textDirection = dirOf(text), fontFamily = PlexSans, fontWeight = if (lit) FontWeight.Medium else FontWeight.Normal, fontSize = 11.sp, lineHeight = 14.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/**
+ * What goes with the stand, in [lines] at most: Claude's question or prompt, or what's open (a line each); then the
+ * next step, then what was done last time, as room allows.
+ */
+@Composable
+private fun StandBody(stand: Stand, dark: Boolean, lines: Int) {
+    val body = TextStyle(fontFamily = PlexSans, fontSize = 12.5.sp, lineHeight = 17.sp, textDirection = androidx.compose.ui.text.style.TextDirection.Content)
+    var left = lines
+    @Composable fun line(text: String, color: Color, max: Int = 1) {
+        if (left <= 0 || text.isBlank()) return
+        Text(text, color = color, style = body.copy(textDirection = dirOf(text)), maxLines = max.coerceAtMost(left), overflow = TextOverflow.Ellipsis)
+        left -= max.coerceAtMost(left)
+    }
+    when (stand.mode) {
+        StandMode.WAITING, StandMode.WORKING -> line(stand.detail, ink(dark), max = 2)
+        StandMode.OPEN -> stand.loops.take((left - 1).coerceAtLeast(1)).forEach { l ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Dot(if (l.kind == LoopKind.CONFLICTS) Color(0xFFEF4444) else if (l.kind == LoopKind.SERVER) LIVE_DOT else CHANGED_DOT, 5.dp)
+                Spacer(Modifier.width(7.dp))
+                Text(l.title, color = ink(dark), style = body.copy(textDirection = dirOf(l.title)), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            left--
+        }
+        else -> {}
+    }
+    if (stand.next.isNotBlank()) line(tr("Next: ", "הבא: ") + stand.next, if (stand.mode == StandMode.SAVED || stand.mode == StandMode.UNKNOWN) ink(dark) else muted(dark))
+    stand.handoff?.let { line(tr("Last time: ", "בפעם הקודמת: ") + it.done, muted(dark)) }
 }
 
 @Composable
 private fun Small(spec: WidgetSpec, p: Project, dark: Boolean, w: Dp, h: Dp, actions: WidgetActions, back: () -> Unit) {
-    Column(Modifier.fillMaxSize().padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 8.dp)) {
+    val local = LocalPreviewLocal.current ?: Settings.state.collectAsState().value.localOf(p.id)
+    val stand = standOf(p, local)
+    Column(Modifier.fillMaxSize().padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 6.dp)) {
         Row(Modifier.fillMaxWidth().height(30.dp).clip(RoundedCornerShape(8.dp)).clickable { actions.pick(spec) }, verticalAlignment = Alignment.CenterVertically) {
-            GitLogo(p, 26.dp)
+            Logo(p, 26.dp)
             Spacer(Modifier.width(8.dp))
             Text(p.name, color = ink(dark), style = TextStyle(fontFamily = PlexSans, fontWeight = FontWeight.Medium, fontSize = 14.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        val showLabels = (h - 50.dp) / 2 >= 66.dp
-        slots(p, 4).chunked(2).forEach { row ->
-            Row(Modifier.fillMaxWidth().weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                row.forEach { slot -> Slot(spec, p, slot, dark, showLabels, 26.dp, actions, back) }
-            }
+        Spacer(Modifier.height(8.dp))
+        Column(Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(12.dp)).clickable { actions.edit(p); back() }.padding(horizontal = 2.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            StandLine(stand, dark)
+            StandBody(stand, dark, lines = if (h >= 200.dp) 3 else 2)
+        }
+        Row(Modifier.fillMaxWidth().height(42.dp), verticalAlignment = Alignment.CenterVertically) {
+            slots(p, ((w.value - 24f) / 50f).toInt().coerceIn(2, 4)).forEach { slot -> Slot(spec, p, slot, dark, false, 22.dp, actions, back) }
         }
     }
 }
 
-/** One row: the project's logo (picks the project), then as many marks as fit, "more" last. */
+/** One row: the project's logo (picks the project), its name and where it stands, then as many marks as fit. */
 @Composable
 private fun Strip(spec: WidgetSpec, p: Project, dark: Boolean, w: Dp, actions: WidgetActions, back: () -> Unit) {
-    val cols = ((w.value - 24f - 44f) / 48f).toInt().coerceIn(2, 8)
+    val local = LocalPreviewLocal.current ?: Settings.state.collectAsState().value.localOf(p.id)
+    val stand = standOf(p, local)
+    val cols = ((w.value - 24f - 44f - 150f) / 46f).toInt().coerceIn(1, 5)
     Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).clickable { actions.pick(spec) }, contentAlignment = Alignment.Center) { GitLogo(p, 30.dp) }
-        slots(p, cols).forEach { slot -> Slot(spec, p, slot, dark, false, 24.dp, actions, back) }
+        Box(Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).clickable { actions.pick(spec) }, contentAlignment = Alignment.Center) { Logo(p, 30.dp) }
+        Spacer(Modifier.width(6.dp))
+        Column(Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).clickable { actions.edit(p); back() }) {
+            Text(p.name, color = ink(dark), style = TextStyle(fontFamily = PlexSans, fontWeight = FontWeight.Medium, fontSize = 14.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            StandLine(stand, dark, alone = true)
+        }
+        Row(Modifier.width((cols * 46).dp).fillMaxHeight(), verticalAlignment = Alignment.CenterVertically) {
+            slots(p, cols).forEach { slot -> Slot(spec, p, slot, dark, false, 22.dp, actions, back) }
+        }
+    }
+}
+
+/** The widget that keeps every project: Now on the desktop. The ones that need you first, one line each; the rest, counted. */
+@Composable
+private fun NowWidget(deck: Deck, dark: Boolean, actions: WidgetActions, back: () -> Unit) {
+    val settings by Settings.state.collectAsState()
+    val rows = deck.projects.filter { settings.localOf(it.id).folder != null }.map { it to standOf(it, settings.localOf(it.id)) }.sortedBy { it.second.rank }
+    val (busy, calm) = rows.partition { it.second.mode == StandMode.WAITING || it.second.mode == StandMode.WORKING || it.second.mode == StandMode.OPEN }
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val room = ((maxHeight.value - 20f - 34f - 26f) / 44f).toInt().coerceAtLeast(1).let { if (rows.size <= it + 1 && rows.size * 44f <= maxHeight.value - 54f) rows.size else it }
+        Column(Modifier.fillMaxSize().padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 8.dp)) {
+            Row(Modifier.fillMaxWidth().height(30.dp), verticalAlignment = Alignment.CenterVertically) {
+                Image(painterResource("icons/app.png"), null, Modifier.size(18.dp).clip(RoundedCornerShape(5.dp)))
+                Spacer(Modifier.width(8.dp))
+                Text(tr("Now", "עכשיו"), color = ink(dark), style = TextStyle(fontFamily = PlexSans, fontWeight = FontWeight.Medium, fontSize = 14.sp), modifier = Modifier.weight(1f))
+                if (busy.isNotEmpty()) Text(tr("${busy.size} need a look", if (busy.size == 1) "פרויקט אחד דורש מבט" else "${busy.size} פרויקטים דורשים מבט"),
+                    color = muted(dark), style = TextStyle(fontFamily = PlexSans, fontSize = 11.sp))
+            }
+            Spacer(Modifier.height(4.dp))
+            if (rows.isEmpty() || busy.isEmpty() && rows.size > room) Column(Modifier.fillMaxWidth().weight(1f), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                Dot(CLEAN_DOT, 10.dp)
+                Spacer(Modifier.height(10.dp))
+                Text(tr("Nothing open", "אין שום דבר פתוח"), color = ink(dark), style = TextStyle(fontFamily = PlexSans, fontWeight = FontWeight.Medium, fontSize = 14.sp))
+                Text(tr("Every project is saved", "כל הפרויקטים שמורים"), color = muted(dark), style = TextStyle(fontFamily = PlexSans, fontSize = 12.sp))
+            } else Column(Modifier.fillMaxWidth().weight(1f)) {
+                rows.take(room).forEach { (p, stand) ->
+                    Row(Modifier.fillMaxWidth().height(44.dp).clip(RoundedCornerShape(12.dp)).clickable { actions.edit(p); back() }.padding(horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Logo(p, 24.dp)
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(p.name, color = ink(dark), style = TextStyle(fontFamily = PlexSans, fontWeight = FontWeight.Medium, fontSize = 13.sp, lineHeight = 16.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            StandLine(stand, dark, alone = true)
+                        }
+                    }
+                }
+            }
+            val hidden = rows.drop(room)
+            if (hidden.isNotEmpty()) Row(Modifier.fillMaxWidth().height(26.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                val waiting = hidden.count { it.second.mode != StandMode.SAVED && it.second.mode != StandMode.UNKNOWN }
+                Dot(if (waiting > 0) CHANGED_DOT else CLEAN_DOT, 6.dp)
+                Spacer(Modifier.width(7.dp))
+                Text(if (waiting > 0) tr("And ${hidden.size} more, $waiting need a look", "ועוד ${hidden.size}, מהם $waiting דורשים מבט")
+                    else tr("And ${hidden.size} more, all saved", if (hidden.size == 1) "ועוד פרויקט אחד, הכול שמור" else "ועוד ${hidden.size} פרויקטים, הכול שמור"),
+                    color = muted(dark), style = TextStyle(fontFamily = PlexSans, fontSize = 11.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
     }
 }
 
@@ -332,22 +439,6 @@ private fun gitOf(p: Project): GitInfo? {
 
 @Composable
 private fun claudeOf(p: Project): ClaudeSession? = claudeIn((LocalPreviewLocal.current ?: Settings.state.collectAsState().value.localOf(p.id)).folder)
-
-/** The logo with a dot: Claude Code's state when it's busy here, else amber for uncommitted changes. */
-@Composable
-private fun GitLogo(p: Project, size: Dp) {
-    val git = gitOf(p)
-    val claude = claudeOf(p)
-    Box(Modifier.size(size + 4.dp)) {
-        Box(Modifier.align(Alignment.Center)) { Logo(p, size) }
-        if (claude != null || (git != null && git.changes > 0)) {
-            Box(Modifier.align(AbsoluteAlignment.TopRight).size(10.dp).clip(RoundedCornerShape(5.dp)).background(Color.White), contentAlignment = Alignment.Center) {
-                if (claude != null) ClaudeDot(claude.mode, false, 7.dp)
-                else Box(Modifier.size(7.dp).clip(RoundedCornerShape(4.dp)).background(CHANGED_DOT))
-            }
-        }
-    }
-}
 
 /** A local tool on the widget's header: the folder, the editor, Claude Code. */
 @OptIn(ExperimentalFoundationApi::class)

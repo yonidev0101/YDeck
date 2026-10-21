@@ -118,11 +118,13 @@ private fun Widgets(deck: Deck, actions: AppActions) {
     Column {
         Group {
             s.widgets.forEach { w ->
-                val p = deck.byId(w.project) ?: deck.projects.firstOrNull()
+                val now = w.project == NOW_WIDGET
+                val p = if (now) null else deck.byId(w.project) ?: deck.projects.firstOrNull()
                 Item {
                     if (p != null) Logo(p, 28.dp)
+                    else if (now) androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource("icons/app.png"), null, Modifier.size(28.dp).clip(RoundedCornerShape(8.dp)))
                     Column(Modifier.weight(1f)) {
-                        Text(p?.name ?: "—", color = c.fg, fontSize = 14.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans)
+                        Text(if (now) tr("All projects", "כל הפרויקטים") else p?.name ?: "—", color = c.fg, fontSize = 14.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans)
                         Text(when {
                             w.h < 96 -> tr("One row", "שורה אחת")
                             w.w < 260 -> tr("Small square", "ריבוע קטן")
