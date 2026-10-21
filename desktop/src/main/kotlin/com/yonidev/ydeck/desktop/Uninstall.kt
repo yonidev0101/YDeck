@@ -1,13 +1,12 @@
 package com.yonidev.ydeck.desktop
 
-import java.io.File
 import kotlin.system.exitProcess
 
 /*
  * Uninstalling YDeck leaves nothing behind. As Windows removes it (from Settings › Apps, or from YDeck's own button),
  * the installer first runs YDeck once with [ARG] (desktop/installer/ui.wxf), and it takes back everything it put
  * outside its folder: the Claude Code plugin, "Open in YDeck" on Explorer's menu, the icons on the project folders,
- * starting with Windows. Then whatever an older install left in the install folder and the Start menu goes too.
+ * starting with Windows. The install folder is the installer's own to clear.
  * Not on an upgrade. The projects' own files (.ydeck.json, AGENTS.md) are the projects', and stay.
  */
 object Uninstall {
@@ -21,14 +20,8 @@ object Uninstall {
         runCatching {
             Settings.state.value.local.values.filter { it.tagged }.mapNotNull { it.dir }.forEach(FolderTag::remove)
         }
-        // The install folder and the Start menu's, once Windows is done with them (an older install's files linger there).
-        val local = System.getenv("LOCALAPPDATA") ?: return
-        val appData = System.getenv("APPDATA") ?: return
-        val folders = listOf(File(local, "YDeck"), File(appData, "Microsoft\\Windows\\Start Menu\\Programs\\YDeck"))
-        runCatching {
-            ProcessBuilder("cmd.exe", "/d", "/c", "ping -n 21 127.0.0.1 >nul & " + folders.joinToString(" & ") { "rmdir /s /q \"${it.path}\"" })
-                .redirectOutput(ProcessBuilder.Redirect.DISCARD).redirectError(ProcessBuilder.Redirect.DISCARD).start()
-        }
+        // The install folder itself is the installer's: jpackage's RemoveFolderEx clears it within the uninstall.
+        // (1.18.1 also deleted it 20 s later, and took a reinstall made within those seconds with it.)
     }
 
     /** The installers' upgrade code (desktop/build.gradle.kts): every version of YDeck carries it. */
