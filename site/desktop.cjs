@@ -1,4 +1,5 @@
-// The home of YDeck for the desktop, in English (/) and Hebrew (/he): the story of the demo film, told in the brand's dot.
+// The home of YDeck for the desktop, in English (/) and Hebrew (/he): its one promise (every project on one screen: what
+// Claude did, what waits for you, what isn't saved), the story of the demo film, told in the brand's dot.
 // The dot is YDeck's mark for a Claude session (a ring when it's open, indigo at work, amber when it needs you, grey when
 // it's gone, green when nothing is open), and the page is built of it at three sizes: in the text (a headline's full stop,
 // a list's bullets, a kicker's state), beside it (the projects' dots, the dot that walks the real screens), and behind it
@@ -18,25 +19,25 @@ const WORKS = new Set(['Nova', 'Atlas', 'Mira', 'Orbit', 'Quill', 'Juno', 'Kite'
 const COPY = {
   en: {
     lang: 'en', dir: 'ltr', locale: 'en_US', home: '/', other: '/he', otherLabel: 'עברית',
-    title: 'YDeck · Nothing left open.',
-    desc: 'With AI you start project after project. YDeck remembers what each one is, where it stands and what is still open in it, and plugs into the Claude Code you already use.',
+    title: 'YDeck · Every project. One screen.',
+    desc: 'YDeck shows on one screen where every project stands: what Claude Code did, what waits for you, and what isn’t saved. Free and open source, for Windows.',
     nav: ['How it works', 'Privacy'], beta: 'Download for Windows',
     eyebrow: 'For developers who work with Claude Code',
-    h1: 'Nothing left open.',
-    lead: 'With AI you start project after project. YDeck remembers what each one is, where it stands, and what is still open in it.',
+    h1: 'Every project. One screen.',
+    lead: 'Open your computer and see at once where every project stands: what Claude did, what waits for you, and what isn’t saved.',
     how: 'See how it works',
     steps: [
-      ['open', 'Open', 'With AI, a new project starts in half an hour.', 'There used to be two or three projects a year. Now every idea is a folder with a repo by the same evening.'],
-      ['work', 'At work', 'So you work on everything at once.', 'Claude builds here, fixes there, and in another terminal it’s halfway through something. The code is written faster than anyone can follow.'],
-      ['wait', 'Needs you', 'And then you no longer remember what’s going on where?', null,
-        ['What was this project again?', 'Where did I stop, and what’s next?', 'Is it pushed, or only on my machine?', 'What’s missing in .env?', 'Is that server still running?']],
-      ['note', 'YDeck', 'YDeck puts it in order.', 'Every project in one place, each with its dot: which is at work, which needs you, what’s open and what’s closed.'],
+      ['open', 'Open', 'With Claude Code, a new project starts in half an hour.', 'There used to be two or three projects a year. Now every idea is a folder with a repo by the same evening.'],
+      ['work', 'At work', 'So you work on a few at once.', 'A Claude window here, another one there, and in a third it’s halfway through something.'],
+      ['wait', 'Needs you', 'Which of them is Claude waiting for you in?', null,
+        ['Which window is asking for permission?', 'What did it do in the last session?', 'What isn’t committed, and what isn’t pushed?', 'Is that server still running?', 'What’s missing in .env?']],
+      ['note', 'YDeck', 'YDeck shows it all on one screen.', 'Its home, Now: who needs you first, who is at work, what’s open in each project, and what is all saved.'],
     ],
     states: { wait: 'Needs you', work: 'Claude is working', open: 'Claude is open', gone: 'Closed' },
     moments: [
+      ['wait', 'Now', 'Who needs you, and why.', 'The project that needs you first is on top: what Claude is waiting for, what it did last time, and what’s still open in it. Each line comes with what closes it.', 'loops'],
+      ['work', 'Receipts', 'What Claude did, exactly.', 'What you asked, and every file it touched, line by line. Keep it in one commit, or put it back exactly as it was.', 'orbit-session'],
       ['note', 'Memory', 'Every project remembers where it stopped.', 'What it is, what was decided, what the last session did and what comes next. Claude writes it down at the end of the work, and every new session starts from there.', 'orbit'],
-      ['work', 'Receipts', 'What Claude did in the last session.', 'What you asked, and every file it touched, line by line. Keep it in one commit, or put it back exactly as it was.', 'orbit-session'],
-      ['wait', 'Open loops', 'What’s still open, in every project.', 'Changes not saved, commits not pushed, a server still running, a key missing in .env, and Claude waiting for an answer. All in one list.', 'loops'],
       ['clean', 'The end of the day', 'Close the day in one click.', 'Claude commits what’s left, pushes, stops the servers and writes tomorrow’s next step. Then nothing is open.', 'loops-clear'],
     ],
     howK: 'How it works', howH: 'A small plugin for Claude Code. Everything else stays as it was.',
@@ -45,30 +46,30 @@ const COPY = {
     facts: [['Claude writes the memory.', 'Where things stand and what’s next go to a personal file (.ydeck.local.json); decisions and links to one in the repo (.ydeck.json). The instructions are shown in Settings, and the repo file can be turned off.'],
       ['YDeck reads git itself.', 'What isn’t saved, what isn’t pushed, which key is missing. Nothing is sent anywhere.']],
     pr: [['On your machine.', 'Your code never leaves it. No account, no server of ours.'], ['No AI of its own.', 'It works with the agents you already use: Claude Code, and Codex through the sessions it writes.'], ['Never destructive.', 'Nothing it does throws work away. Everything can be undone.'], ['Free.', 'For every developer, on Windows. Mac is next.']],
-    endA: 'Nothing left open.', endB: 'Free and open source, for Windows.',
+    endA: 'Every project. One screen.', endB: 'Free and open source, for Windows.',
     foot: ['Privacy', 'YDeck for Android', 'Download'],
   },
   he: {
     lang: 'he', dir: 'rtl', locale: 'he_IL', home: '/he/', other: '/', otherLabel: 'English',
-    title: 'YDeck · שום דבר לא נשאר פתוח.',
-    desc: 'עם AI פותחים עוד ועוד פרויקטים. YDeck זוכר מה כל אחד, איפה הוא עומד ומה עוד פתוח בו, ומתחבר ל־Claude Code שכבר יש לך.',
+    title: 'YDeck · כל הפרויקטים. מסך אחד.',
+    desc: 'YDeck מראה במסך אחד איפה כל פרויקט עומד: מה Claude Code עשה, מה מחכה לך, ומה לא נשמר. חינם וקוד פתוח, ל־Windows.',
     nav: ['איך זה עובד', 'פרטיות'], beta: 'הורדה ל־Windows',
     eyebrow: 'למפתחים שעובדים עם Claude Code',
-    h1: 'שום דבר לא נשאר פתוח.',
-    lead: 'עם AI פותחים עוד ועוד פרויקטים. YDeck זוכר מה כל אחד, איפה הוא עומד, ומה עוד פתוח בו.',
+    h1: 'כל הפרויקטים. מסך אחד.',
+    lead: 'פותחים את המחשב ורואים בבת אחת איפה כל פרויקט עומד: מה Claude עשה, מה מחכה לך, ומה לא נשמר.',
     how: 'איך זה עובד',
     steps: [
-      ['open', 'פתוח', 'עם AI, פרויקט חדש מתחיל בחצי שעה.', 'פעם היו שניים־שלושה פרויקטים בשנה. היום כל רעיון הופך לתיקייה עם ריפו, עוד באותו ערב.'],
-      ['work', 'עובד', 'אז עובדים על הכול במקביל.', 'Claude בונה פה, מתקן שם, ובטרמינל אחר הוא באמצע משהו. הקוד נכתב מהר יותר משאפשר לעקוב.'],
-      ['wait', 'מחכה לך', 'ואז כבר לא זוכרים מה קורה איפה?', null,
-        ['מה הפרויקט הזה בכלל?', 'איפה עצרתי, ומה הצעד הבא?', 'זה עלה ל־git, או שנשאר רק אצלי?', 'מה חסר ב־env?', 'השרת הזה עוד רץ?']],
-      ['note', 'YDeck', 'YDeck עושה סדר.', 'כל הפרויקטים במקום אחד, כל אחד עם הנקודה שלו: מי עובד, מי מחכה לך, מה פתוח ומה נסגר.'],
+      ['open', 'פתוח', 'עם Claude Code, פרויקט חדש מתחיל בחצי שעה.', 'פעם היו שניים־שלושה פרויקטים בשנה. היום כל רעיון הופך לתיקייה עם ריפו, עוד באותו ערב.'],
+      ['work', 'עובד', 'אז עובדים על כמה במקביל.', 'חלון של Claude פה, עוד אחד שם, ובשלישי הוא באמצע משהו.'],
+      ['wait', 'מחכה לך', 'ובאיזה מהם Claude מחכה לך עכשיו?', null,
+        ['באיזה חלון הוא מחכה לאישור?', 'מה הוא עשה בסשן האחרון?', 'מה עוד לא נשמר, ומה לא נדחף?', 'השרת הזה עוד רץ?', 'מה חסר ב־env?']],
+      ['note', 'YDeck', 'YDeck מראה הכול במסך אחד.', 'מסך הבית, "עכשיו": מי מחכה לך ראשון, מי עובד, מה פתוח בכל פרויקט, ומה כבר שמור.'],
     ],
     states: { wait: 'מחכה לך', work: 'Claude עובד', open: 'Claude פתוח', gone: 'נסגר' },
     moments: [
+      ['wait', 'עכשיו', 'מי מחכה לך, ולמה.', 'הפרויקט שצריך אותך ראשון נמצא למעלה: על מה Claude מחכה, מה הוא עשה בפעם הקודמת, ומה עוד פתוח בו. ליד כל שורה, הפעולה שסוגרת אותה.', 'loops'],
+      ['work', 'קבלות', 'מה Claude עשה, בדיוק.', 'מה ביקשת, וכל קובץ שהוא נגע בו, שורה אחרי שורה. שומרים בקומיט אחד, או מחזירים בדיוק למה שהיה.', 'orbit-session'],
       ['note', 'זיכרון', 'כל פרויקט זוכר איפה עצר.', 'מה הפרויקט, מה הוחלט, מה נעשה בסשן האחרון ומה הצעד הבא. Claude כותב את זה בעצמו בסוף העבודה, וכל סשן חדש מתחיל משם.', 'orbit'],
-      ['work', 'קבלות', 'מה Claude עשה בסשן האחרון.', 'מה ביקשת, וכל קובץ שהוא נגע בו, שורה אחרי שורה. שומרים בקומיט אחד, או מחזירים בדיוק למה שהיה.', 'orbit-session'],
-      ['wait', 'מה פתוח', 'מה נשאר פתוח, בכל הפרויקטים.', 'שינויים שלא נשמרו, קומיטים שלא נדחפו, שרת שעוד רץ, מפתח שחסר ב־.env, ו־Claude שמחכה לתשובה. הכול ברשימה אחת.', 'loops'],
       ['clean', 'סוף היום', 'סוגרים את היום בלחיצה.', 'Claude עושה קומיט למה שנשאר, דוחף, עוצר את השרתים וכותב את הצעד הבא למחר. אחר כך שום דבר לא פתוח.', 'loops-clear'],
     ],
     howK: 'איך זה עובד', howH: 'פלאגין קטן ל־Claude Code. כל השאר נשאר כמו שהיה.',
@@ -77,7 +78,7 @@ const COPY = {
     facts: [['Claude כותב את הזיכרון.', 'איפה עומדים ומה הלאה נכתבים לקובץ אישי (.ydeck.local.json), והחלטות וקישורים לקובץ שבריפו (.ydeck.json). ההוראות גלויות בהגדרות, ואת הקובץ שבריפו אפשר לכבות.'],
       ['YDeck קורא את git בעצמו.', 'מה לא נשמר, מה לא נדחף, ואיזה מפתח חסר. שום דבר לא נשלח לשום מקום.']],
     pr: [['על המחשב שלך.', 'הקוד לא יוצא ממנו. בלי חשבון, בלי שרת שלנו.'], ['בלי AI משלו.', 'עובד עם הסוכנים שכבר יש לך: Claude Code, ו־Codex דרך הסשנים שהוא כותב.'], ['אף פעם לא הורס.', 'שום דבר שהוא עושה לא זורק עבודה. הכול אפשר לבטל.'], ['חינם.', 'לכל מפתח, ב־Windows. Mac בדרך.']],
-    endA: 'שום דבר לא נשאר פתוח.', endB: 'חינם וקוד פתוח, ל־Windows.',
+    endA: 'כל הפרויקטים. מסך אחד.', endB: 'חינם וקוד פתוח, ל־Windows.',
     foot: ['פרטיות', 'YDeck לאנדרואיד', 'הורדה'],
   },
 };
@@ -99,9 +100,9 @@ const dt = st => `<i class="dt ${st}" aria-hidden="true"></i>`;
 // The dot on each real screen: where it lands, in the screen's pixels (3600×2340, the Hebrew layout; the English one is
 // mirrored), and in which state. The same keys as demo.html's GUIDE.
 const GUIDE = {
-  orbit: [[2754, 932, 'note'], [2659, 1535, 'wait'], [2659, 1737, 'wait'], [2659, 1937, 'wait']],
-  loops: [[2659, 628, 'wait'], [2659, 828, 'wait'], [2659, 1028, 'wait'], [2659, 1460, 'wait'], [2659, 1652, 'work'], [2659, 1852, 'wait']],
-  'loops-clear': [[1494, 470, 'clean']],
+  orbit: [[2754, 932, 'note'], [2659, 1535, 'wait'], [2659, 1737, 'wait']],
+  loops: [[2659, 607, 'wait'], [2650, 758, 'note'], [2659, 932, 'wait'], [2659, 1134, 'wait'], [2659, 1913, 'work'], [2659, 2111, 'wait']],
+  'loops-clear': [[1494, 509, 'clean']],
 };
 const STATE_COLOR = { note: '#F4F4F5', wait: '#F5A524', work: '#9C97FF', clean: '#34C77B', open: '#B9B9C2', gone: '#4E4E56' };
 // Each walk loops: it lands on every key for its share of the time, then rests on the last.
@@ -116,12 +117,22 @@ function guideCss() {
   }).join('')).join('');
 }
 
+// On a phone a whole screen is too small to read: each moment shows the part of its screen it is about, larger.
+// [x, y, width] in the screen's pixels (the Hebrew layout; mirrored for English), at 5:4.
+const PHONE_CROP = { loops: [1450, 330, 1400], 'orbit-session': [130, 850, 1450], orbit: [1450, 850, 1400], 'loops-clear': [1150, 420, 1650] };
+function phoneCss() {
+  return Object.entries(PHONE_CROP).map(([name, [x, y, w]]) => ['he', 'en'].map(lang => {
+    const left = lang === 'en' ? 3600 - x - w : x;
+    return `html[lang=${lang}] .sh-${name} .sc{width:${(3600 / w * 100).toFixed(2)}%;left:-${(left / w * 100).toFixed(2)}%;margin-top:-${(y / w * 100).toFixed(2)}%}`;
+  }).join('')).join('');
+}
+
 // The dot behind, per section: [state, colour, hole (0 a full dot, .86 a thin ring), x from the inline start %, y %, size vmin, opacity].
 // It keeps to the corners: the top one on the side away from the text, and in the moments the corner away from the screen.
 const ORB = [
   ['hero', 'open', .86, 90, 20, 30, .32], ['open', 'open', .86, 92, 18, 26, .3], ['work', 'work', 0, 92, 18, 22, .36],
   ['wait', 'wait', 0, 92, 84, 22, .34], ['note', 'note', .86, 92, 18, 24, .2],
-  ['m0', 'note', 0, 8, 86, 12, .22], ['m1', 'work', .8, 92, 16, 20, .34], ['m2', 'wait', 0, 8, 86, 16, .34], ['m3', 'clean', 0, 92, 16, 16, .34],
+  ['m0', 'wait', 0, 8, 86, 16, .34], ['m1', 'work', .8, 92, 16, 20, .34], ['m2', 'note', 0, 8, 86, 12, .22], ['m3', 'clean', 0, 92, 16, 16, .34],
   ['gone', 'gone', .86, 92, 18, 24, .7], ['end', 'note', 0, 50, 88, 6, .18],
 ];
 
@@ -243,6 +254,7 @@ ${[1, 2, 3, 4].map(i => `.step li:nth-child(${i + 1}){transition-delay:${i * .12
 .moment:nth-of-type(even){grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr)}
 .moment:nth-of-type(even) .copy{order:2}
 .shot{position:relative;border-radius:14px;overflow:hidden;border:1px solid rgba(255,255,255,.1);box-shadow:0 40px 120px rgba(0,0,0,.6);aspect-ratio:3600/2340;background:var(--card)}
+.shot .sc{position:absolute;inset:0;aspect-ratio:3600/2340}
 .shot img{display:block;width:100%;height:100%;object-fit:cover}
 .gd{position:absolute;width:1.5%;min-width:10px;aspect-ratio:1;border-radius:50%;transform:translate(-50%,-50%);box-shadow:0 0 0 4px var(--night),0 0 0 6px rgba(255,255,255,.14);opacity:0}
 .shot.in .gd{opacity:1}
@@ -302,6 +314,9 @@ footer a:hover{color:var(--ink)}
   .step{min-height:72vh}
   .moment,.moment:nth-of-type(even){grid-template-columns:minmax(0,1fr);gap:36px;min-height:0;padding:12vh 0}
   .moment:nth-of-type(even) .copy{order:0}
+  .shot{aspect-ratio:5/4}
+  .shot .sc{inset:auto;top:0}
+  ${phoneCss()}
   .legend{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:48px}
   .legend::before{display:none}
   .facts{grid-template-columns:minmax(0,1fr);gap:32px}
@@ -388,7 +403,7 @@ ${list ? `<ul>${list.map((t, i) => `<li>${dt(i === 0 ? 'gone' : i === 4 ? 'work'
 <div class="wrap">
 ${c.moments.map(([st, k, h, p, screen], i) => `<section class="moment" data-dot="m${i}">
 <div class="copy rise"><div class="kicker">${dt(st)}${esc(k)}</div><h2>${amber(esc(h))}</h2><p>${esc(p)}</p></div>
-<div class="shot rise d1"><img src="/media/screen-${c.lang}-${screen}.jpg" alt="" loading="lazy" width="1800" height="1170">${GUIDE[screen] ? `<i class="gd ${screen}"></i>` : ''}</div>
+<div class="shot rise d1 sh-${screen}"><div class="sc"><img src="/media/screen-${c.lang}-${screen}.jpg" alt="" loading="lazy" width="1800" height="1170">${GUIDE[screen] ? `<i class="gd ${screen}"></i>` : ''}</div></div>
 </section>`).join('\n')}
 </div>
 
