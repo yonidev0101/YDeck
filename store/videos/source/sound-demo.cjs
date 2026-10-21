@@ -87,7 +87,7 @@ function pad(from, to, notes, amp, cut, fadeIn = 1.2, fadeOut = 1.2) {
 function swellTo(at, len, amp, m = null) {
   let lp = 0;
   for (let i = Math.floor((at - len) * SR); i < at * SR; i++) {
-    const k = (i / SR - (at - len)) / len;
+    const k = clamp((i / SR - (at - len)) / len);  // the first sample can fall a hair before the start
     lp += (rnd() - lp) * (0.01 + 0.25 * k * k);
     let v = lp * 0.8;
     if (m !== null) v += 0.25 * Math.sin(TAU * hz(m) * i / SR) * k;
