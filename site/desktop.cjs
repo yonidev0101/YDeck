@@ -46,6 +46,7 @@ const COPY = {
       ['YDeck reads git itself.', 'What isn’t saved, what isn’t pushed, which key is missing. Nothing is sent anywhere.']],
     pr: [['On your machine.', 'Your code never leaves it. No account, no server of ours.'], ['No AI of its own.', 'It works with the agents you already use: Claude Code, and Codex through the sessions it writes.'], ['Never destructive.', 'Nothing it does throws work away. Everything can be undone.'], ['Free.', 'For every developer, on Windows. Mac is next.']],
     endA: 'Nothing left open.', endB: 'Free and open source, for Windows.',
+    phone: ['On the phone too:', 'YDeck for Android, in beta on Google Play', '/download'],
     foot: ['Privacy', 'YDeck for Android', 'Download'],
   },
   he: {
@@ -78,6 +79,7 @@ const COPY = {
       ['YDeck קורא את git בעצמו.', 'מה לא נשמר, מה לא נדחף, ואיזה מפתח חסר. שום דבר לא נשלח לשום מקום.']],
     pr: [['על המחשב שלך.', 'הקוד לא יוצא ממנו. בלי חשבון, בלי שרת שלנו.'], ['בלי AI משלו.', 'עובד עם הסוכנים שכבר יש לך: Claude Code, ו־Codex דרך הסשנים שהוא כותב.'], ['אף פעם לא הורס.', 'שום דבר שהוא עושה לא זורק עבודה. הכול אפשר לבטל.'], ['חינם.', 'לכל מפתח, ב־Windows. Mac בדרך.']],
     endA: 'שום דבר לא נשאר פתוח.', endB: 'חינם וקוד פתוח, ל־Windows.',
+    phone: ['גם בטלפון:', 'YDeck לאנדרואיד, בטא ב־Google Play', '/beta'],
     foot: ['פרטיות', 'YDeck לאנדרואיד', 'הורדה'],
   },
 };
@@ -135,6 +137,7 @@ main{position:relative;z-index:1}
 h1{margin:0;font-weight:300;font-size:clamp(48px,9vw,112px);line-height:1.02;letter-spacing:-.045em}
 html[lang=he] h1{letter-spacing:-.02em;line-height:1.08}
 .lead{max-width:620px;margin:28px auto 0;font-size:clamp(18px,2.2vw,22px);line-height:1.5;color:var(--soft)}
+.phone{margin-top:22px;font-size:15px;color:var(--mute);text-align:center}.phone a{color:var(--indigo-t)}.phone a:hover{color:#fff}
 .ctas{display:flex;gap:26px;align-items:center;justify-content:center;margin-top:40px;flex-wrap:wrap}
 /* the mark */
 .ring .arc{fill:none;stroke:var(--ink);stroke-width:11;stroke-linecap:round;stroke-dasharray:300 60}
@@ -356,6 +359,8 @@ function fieldBody(c) {
 
 function html(c, siteUrl, email, fonts) {
   const beta = c.lang === 'he' ? '/he/download' : '/download';
+  // the Android app, one quiet line under the download
+  const phone = `<p class="phone rise d2">${esc(c.phone[0])} <a href="${c.phone[2]}">${esc(c.phone[1])} ←</a></p>`.replace(' ←', c.lang === 'he' ? ' ←' : ' →');
   const privacy = '/privacy', android = '/android';
   return `<!doctype html><html lang="${c.lang}" dir="${c.dir}"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -384,6 +389,7 @@ ${RING(112, true)}
 <h1 class="rise d1">${amber(esc(c.h1))}</h1>
 <p class="lead rise d2">${esc(c.lead)}</p>
 <div class="ctas rise d2"><a class="pill big" href="${beta}">${c.beta}</a><a class="text-link" href="#story">${c.how} ↓</a></div>
+${phone}
 </section>
 
 <div class="wrap story" id="story">
@@ -419,6 +425,7 @@ ${RING(72)}
 <h2 class="rise">${amber(esc(c.endA))}</h2>
 <p class="rise d1">${esc(c.endB)}</p>
 <a class="pill big rise d2" href="${beta}">${c.beta}</a>
+${phone}
 </section>
 </main>
 <footer><div class="wrap">
