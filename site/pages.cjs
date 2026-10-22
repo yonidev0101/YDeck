@@ -138,7 +138,7 @@ ${part('General', '', en.end)}
 }
 
 // ── Google Play: the closed test. Join the group, then become a tester; one link for the campaign, /beta. ──
-const BETA_GROUP = 'https://groups.google.com/g/ydeck-testers';
+const BETA_GROUP = 'https://groups.google.com/g/yonidev-testers';
 const BETA_OPT_IN = 'https://play.google.com/apps/testing/com.yonidev.ydeck';
 const PLAY_LISTING = 'https://play.google.com/store/apps/details?id=com.yonidev.ydeck';
 const playHe = `<div class="part"><h2>YDeck לאנדרואיד</h2><p class="sub">בטא ב־Google Play · אנדרואיד 12 ומעלה · חינם, בלי חשבון. מתחבר ל־YDeck במחשב.</p>

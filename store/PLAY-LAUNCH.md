@@ -37,8 +37,8 @@ Play Console ← **Create app**:
 
 ## 3. בדיקה סגורה (חובה בחשבון אישי: 12 בודקים × 14 יום)
 
-1. **קבוצת גוגל** ב־groups.google.com: שם `ydeck-testers`. בהגדרות הקבוצה: מי יכול להצטרף ← **Anyone on the web can join** ("כל אחד באינטרנט"), ומי יכול לראות את הקבוצה ← **Anyone on the web**. בלי זה הקישור באתר (`/beta`) מראה לבודקים שגיאת גישה.
-2. Test and release ← Testing ← **Closed testing** ← Create track (או Alpha) ← **Testers**: מוסיפים את `ydeck-testers@googlegroups.com`.
+1. **קבוצת גוגל** ב־groups.google.com: שם `yonidev-testers`. בהגדרות הקבוצה: מי יכול להצטרף ← **Anyone on the web can join** ("כל אחד באינטרנט"), ומי יכול לראות את הקבוצה ← **Anyone on the web**. בלי זה הקישור באתר (`/beta`) מראה לבודקים שגיאת גישה.
+2. Test and release ← Testing ← **Closed testing** ← Create track (או Alpha) ← **Testers**: מוסיפים את `yonidev-testers@googlegroups.com`.
 3. **Create new release** ← מעלים את `dist/YDeck-0.9.7.aab`.
    - Release name: `0.9.7`
    - Release notes (עברית):
