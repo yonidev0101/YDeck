@@ -143,19 +143,19 @@ const BETA_OPT_IN = 'https://play.google.com/apps/testing/com.yonidev.ydeck';
 const PLAY_LISTING = 'https://play.google.com/store/apps/details?id=com.yonidev.ydeck';
 const playHe = `<div class="part"><h2>YDeck לאנדרואיד</h2><p class="sub">בטא ב־Google Play · אנדרואיד 12 ומעלה · חינם, בלי חשבון. מתחבר ל־YDeck במחשב.</p>
 <div class="dl"><a class="pill big" href="${BETA_GROUP}" target="_blank" rel="noopener">1. הצטרפות לקבוצת הבודקים</a><span class="size">"הצטרפות לקבוצה", עם החשבון שמחובר ל־Google Play בטלפון</span></div>
-<div class="dl"><a class="pill big" href="${BETA_OPT_IN}" target="_blank" rel="noopener">2. התקנה מ־Google Play</a><span class="size">לוחצים "להיות בודק", ואז מתקינים מהחנות</span></div>
+<div class="dl"><a class="pill big" href="${BETA_OPT_IN}" target="_blank" rel="noopener">2. התקנה מ־Google Play</a><span class="size">לוחצים "להיות בודק"</span></div>
+<div class="dl"><a class="pill big" href="${PLAY_LISTING}" target="_blank" rel="noopener">3. YDeck ב־Google Play</a><span class="size">פותחים בחנות ולוחצים "התקנה". עובד אחרי שני הצעדים הראשונים</span></div>
 ${sec('למה שני צעדים?', '<p>YDeck לאנדרואיד בבדיקה לפני שהיא נפתחת לכולם ב־Google Play. בשלב הזה Google מאפשרת להתקין רק למי שהצטרף לקבוצת הבודקים. כל מי שמצטרף ומשאיר אותה מותקנת שבועיים עוזר לה להגיע לחנות.</p>')}
 ${sec('כתוב "האפליקציה לא זמינה"', '<p>כמעט תמיד הצעד הראשון לא הושלם, או שנעשה בחשבון Google אחר מזה שבטלפון. מצטרפים לקבוצה עם אותו חשבון, מחכים כמה דקות ופותחים שוב את הקישור השני.</p>')}
 ${sec('מחברים למחשב', '<p>ב־YDeck במחשב: הגדרות ← טלפון, וסורקים את הקוד מהטלפון. מאז הפרויקטים, איפה כל אחד עומד והצעד הבא מגיעים לטלפון, מוצפנים מקצה לקצה.</p>')}
-<p class="sub"><a href="${PLAY_LISTING}" target="_blank" rel="noopener">YDeck ב־Google Play</a> (נפתח אחרי שני הצעדים)</p>
 </div>`;
 const playEn = `<div class="part"><h2>YDeck for Android</h2><p class="sub">Beta on Google Play · Android 12 and later · free, no account. Pairs with YDeck on your computer.</p>
 <div class="dl"><a class="pill big" href="${BETA_GROUP}" target="_blank" rel="noopener">1. Join the testers group</a><span class="size">"Join group", with the account your phone uses for Google Play</span></div>
-<div class="dl"><a class="pill big" href="${BETA_OPT_IN}" target="_blank" rel="noopener">2. Install from Google Play</a><span class="size">Tap "Become a tester", then install from the store</span></div>
+<div class="dl"><a class="pill big" href="${BETA_OPT_IN}" target="_blank" rel="noopener">2. Install from Google Play</a><span class="size">Tap "Become a tester"</span></div>
+<div class="dl"><a class="pill big" href="${PLAY_LISTING}" target="_blank" rel="noopener">3. YDeck on Google Play</a><span class="size">Open it in the store and tap "Install". Works after the first two steps</span></div>
 ${sec('Why two steps?', '<p>YDeck for Android is in testing before it opens to everyone on Google Play. Until then, Google lets only members of the testers group install it. Everyone who joins and keeps it for two weeks helps it reach the store.</p>')}
 ${sec('It says "app not available"', '<p>Almost always the first step wasn’t finished, or was done with a different Google account from the one on the phone. Join the group with that account, wait a few minutes and open the second link again.</p>')}
 ${sec('Pair it with your computer', '<p>In YDeck on your computer: Settings → Phone, and scan the code with the phone. From then on your projects, where each one stands and the next step reach the phone, end-to-end encrypted.</p>')}
-<p class="sub"><a href="${PLAY_LISTING}" target="_blank" rel="noopener">YDeck on Google Play</a> (opens after the two steps)</p>
 </div>`;
 
 // ── download ──
@@ -223,7 +223,7 @@ function build({ DIST, EMAIL, SITE_URL, apk }) {
   write('he/download/index.html', shell({ lang: 'he', dir: 'rtl', title: 'הורדה · YDeck', desc: 'YDeck ל־Windows (קוד פתוח), ו־YDeck לאנדרואיד בבטא ב־Google Play.', siteUrl: SITE_URL, email: EMAIL, body: download({ ...apk, email: EMAIL }), alt: { href: '/download', label: 'English' } }));
   write('code-signing/index.html', shell({ lang: 'en', dir: 'ltr', title: 'Code signing policy · YDeck', desc: 'How YDeck for Windows is built and released, and why it isn’t signed yet.', siteUrl: SITE_URL, email: EMAIL, body: codeSigning(EMAIL) }));
   he('android/index.html', 'YDeck לאנדרואיד', 'הזיכרון של הפרויקטים, בטלפון: איפה כל פרויקט עומד ומה הבא. בטא ב־Google Play.', android());
-  he('beta/index.html', 'בטא ב־Google Play · YDeck', 'להתקין את YDeck לאנדרואיד מ־Google Play: שני צעדים, דקה אחת.', `<div class="doc"><div class="wrap"><h1>YDeck ב־Google Play</h1><p class="lead">מתקינים מהחנות, בלי אזהרות. שני צעדים, דקה אחת, ומעכשיו העדכונים מגיעים לבד.</p>${playHe}</div></div>`);
+  he('beta/index.html', 'בטא ב־Google Play · YDeck', 'להתקין את YDeck לאנדרואיד מ־Google Play: שלושה צעדים, דקה אחת.', `<div class="doc"><div class="wrap"><h1>YDeck ב־Google Play</h1><p class="lead">מתקינים מהחנות, בלי אזהרות. שלושה צעדים, דקה אחת, ומעכשיו העדכונים מגיעים לבד.</p>${playHe}</div></div>`);
   he('404.html', 'לא נמצא · YDeck', 'העמוד לא נמצא.', `<div class="center">${RING(64)}<h1 style="font-size:clamp(36px,6vw,64px)">אין כאן כלום.</h1><a class="text-link" href="/he/">לעמוד הבית</a></div>`);
 }
 
