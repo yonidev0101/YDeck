@@ -32,6 +32,7 @@ fun main(args: Array<String>) {
     ClaudeLink.start()
     PhoneLink.start()
     UsageStats.start()
+    Updates.start()
     // A session that ends in a project's folder: its .ydeck files and its git state, at once rather than in 20 seconds.
     ClaudeLink.onStop = { cwd ->
         Thread {
@@ -116,6 +117,10 @@ private fun ApplicationScope.App(background: Boolean, asks: MutableStateFlow<Ask
     val tray = remember { AppTray.icon(onOpen = { open() }, onMenu = { trayMenu = it }) }
     DisposableEffect(Unit) { onDispose { AppTray.remove(tray) } }
     fun notify(title: String, text: String) { tray?.displayMessage(title, text, TrayIcon.MessageType.NONE) }
+    // A newer YDeck, told once; a click on the notification opens the window, where the sidebar offers it.
+    LaunchedEffect(Unit) {
+        Updates.onNew = { r -> notify(tr("YDeck ${r.version} is out", "YDeck ${r.version} יצאה"), tr("Open YDeck to update. It takes a few seconds.", "פותחים את YDeck כדי לעדכן. זה לוקח כמה שניות.")) }
+    }
 
     // Claude Code waiting for the user, or done with a long task, in a project: a Windows notification.
     LaunchedEffect(Unit) {

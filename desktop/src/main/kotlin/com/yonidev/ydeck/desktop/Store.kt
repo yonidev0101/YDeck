@@ -147,6 +147,10 @@ object Settings {
         val statsId: String = "",
         /** The install was counted once. */
         val statsInstalled: Boolean = false,
+        /** Asks GitHub for a newer YDeck every few hours (see [Updates]). */
+        val updateCheck: Boolean = true,
+        /** The last new version a notification told of, so each is told once. */
+        val updateTold: String = "",
     ) {
         fun localOf(projectId: String?): Local = projectId?.let { local[it] } ?: Local()
     }
@@ -183,6 +187,8 @@ object Settings {
                 put("statsAsked", s.statsAsked)
                 put("statsId", s.statsId)
                 put("statsInstalled", s.statsInstalled)
+                put("updateCheck", s.updateCheck)
+                put("updateTold", s.updateTold)
                 put("local", JSONObject().apply {
                     s.local.filterValues { !it.isEmpty }.forEach { (id, l) ->
                         put(id, JSONObject().apply {
@@ -230,6 +236,8 @@ object Settings {
             statsAsked = o.optBoolean("statsAsked", false),
             statsId = o.optString("statsId"),
             statsInstalled = o.optBoolean("statsInstalled", false),
+            updateCheck = o.optBoolean("updateCheck", true),
+            updateTold = o.optString("updateTold"),
             local = o.optJSONObject("local")?.let { all ->
                 all.keys().asSequence().associateWith { id ->
                     val l = all.getJSONObject(id)

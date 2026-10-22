@@ -107,6 +107,9 @@ private fun General() {
             Toggle(s.siteIcons) { on -> Settings.update { it.copy(siteIcons = on) } }
         }
         Setting(tr("Check for new commits on the server", "בדיקת קומיטים חדשים בשרת"), hint = tr("Every 10 minutes, quietly (git fetch). Nothing in your folders changes.", "כל 10 דקות, בשקט (git fetch). שום דבר בתיקיות לא משתנה.")) { Toggle(s.gitFetch) { on -> Settings.update { it.copy(gitFetch = on) } } }
+        Setting(tr("Check for updates", "בדיקת עדכונים"), hint = tr("Every few hours, YDeck asks GitHub whether a newer version is out.", "כל כמה שעות YDeck שואל את GitHub אם יצאה גרסה חדשה.")) {
+            Toggle(s.updateCheck) { on -> Settings.update { it.copy(updateCheck = on) } }
+        }
         Setting(tr("Anonymous usage counts", "נתוני שימוש אנונימיים"), hint = tr("Once a day: the version, the language, how many projects (a range), whether Claude Code is connected, and which parts were used. Never names, paths, code, links or prompts.", "פעם ביום: גרסה, שפה, כמה פרויקטים (טווח), אם Claude Code מחובר, ובאילו חלקים השתמשת. אף פעם לא שמות, נתיבים, קוד, קישורים או בקשות ל־Claude.")) {
             Toggle(s.usageStats && s.statsAsked) { on -> Settings.update { it.copy(usageStats = on, statsAsked = true) } }
         }
@@ -273,8 +276,27 @@ private fun About() {
             Spacer(Modifier.width(4.dp))
             Text(tr("Made by YoniDev", "נבנה ע״י YoniDev"), color = c.faint, fontSize = 13.sp, fontFamily = PlexSans)
         }
+        UpdateCheckRow()
         UninstallRow()
     }
+}
+
+/** In About: whether this is the latest YDeck, asked now. */
+@Composable
+private fun UpdateCheckRow() {
+    val c = LocalDeck.current
+    val available = Updates.available.collectAsState().value
+    var said by remember { mutableStateOf<String?>(null) }
+    var open by remember { mutableStateOf(false) }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (available != null) Pill(tr("Update to ${available.version}", "עדכון ל־${available.version}"), Tone.PRIMARY, Glyph.DOWNLOAD, small = true) { open = true }
+        else TextAction(tr("Check for updates", "בדיקת עדכונים"), accent = true) {
+            said = tr("Checking…", "בודק…")
+            Thread { said = if (Updates.check() == null) tr("This is the latest version.", "זו הגרסה האחרונה.") else null }.start()
+        }
+        said?.let { Text(it, color = c.muted, fontSize = 13.sp, fontFamily = PlexSans) }
+    }
+    if (open && available != null) UpdateDialog(available) { open = false }
 }
 
 /** Uninstalling YDeck: what goes and what stays, and YDeck's own data only if asked (see [Uninstall]). */

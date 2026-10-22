@@ -52,6 +52,8 @@ object AppTray {
         val image = AppTray::class.java.classLoader.getResourceAsStream("icons/app.png")!!.use { ImageIO.read(it) }
         TrayIcon(image, "YDeck").apply {
             isImageAutoSize = true
+            // A click on one of its notifications.
+            addActionListener { onOpen() }
             addMouseListener(object : MouseAdapter() {
                 override fun mouseReleased(e: MouseEvent) {
                     if (e.isPopupTrigger || e.button == MouseEvent.BUTTON3) java.awt.MouseInfo.getPointerInfo()?.location?.let(onMenu)

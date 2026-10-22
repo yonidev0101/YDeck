@@ -245,6 +245,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.ProjectsNav(deck: Dec
             Text(tr("New project", "פרויקט חדש"), color = c.muted, fontSize = 14.sp, fontFamily = PlexSans)
         }
     }
+    UpdateRow()
     NavRow(Glyph.GEAR, tr("Settings", "הגדרות"), false) { Nav.set(Screen.Settings()) }
 }
 

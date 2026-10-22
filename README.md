@@ -43,7 +43,8 @@ Git state comes from `git` itself, run in each project folder; dev servers and `
 
 ## Install
 
-Download the MSI from [Releases](https://github.com/yonidev0101/YDeck/releases/latest) and run it. The installer is
+Download the MSI from [Releases](https://github.com/yonidev0101/YDeck/releases/latest) and run it. After that YDeck
+updates itself: it checks GitHub every few hours, and "Update now" upgrades it in place (off in Settings → General). The installer is
 built by GitHub Actions from the tagged commit, but isn't code-signed yet, so SmartScreen asks once: **More info → Run
 anyway**. Uninstalling (Windows Settings → Apps, or Settings → About in YDeck) takes back everything YDeck added: the
 Claude Code plugin, "Open in YDeck" on Explorer's menu, the folder icons, starting with Windows. Your code and your
