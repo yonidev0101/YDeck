@@ -1,10 +1,10 @@
-# YDeck ב־Google Play: מדריך ההעלאה (מעודכן ל־0.9.3, 14 באוקטובר 2026)
+# YDeck ב־Google Play: מדריך ההעלאה (מעודכן ל־0.9.7, 22 באוקטובר 2026)
 
 שלב אחרי שלב ב־Play Console, עם הטקסט המוכן לכל שדה. הקבצים:
 
 | מה | איפה |
 |---|---|
-| ה־AAB להעלאה | `dist/YDeck-0.9.3.aab` (versionCode 12, חתום במפתח ההעלאה) |
+| ה־AAB להעלאה | `dist/YDeck-0.9.7.aab` (versionCode 16, חתום במפתח ההעלאה) |
 | אייקון 512 | `store/play/icon-512.png` |
 | תמונה ראשית (Feature graphic) 1024×500 | `store/play/feature-graphic-he.png` (ולדף האנגלי `feature-graphic-en.png`) |
 | צילומי מסך לטלפון, 4 | `store/play/screenshots/YDeck-01.png` … `YDeck-04.png` (1080×1920) |
@@ -37,18 +37,18 @@ Play Console ← **Create app**:
 
 ## 3. בדיקה סגורה (חובה בחשבון אישי: 12 בודקים × 14 יום)
 
-1. **קבוצת גוגל** ב־groups.google.com: שם `ydeck-testers`, כל אחד יכול להצטרף.
+1. **קבוצת גוגל** ב־groups.google.com: שם `ydeck-testers`. בהגדרות הקבוצה: מי יכול להצטרף ← **Anyone on the web can join** ("כל אחד באינטרנט"), ומי יכול לראות את הקבוצה ← **Anyone on the web**. בלי זה הקישור באתר (`/beta`) מראה לבודקים שגיאת גישה.
 2. Test and release ← Testing ← **Closed testing** ← Create track (או Alpha) ← **Testers**: מוסיפים את `ydeck-testers@googlegroups.com`.
-3. **Create new release** ← מעלים את `dist/YDeck-0.8.aab`.
-   - Release name: `0.8`
+3. **Create new release** ← מעלים את `dist/YDeck-0.9.7.aab`.
+   - Release name: `0.9.7`
    - Release notes (עברית):
      ```
      <iw-IL>
-     הגרסה הראשונה בחנות: ווידג'ט לכל פרויקט, וכל קישור נפתח בחשבון הנכון.
+     הזיכרון של הפרויקטים, בטלפון: איפה כל פרויקט עומד, מה Claude עשה ומה הבא. מתחבר ל־YDeck במחשב.
      </iw-IL>
      ```
 4. Next ← Save ← **Send for review**. הבדיקה הראשונה לוקחת בדרך כלל כמה ימים.
-5. אחרי האישור: **קישור ההצטרפות** (Join on the web) נשלח לבודקים יחד עם קישור הקבוצה. קודם מצטרפים לקבוצה, ואז מתקינים.
+5. אחרי האישור: שולחים לבודקים את **https://ydeck-app.pages.dev/beta**. שם שני הצעדים: הצטרפות לקבוצה, ואז קישור ההצטרפות (`play.google.com/apps/testing/com.yonidev.ydeck`).
 6. אחרי 14 יום עם 12 בודקים לפחות: Dashboard ← **Apply for production**.
 
 ## 4. דף החנות (Grow users ← Store presence ← Main store listing)

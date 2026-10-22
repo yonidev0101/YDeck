@@ -137,6 +137,27 @@ ${part('General', '', en.end)}
 </div></div>`;
 }
 
+// ── Google Play: the closed test. Join the group, then become a tester; one link for the campaign, /beta. ──
+const BETA_GROUP = 'https://groups.google.com/g/ydeck-testers';
+const BETA_OPT_IN = 'https://play.google.com/apps/testing/com.yonidev.ydeck';
+const PLAY_LISTING = 'https://play.google.com/store/apps/details?id=com.yonidev.ydeck';
+const playHe = `<div class="part"><h2>YDeck לאנדרואיד</h2><p class="sub">בטא ב־Google Play · אנדרואיד 12 ומעלה · חינם, בלי חשבון. מתחבר ל־YDeck במחשב.</p>
+<div class="dl"><a class="pill big" href="${BETA_GROUP}" target="_blank" rel="noopener">1. הצטרפות לקבוצת הבודקים</a><span class="size">"הצטרפות לקבוצה", עם החשבון שמחובר ל־Google Play בטלפון</span></div>
+<div class="dl"><a class="pill big" href="${BETA_OPT_IN}" target="_blank" rel="noopener">2. התקנה מ־Google Play</a><span class="size">לוחצים "להיות בודק", ואז מתקינים מהחנות</span></div>
+${sec('למה שני צעדים?', '<p>YDeck לאנדרואיד בבדיקה לפני שהיא נפתחת לכולם ב־Google Play. בשלב הזה Google מאפשרת להתקין רק למי שהצטרף לקבוצת הבודקים. כל מי שמצטרף ומשאיר אותה מותקנת שבועיים עוזר לה להגיע לחנות.</p>')}
+${sec('כתוב "האפליקציה לא זמינה"', '<p>כמעט תמיד הצעד הראשון לא הושלם, או שנעשה בחשבון Google אחר מזה שבטלפון. מצטרפים לקבוצה עם אותו חשבון, מחכים כמה דקות ופותחים שוב את הקישור השני.</p>')}
+${sec('מחברים למחשב', '<p>ב־YDeck במחשב: הגדרות ← טלפון, וסורקים את הקוד מהטלפון. מאז הפרויקטים, איפה כל אחד עומד והצעד הבא מגיעים לטלפון, מוצפנים מקצה לקצה.</p>')}
+<p class="sub"><a href="${PLAY_LISTING}" target="_blank" rel="noopener">YDeck ב־Google Play</a> (נפתח אחרי שני הצעדים)</p>
+</div>`;
+const playEn = `<div class="part"><h2>YDeck for Android</h2><p class="sub">Beta on Google Play · Android 12 and later · free, no account. Pairs with YDeck on your computer.</p>
+<div class="dl"><a class="pill big" href="${BETA_GROUP}" target="_blank" rel="noopener">1. Join the testers group</a><span class="size">"Join group", with the account your phone uses for Google Play</span></div>
+<div class="dl"><a class="pill big" href="${BETA_OPT_IN}" target="_blank" rel="noopener">2. Install from Google Play</a><span class="size">Tap "Become a tester", then install from the store</span></div>
+${sec('Why two steps?', '<p>YDeck for Android is in testing before it opens to everyone on Google Play. Until then, Google lets only members of the testers group install it. Everyone who joins and keeps it for two weeks helps it reach the store.</p>')}
+${sec('It says "app not available"', '<p>Almost always the first step wasn’t finished, or was done with a different Google account from the one on the phone. Join the group with that account, wait a few minutes and open the second link again.</p>')}
+${sec('Pair it with your computer', '<p>In YDeck on your computer: Settings → Phone, and scan the code with the phone. From then on your projects, where each one stands and the next step reach the phone, end-to-end encrypted.</p>')}
+<p class="sub"><a href="${PLAY_LISTING}" target="_blank" rel="noopener">YDeck on Google Play</a> (opens after the two steps)</p>
+</div>`;
+
 // ── download ──
 function download(apk) {
   return `<div class="doc"><div class="wrap">
@@ -145,12 +166,8 @@ function download(apk) {
 <div class="part"><h2>YDeck ל־Windows</h2><p class="sub">קוד פתוח (MIT). כל גרסה נבנית ב־GitHub Actions מהקוד שבריפו, ועולה לדף ה־Releases.</p>
 <div class="dl"><a class="pill big" href="https://github.com/yonidev0101/YDeck/releases/latest">הורדת הגרסה האחרונה</a><span class="size">MSI · Windows 10 ומעלה</span></div>
 ${sec('למה Windows מזהיר?', '<p>הקובץ עוד לא חתום דיגיטלית, אז SmartScreen מציג אזהרה בפעם הראשונה: לוחצים "מידע נוסף" ואז "הפעל בכל זאת". ראו <a href="/code-signing">Code signing policy</a>.</p>')}
-${sec('הסרה', '<p>הגדרות Windows ← אפליקציות ← YDeck ← הסרה. כדי שלא יישאר כלום, לפני ההסרה מכבים בהגדרות של YDeck את הלוגו על התיקיות, את ״פתיחה ב־YDeck״ ואת ההפעלה עם Windows.</p>')}</div>
-<div class="part"><h2>YDeck לאנדרואיד</h2><p class="sub">גרסה ${apk.version} · לאנדרואיד 12 ומעלה · חינם, בלי חשבון.</p>
-<div class="dl"><a class="pill big" href="/download/${apk.name}" download>הורדת YDeck ${apk.version}</a><span class="size">APK · ${apk.mb} MB · ${apk.released}</span></div>
-${sec('מתקינים', `<p>פותחים את הקובץ שירד ומאשרים התקנה. בפעם הראשונה אנדרואיד מבקש לאשר התקנות מהדפדפן:</p>${steps('פתיחת הקובץ', 'הגדרות', 'לאפשר מהמקור הזה', 'התקנה')}<p>את הווידג'ט מוסיפים מהאפליקציה, או בלחיצה ארוכה על מסך הבית:</p>${steps('לחיצה ארוכה על מסך הבית', 'ווידג\'טים', 'YDeck')}`)}
-${sec('למה מופיעה אזהרה?', '<p>אנדרואיד מזהיר על כל אפליקציה שלא מגיעה מ־Google Play. זה לא אומר שמשהו לא בסדר. YDeck בדרך לחנות.</p>')}
-${sec('איך יודעים שהקובץ אמיתי?', `<p>טביעת האצבע של הקובץ (SHA-256), להשוואה:</p><div class="hash">${apk.sha256}</div>`)}
+${sec('הסרה', '<p>הגדרות Windows ← אפליקציות ← YDeck ← הסרה. ההסרה מחזירה את כל מה ש־YDeck הוסיף: התוסף ל־Claude Code, ״פתיחה ב־YDeck״ בתפריט, הלוגו על התיקיות וההפעלה עם Windows. הקוד שלך וקובצי ה־.ydeck בפרויקטים נשארים.</p>')}</div>
+${playHe}
 </div></div></div>`;
 }
 
@@ -161,13 +178,9 @@ function downloadEn(apk) {
 <div class="part"><h2>YDeck for Windows</h2><p class="sub">Open source (MIT). Every release is built by GitHub Actions from the code in the repository, and published on its Releases page.</p>
 <div class="dl"><a class="pill big" href="https://github.com/yonidev0101/YDeck/releases/latest">Download the latest version</a><span class="size">MSI · Windows 10 and later</span></div>
 ${sec('Why does Windows warn?', '<p>The installer isn’t digitally signed yet, so SmartScreen warns the first time: click "More info", then "Run anyway". See the <a href="/code-signing">Code signing policy</a>.</p>')}
-${sec('Uninstalling', '<p>Windows Settings → Apps → YDeck → Uninstall. To leave nothing behind, first turn off in YDeck’s Settings the logo on folders, "Open in YDeck" and starting with Windows.</p>')}
+${sec('Uninstalling', '<p>Windows Settings → Apps → YDeck → Uninstall. It takes back everything YDeck added: the Claude Code plugin, "Open in YDeck" on the menu, the logo on folders and starting with Windows. Your code and your projects’ .ydeck files stay.</p>')}
 ${sec('The source', '<p><a href="https://github.com/yonidev0101/YDeck">github.com/yonidev0101/YDeck</a></p>')}</div>
-<div class="part"><h2>YDeck for Android</h2><p class="sub">Version ${apk.version} · Android 12 and later · free, no account.</p>
-<div class="dl"><a class="pill big" href="/download/${apk.name}" download>Download YDeck ${apk.version}</a><span class="size">APK · ${apk.mb} MB · ${apk.released}</span></div>
-${sec('Installing', `<p>Open the downloaded file and allow the install. The first time, Android asks to allow installs from your browser:</p>${steps('Open the file', 'Settings', 'Allow from this source', 'Install')}<p>Add the widget from the app, or with a long press on the home screen:</p>${steps('Long press on the home screen', 'Widgets', 'YDeck')}`)}
-${sec('Why is there a warning?', '<p>Android warns about every app that doesn’t come from Google Play. It doesn’t mean anything is wrong. YDeck is on its way to the store.</p>')}
-${sec('Is the file genuine?', `<p>The file’s fingerprint (SHA-256), to compare:</p><div class="hash">${apk.sha256}</div>`)}
+${playEn}
 </div></div></div>`;
 }
 
@@ -176,14 +189,14 @@ function android() {
   return `<section class="hero" style="min-height:auto;padding-top:160px;padding-bottom:40px">
 ${RING(84)}
 <div class="eyebrow">YDeck לאנדרואיד</div>
-<h1 style="font-size:clamp(40px,7vw,84px)">כל פרויקט, נגיעה אחת.</h1>
-<p class="lead">ווידג'ט למסך הבית: הקישורים של כל פרויקט, וכל נגיעה פותחת את הקונסולה בחשבון הנכון.</p>
-<div class="ctas"><a class="pill big" href="/download">הורדה לאנדרואיד</a><a class="text-link" href="/he/">YDeck ל־Windows</a></div>
+<h1 style="font-size:clamp(40px,7vw,84px)">שום דבר לא נשאר פתוח, גם בדרך.</h1>
+<p class="lead">הזיכרון של הפרויקטים, בטלפון: איפה כל פרויקט עומד, מה Claude עשה בסשן האחרון, ומה הצעד הבא.</p>
+<div class="ctas"><a class="pill big" href="/beta">הצטרפות לבטא ב־Google Play</a><a class="text-link" href="/he/">YDeck ל־Windows</a></div>
 </section>
 <section class="principles"><div class="wrap"><ol>
-<li><b>החשבון הנכון.</b><span>לכל פרויקט שומרים את חשבון הגוגל שלו, וכל קונסולה נפתחת ישר בו.</span></li>
-<li><b>בלי חשבון, בלי שרת.</b><span>הפרויקטים נשמרים בטלפון בלבד.</span></li>
-<li><b>עם המחשב.</b><span>אותו קובץ פרויקטים כמו YDeck ל־Windows: מייצאים מכאן, מייבאים שם.</span></li>
+<li><b>מה הבא.</b><span>הצעד הבא של כל פרויקט, ונקודה כתומה כשמשהו עוד פתוח.</span></li>
+<li><b>כותבים מהדרך.</b><span>החלטה או צעד הבא שעלו לך מגיעים ל־YDeck במחשב.</span></li>
+<li><b>מוצפן מקצה לקצה.</b><span>בלי חשבון. המפתח נמצא רק בקוד שסרקת מהמחשב.</span></li>
 </ol></div></section>`;
 }
 
@@ -206,10 +219,11 @@ function build({ DIST, EMAIL, SITE_URL, apk }) {
   const write = (file, html) => { const out = path.join(DIST, file); fs.mkdirSync(path.dirname(out), { recursive: true }); fs.writeFileSync(out, html); };
   const he = (file, title, desc, body) => write(file, shell({ lang: 'he', dir: 'rtl', title, desc, siteUrl: SITE_URL, email: EMAIL, body }));
   he('privacy/index.html', 'מדיניות פרטיות · YDeck', 'מה YDeck שומר, מה יוצא מהמחשב ומהטלפון, ומה לא. בעברית ובאנגלית.', privacy(EMAIL));
-  write('download/index.html', shell({ lang: 'en', dir: 'ltr', title: 'Download · YDeck', desc: `YDeck for Windows (open source) and YDeck ${apk.version} for Android.`, siteUrl: SITE_URL, email: EMAIL, body: downloadEn({ ...apk, email: EMAIL }), alt: { href: '/he/download', label: 'עברית' } }));
-  write('he/download/index.html', shell({ lang: 'he', dir: 'rtl', title: 'הורדה · YDeck', desc: `YDeck ל־Windows (קוד פתוח) ו־YDeck ${apk.version} לאנדרואיד.`, siteUrl: SITE_URL, email: EMAIL, body: download({ ...apk, email: EMAIL }), alt: { href: '/download', label: 'English' } }));
+  write('download/index.html', shell({ lang: 'en', dir: 'ltr', title: 'Download · YDeck', desc: 'YDeck for Windows (open source), and YDeck for Android in beta on Google Play.', siteUrl: SITE_URL, email: EMAIL, body: downloadEn({ ...apk, email: EMAIL }), alt: { href: '/he/download', label: 'עברית' } }));
+  write('he/download/index.html', shell({ lang: 'he', dir: 'rtl', title: 'הורדה · YDeck', desc: 'YDeck ל־Windows (קוד פתוח), ו־YDeck לאנדרואיד בבטא ב־Google Play.', siteUrl: SITE_URL, email: EMAIL, body: download({ ...apk, email: EMAIL }), alt: { href: '/download', label: 'English' } }));
   write('code-signing/index.html', shell({ lang: 'en', dir: 'ltr', title: 'Code signing policy · YDeck', desc: 'How YDeck for Windows is built and released, and why it isn’t signed yet.', siteUrl: SITE_URL, email: EMAIL, body: codeSigning(EMAIL) }));
-  he('android/index.html', 'YDeck לאנדרואיד', 'ווידג\'ט לאנדרואיד שמחזיק את הקישורים של כל פרויקט, וכל נגיעה פותחת בחשבון הנכון.', android());
+  he('android/index.html', 'YDeck לאנדרואיד', 'הזיכרון של הפרויקטים, בטלפון: איפה כל פרויקט עומד ומה הבא. בטא ב־Google Play.', android());
+  he('beta/index.html', 'בטא ב־Google Play · YDeck', 'להתקין את YDeck לאנדרואיד מ־Google Play: שני צעדים, דקה אחת.', `<div class="doc"><div class="wrap"><h1>YDeck ב־Google Play</h1><p class="lead">מתקינים מהחנות, בלי אזהרות. שני צעדים, דקה אחת, ומעכשיו העדכונים מגיעים לבד.</p>${playHe}</div></div>`);
   he('404.html', 'לא נמצא · YDeck', 'העמוד לא נמצא.', `<div class="center">${RING(64)}<h1 style="font-size:clamp(36px,6vw,64px)">אין כאן כלום.</h1><a class="text-link" href="/he/">לעמוד הבית</a></div>`);
 }
 
