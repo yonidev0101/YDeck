@@ -2,11 +2,14 @@ package com.yonidev.ydeck.desktop
 
 import com.yonidev.ydeck.link.Ran
 import com.yonidev.ydeck.link.RunCommand
+import com.yonidev.ydeck.link.RunOut
+import com.yonidev.ydeck.link.RunWatch
 import com.yonidev.ydeck.link.Snapshot
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 import java.nio.file.Files
@@ -39,24 +42,55 @@ class RunsTest {
         assertEquals(s.runOk, back.runOk)
     }
 
-    /** The exit code reaches its file, through each shell's own arguments as YDeck builds them (without the window). */
-    @Test fun theExitCodeComesBack() {
+    @Test fun aCommandChoosesItsWindowAndOldPhonesKeepTheirs() {
+        val r = RunCommand("id1", "p1", "npm test", 123L, window = false)
+        assertEquals(r, RunCommand.decode(r.encode()))
+        // A phone from before the choice: the window it always had.
+        assertEquals(true, RunCommand.decode("""{"app":"YDeck","kind":"run","id":"x","line":"git status"}""".toByteArray())?.window)
+    }
+
+    @Test fun theLiveMessagesGoAndComeBackAndCantPassForEachOther() {
+        val o = RunOut("id1", 40, "שלום\nworld", done = true, code = 3)
+        assertEquals(o, RunOut.decode(o.encode()))
+        val w = RunWatch("id1", 12)
+        assertEquals(w, RunWatch.decode(w.encode()))
+        assertNull(RunOut.decode(w.encode()))
+        assertNull(RunWatch.decode(o.encode()))
+        assertEquals((71..100).joinToString("\n"), Ran.tailOf((1..100).joinToString("\n") + "\n\n"))
+    }
+
+    /**
+     * Each shell, through the script as YDeck runs it with no window: the output (Hebrew too) reaches the log, the
+     * exit code its file, and a line's quotes reach the shell as typed.
+     */
+    @Test fun theOutputAndTheExitCodeComeBack() {
         val dir = Files.createTempDirectory("ydeck-runs").toFile()
         try {
-            for (shell in listOf(Shell.CMD, Shell.POWERSHELL).filter { Shells.exe(it) != null }) {
-                val ok = File(dir, "${shell.id}-ok.exit")
-                val bad = File(dir, "${shell.id}-bad.exit")
-                run(Tools.watchedArgs(shell, Shells.exe(shell)!!.path, "git --version", ok), dir)
-                run(Tools.watchedArgs(shell, Shells.exe(shell)!!.path, "git no-such-command", bad), dir)
-                assertEquals("$shell ok", "0", ok.readText().trim())
-                assertNotEquals("$shell failed", "0", bad.readText().trim())
+            val lines = mapOf(
+                Shell.CMD to listOf("echo \"a b\" & echo שלום", "git no-such-command"),
+                Shell.POWERSHELL to listOf("Write-Output 'a b'; 'שלום'", "git no-such-command"),
+                Shell.BASH to listOf("echo \"a b\"; echo שלום", "git no-such-command"),
+            )
+            for ((shell, two) in lines) {
+                val exe = Shells.exe(shell)?.takeIf { it.isFile } ?: continue
+                val ok = RunScript.files("${shell.id}-ok", shell)
+                run(RunScript.args(shell, exe.path, two[0], ok, stay = false), dir)
+                assertEquals("$shell exit", "0", ok.exit.readText().trim())
+                val log = ok.log.readText(Charsets.UTF_8)
+                println("$shell: $log")
+                assertTrue("$shell log: $log", log.contains("שלום") && log.contains("a b"))
+                val bad = RunScript.files("${shell.id}-bad", shell)
+                run(RunScript.args(shell, exe.path, two[1], bad, stay = false), dir)
+                assertNotEquals("$shell failed", "0", bad.exit.readText().trim())
+                assertTrue("$shell error in log", bad.log.readText().contains("no-such-command"))
+                RunScript.clean(ok); RunScript.clean(bad)
             }
         } finally {
             dir.deleteRecursively()
         }
     }
 
-    /** Runs as the window would, but with nobody typing: the shell that stays open reads the end of input and goes. */
+    /** As YDeck runs it with no window: nobody types, so input ends at once. */
     private fun run(args: List<String>, dir: File) {
         val p = ProcessBuilder(args).directory(dir).redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start()
         p.outputStream.close()

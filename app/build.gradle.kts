@@ -35,8 +35,8 @@ android {
         applicationId = if (legacy) "com.yonidev.projectdeck" else "com.yonidev.ydeck"
         minSdk = 31
         targetSdk = 36
-        versionCode = 24
-        versionName = "0.9.15"
+        versionCode = 25
+        versionName = "0.9.16"
         resValue("string", "app_name", if (legacy) "YDeck (ישן)" else "YDeck")
     }
 
@@ -107,6 +107,8 @@ dependencies {
     implementation("androidx.camera:camera-view:1.4.2")
     // Fetching the computer's latest state in the background, for the widget.
     implementation("androidx.work:work-runtime-ktx:2.10.1")
+    // The live line to the computer (a command's output as it comes): a WebSocket through the relay.
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     testImplementation("junit:junit:4.13.2")
     // The real org.json on the JVM, so the parser and serializer can be unit-tested without a device.

@@ -62,6 +62,8 @@ object PhoneLink {
     val state: StateFlow<State> = _state
 
     @Volatile private var pairing: Pairing? = null
+    /** The pairing now, for the live line ([LiveLine]); null when no phone is paired. */
+    val pairingNow: Pairing? get() = pairing
     @Volatile private var lastSent: String? = null
     @Volatile private var lastSentAt = 0L
     /** The state goes out at least this often; a phone that hasn't heard for [com.yonidev.ydeck.link.Live.FRESH_MS] stops trusting it. */

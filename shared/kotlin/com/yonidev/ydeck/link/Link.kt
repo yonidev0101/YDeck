@@ -165,6 +165,12 @@ class Relay(private val pairing: Pairing, private val base: String = RELAY) {
     /** Unpair: empties the box. */
     fun delete(): Boolean = call("DELETE", "", null) { code, _ -> code == 200 } ?: false
 
+    /** The box's live line (a WebSocket; see [RunOut]), for [role] "computer" or "phone". Opened with the same
+     *  `Authorization: Bearer <token>` as every other call. Each app opens it with its own WebSocket client. */
+    fun liveUrl(role: String): String = base.replaceFirst("https://", "wss://").replaceFirst("http://", "ws://") + "/v1/box/${pairing.boxId}/live?role=$role"
+
+    val authorization: String get() = "Bearer ${pairing.token}"
+
     /** The last call's HTTP status, 0 when the relay couldn't be reached. 401: the box doesn't take our token (the
      *  computer unpaired, and the box was claimed again); 404 on getState: the computer hasn't sent anything yet. */
     var lastCode = 0

@@ -113,6 +113,8 @@ object Computer {
     fun state(context: Context): State = _state.value ?: load(context).also { _state.value = it }
 
     @Volatile private var pairing: Pairing? = null
+    /** The pairing now, for the live line ([LiveOut]); null when not paired. */
+    val pairingNow: Pairing? get() = pairing
     @Volatile private var etag: String? = null
     /** The secret was made here, never shown on a screen (a one-time code, or moved to after an older one). */
     @Volatile private var made = false
@@ -264,14 +266,15 @@ object Computer {
     }
 
     /**
-     * Asks the computer to run [line] in [projectId]'s folder (see [com.yonidev.ydeck.link.RunCommand]). It waits there
+     * Asks the computer to run [line] in [projectId]'s folder (see [com.yonidev.ydeck.link.RunCommand]), in a new
+     * terminal window there or inside YDeck ([window]). It waits there
      * for approval unless that exact line was allowed always. Sent now or never, like [launch].
      */
-    suspend fun run(context: Context, projectId: String, line: String): Boolean = withContext(Dispatchers.IO) {
+    suspend fun run(context: Context, projectId: String, line: String, window: Boolean): Boolean = withContext(Dispatchers.IO) {
         val app = context.applicationContext
         val p = pairing ?: return@withContext false
         val clean = com.yonidev.ydeck.link.RunCommand.clean(line) ?: return@withContext false
-        val r = com.yonidev.ydeck.link.RunCommand(java.util.UUID.randomUUID().toString(), projectId, clean, System.currentTimeMillis())
+        val r = com.yonidev.ydeck.link.RunCommand(java.util.UUID.randomUUID().toString(), projectId, clean, System.currentTimeMillis(), window)
         if (!Relay(p).postNote(p.seal("run", r.encode()))) return@withContext false
         val s = state(app)
         _state.value = s.copy(runs = (s.runs + (r to null)).takeLast(12))

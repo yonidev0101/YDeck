@@ -20,6 +20,11 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -103,13 +108,17 @@ fun ProjectScreen(
     runOn: Boolean = false,
     runs: List<Pair<com.yonidev.ydeck.link.RunCommand, com.yonidev.ydeck.link.Ran?>> = emptyList(),
     runOk: List<String> = emptyList(),
-    onRun: ((String) -> Unit)? = null,
+    onRun: ((line: String, window: Boolean) -> Unit)? = null,
 ) {
     val c = LocalDeck.current
     var tab by rememberSaveable { mutableStateOf(Tab.MEMORY) }
     var writing by remember { mutableStateOf<String?>(null) }
     var launching by remember { mutableStateOf(false) }
     var running by remember { mutableStateOf(false) }
+    // A command's page: one tapped in the list, or the one just sent (the first sent after [sentAt]).
+    var watching by remember { mutableStateOf<String?>(null) }
+    var sentAt by remember { mutableStateOf(0L) }
+    val context = LocalContext.current
     val canWrite = onWrite != null && memory != null
     PageScaffold(
         title = p.name, onBack = onBack,
@@ -123,7 +132,10 @@ fun ProjectScreen(
             item(key = "w:" + w.id) { WaitingCard(w, p, canReply, replies.lastOrNull { it.first.waiting == w.id }) { text, choices -> onReply(w.id, text, choices) } }
         }
         if (onLaunch != null && live != null) item { ClaudeCard(launches.lastOrNull(), launchOn) { launching = true } }
-        if (onRun != null && live != null) item { RunCard(runs, runOn, runOk, onRun) { running = true } }
+        if (onRun != null && live != null) item {
+            RunCard(runs, runOn, runOk, onRun = { line -> sentAt = System.currentTimeMillis() - 1_000; onRun(line, com.yonidev.ydeck.data.RunChoice.window(context)) },
+                onOpen = { watching = it }) { running = true }
+        }
         item { Tabs(tab, mapOf(Tab.GIT to (live?.changes ?: 0), Tab.LINKS to p.actions.size)) { tab = it } }
         when (tab) {
             Tab.MEMORY -> item {
@@ -135,7 +147,11 @@ fun ProjectScreen(
         }
     }
     writing?.let { kind -> WriteSheet(kind, onDismiss = { writing = null }, onSend = { k, text -> writing = null; onWrite?.invoke(k, text) }) }
-    if (running && onRun != null) RunSheet(runOk, onDismiss = { running = false }) { line -> running = false; onRun(line) }
+    if (running && onRun != null) RunSheet(runOk, onDismiss = { running = false }) { line, window ->
+        running = false; sentAt = System.currentTimeMillis() - 1_000; onRun(line, window)
+    }
+    val shownRun = watching?.let { id -> runs.lastOrNull { it.first.id == id } } ?: if (sentAt > 0) runs.lastOrNull { it.first.at >= sentAt } else null
+    shownRun?.let { (r, n) -> RunOutSheet(r, n, onDismiss = { watching = null; sentAt = 0 }) }
     if (launching) LaunchSheet(live?.sessions.orEmpty(), live, onDismiss = { launching = false }) { mode, session, prompt, remote ->
         launching = false
         onLaunch?.invoke(mode, session, prompt, remote)
@@ -827,9 +843,9 @@ private fun WriteSheet(initial: String, onDismiss: () -> Unit, onSend: (String, 
 private fun ranWords(r: com.yonidev.ydeck.link.RunCommand, n: com.yonidev.ydeck.link.Ran?): Pair<String, Color> = when {
     n == null -> (if (System.currentTimeMillis() - r.at > 90_000) "המחשב עוד לא ענה. YDeck פתוח בו?" else "נשלח, מחכה למחשב…") to Color(0xFF8A8A90)
     n.state == com.yonidev.ydeck.link.Ran.ASKING -> "מחכה לאישור במחשב" to CHANGED_DOT
-    n.state == com.yonidev.ydeck.link.Ran.RUNNING -> "רץ במחשב, בחלון טרמינל" to LIVE_DOT
+    n.state == com.yonidev.ydeck.link.Ran.RUNNING -> (if (r.window) "רץ במחשב, בחלון טרמינל" else "רץ במחשב, בתוך YDeck") to LIVE_DOT
     n.state == com.yonidev.ydeck.link.Ran.DONE && n.code == 0 -> "הסתיים בהצלחה · ${ago(n.at)}" to CLEAN_DOT
-    n.state == com.yonidev.ydeck.link.Ran.DONE -> "נכשל · קוד ${n.code} · הפלט בחלון במחשב" to CONFLICT_DOT
+    n.state == com.yonidev.ydeck.link.Ran.DONE -> "נכשל · קוד ${n.code}" to CONFLICT_DOT
     else -> when (n.why) {
         "off" -> "הפקודות מהטלפון כבויות במחשב (הגדרות ← טלפון)"
         "stale" -> "הגיעה מאוחר מדי ולא רצה. אפשר לשלוח שוב."
@@ -843,7 +859,8 @@ private fun ranWords(r: com.yonidev.ydeck.link.RunCommand, n: com.yonidev.ydeck.
 /** "Run a command on the computer": the lines allowed always for one tap, a new one, and the last few, with how they went. */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun RunCard(runs: List<Pair<com.yonidev.ydeck.link.RunCommand, com.yonidev.ydeck.link.Ran?>>, on: Boolean, ok: List<String>, onRun: (String) -> Unit, onNew: () -> Unit) {
+private fun RunCard(runs: List<Pair<com.yonidev.ydeck.link.RunCommand, com.yonidev.ydeck.link.Ran?>>, on: Boolean, ok: List<String>, onRun: (String) -> Unit,
+                    onOpen: (String) -> Unit, onNew: () -> Unit) {
     val c = LocalDeck.current
     Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 6.dp)) {
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.surface)) {
@@ -857,7 +874,7 @@ private fun RunCard(runs: List<Pair<com.yonidev.ydeck.link.RunCommand, com.yonid
                 }
                 Column(Modifier.weight(1f)) {
                     Text("פקודה במחשב", color = c.fg, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                    Text(if (on) "רצה רק אחרי אישור במחשב, בחלון שנפתח שם" else "כבוי במחשב. מדליקים ב־YDeck במחשב ← הגדרות ← טלפון.",
+                    Text(if (on) "רצה רק אחרי אישור במחשב, והפלט מגיע לכאן" else "כבוי במחשב. מדליקים ב־YDeck במחשב ← הגדרות ← טלפון.",
                         color = c.muted, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
             }
@@ -881,7 +898,8 @@ private fun RunCard(runs: List<Pair<com.yonidev.ydeck.link.RunCommand, com.yonid
         // The last few, newest first: the line, and how it went.
         runs.takeLast(3).reversed().forEach { (r, n) ->
             val (words, dot) = ranWords(r, n)
-            Row(Modifier.fillMaxWidth().padding(start = 6.dp, end = 6.dp, top = 10.dp), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(Modifier.fillMaxWidth().padding(top = 4.dp).clip(RoundedCornerShape(10.dp)).clickable { onOpen(r.id) }.padding(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Box(Modifier.padding(top = 7.dp)) { Dot(dot, 7.dp) }
                 Column(Modifier.weight(1f)) {
                     Text(r.line, color = c.fg, fontSize = 13.sp, fontFamily = PlexMono, maxLines = 1, overflow = TextOverflow.Ellipsis, style = TextStyle(textDirection = TextDirection.Ltr))
@@ -895,14 +913,16 @@ private fun RunCard(runs: List<Pair<com.yonidev.ydeck.link.RunCommand, com.yonid
 /** Typing a command for the computer: one line, as it will run there, in the project's folder. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun RunSheet(ok: List<String>, onDismiss: () -> Unit, onSend: (String) -> Unit) {
+private fun RunSheet(ok: List<String>, onDismiss: () -> Unit, onSend: (line: String, window: Boolean) -> Unit) {
     val c = LocalDeck.current
+    val context = LocalContext.current
     var line by remember { mutableStateOf("") }
+    var window by remember { mutableStateOf(com.yonidev.ydeck.data.RunChoice.window(context)) }
     val clean = com.yonidev.ydeck.link.RunCommand.clean(line)
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = c.surface) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp).padding(bottom = 22.dp)) {
             Text("פקודה במחשב", color = c.fg, fontSize = 22.sp, fontFamily = Display, fontWeight = FontWeight.Light)
-            Text("רצה בתיקיית הפרויקט, בחלון טרמינל חדש שנשאר פתוח. במחשב בוחרים: פעם אחת, תמיד, או לא.",
+            Text("רצה בתיקיית הפרויקט, והפלט מגיע לכאן תוך כדי. במחשב בוחרים: פעם אחת, תמיד, או לא.",
                 color = c.muted, fontSize = 13.sp, lineHeight = 19.sp, modifier = Modifier.padding(top = 6.dp, bottom = 14.dp))
             Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.surface2).padding(horizontal = 14.dp, vertical = 14.dp)) {
                 val style = TextStyle(color = c.fg, fontSize = 16.sp, fontFamily = PlexMono, textDirection = TextDirection.Ltr)
@@ -910,15 +930,70 @@ private fun RunSheet(ok: List<String>, onDismiss: () -> Unit, onSend: (String) -
                 BasicTextField(line, { line = it.replace("\n", " ").take(com.yonidev.ydeck.link.RunCommand.MAX) }, textStyle = style, singleLine = true,
                     cursorBrush = SolidColor(c.fg), modifier = Modifier.fillMaxWidth())
             }
+            // Where it runs there; remembered for next time (and for the lines allowed always).
+            Row(Modifier.fillMaxWidth().padding(top = 12.dp).clip(RoundedCornerShape(12.dp)).background(c.surface2).padding(3.dp)) {
+                listOf(false to "בתוך YDeck", true to "בחלון חדש").forEach { (w, label) ->
+                    Box(Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(if (window == w) c.surface else Color.Transparent)
+                        .clickable { window = w; com.yonidev.ydeck.data.RunChoice.setWindow(context, w) }.padding(vertical = 9.dp), contentAlignment = Alignment.Center) {
+                        Text(label, color = if (window == w) c.fg else c.muted, fontSize = 14.sp, fontWeight = if (window == w) FontWeight.Medium else FontWeight.Normal)
+                    }
+                }
+            }
+            Text(if (window) "נפתח חלון טרמינל במחשב ונשאר פתוח, ואפשר להקליד בו שם." else "בלי חלון במחשב. מתאים לפקודה שלא שואלת שאלות באמצע.",
+                color = c.faint, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
             if (ok.isNotEmpty()) Text("מאושרות תמיד: " + ok.joinToString(" · "), color = c.faint, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(top = 10.dp))
             Button(
-                onClick = { clean?.let(onSend) },
+                onClick = { clean?.let { onSend(it, window) } },
                 enabled = clean != null,
                 colors = ButtonDefaults.buttonColors(containerColor = c.fg, contentColor = c.bg, disabledContainerColor = c.surface2, disabledContentColor = c.faint),
                 shape = RoundedCornerShape(14.dp),
                 modifier = Modifier.fillMaxWidth().padding(top = 16.dp).height(50.dp),
             ) { Text(if (clean != null && clean in ok) "הרצה במחשב" else "שליחה לאישור במחשב", fontSize = 16.sp, fontWeight = FontWeight.Medium) }
+        }
+    }
+}
+
+/**
+ * One command's page: the line, how it's going, and its output as it comes on the computer (over the live line, see
+ * LiveOut). After it ended, and when the line can't be had, the last lines the state carries.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RunOutSheet(r: com.yonidev.ydeck.link.RunCommand, n: com.yonidev.ydeck.link.Ran?, onDismiss: () -> Unit) {
+    val c = LocalDeck.current
+    val context = LocalContext.current
+    val live by com.yonidev.ydeck.data.LiveOut.state.collectAsState()
+    val started = n?.state == com.yonidev.ydeck.link.Ran.RUNNING || n?.state == com.yonidev.ydeck.link.Ran.DONE
+    DisposableEffect(r.id, started) {
+        if (started) com.yonidev.ydeck.data.LiveOut.watch(context, r.id)
+        onDispose { com.yonidev.ydeck.data.LiveOut.unwatch(r.id) }
+    }
+    val seen = live[r.id]
+    // The line said it ended before the state did: said so at once.
+    val now = if (seen?.done == true && n?.state == com.yonidev.ydeck.link.Ran.RUNNING) n.copy(state = com.yonidev.ydeck.link.Ran.DONE, code = seen.code, at = System.currentTimeMillis()) else n
+    val (words, dot) = ranWords(r, now)
+    val text = seen?.text?.takeIf { it.isNotEmpty() } ?: n?.tail.orEmpty()
+    val scroll = rememberScrollState()
+    LaunchedEffect(text.length) { scroll.animateScrollTo(scroll.maxValue) }
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = c.surface) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp).padding(bottom = 22.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Dot(dot, 8.dp)
+                Text(words, color = c.muted, fontSize = 13.sp)
+            }
+            Text(r.line, color = c.fg, fontSize = 16.sp, fontFamily = PlexMono, style = TextStyle(textDirection = TextDirection.Ltr),
+                modifier = Modifier.fillMaxWidth().padding(top = 10.dp))
+            Box(Modifier.fillMaxWidth().padding(top = 14.dp).heightIn(min = 160.dp, max = 460.dp).clip(RoundedCornerShape(14.dp)).background(c.surface2)
+                .verticalScroll(scroll).padding(horizontal = 14.dp, vertical = 12.dp)) {
+                androidx.compose.foundation.text.selection.SelectionContainer {
+                    Text(text.ifEmpty { if (now?.state == com.yonidev.ydeck.link.Ran.DONE) "(אין פלט)" else "…" },
+                        color = if (text.isEmpty()) c.faint else c.fg, fontSize = 12.sp, lineHeight = 17.sp, fontFamily = PlexMono,
+                        style = TextStyle(textDirection = TextDirection.Ltr), modifier = Modifier.fillMaxWidth())
+                }
+            }
+            if (seen == null && n?.state == com.yonidev.ydeck.link.Ran.DONE && text.isNotEmpty())
+                Text("${com.yonidev.ydeck.link.Ran.TAIL_LINES} השורות האחרונות", color = c.faint, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
         }
     }
 }

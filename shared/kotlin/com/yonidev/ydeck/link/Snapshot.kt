@@ -312,12 +312,14 @@ data class Launched(val id: String, val ok: Boolean, val why: String = "")
 /**
  * "Run this in the project's folder": a command line typed on the phone. Unlike [Launch] it is the developer's own
  * line, so the computer never runs it on the phone's say alone: someone at the computer approves it, once or always
- * (always is that exact line, in that project, nothing wider), unless it was approved always before. It runs in a new
- * terminal window there, in sight, which stays open. One line only. Sealed as "run".
+ * (always is that exact line, in that project, nothing wider), unless it was approved always before. It runs either
+ * in a new terminal window there, in sight, which stays open ([window]), or inside YDeck without a window, its output
+ * shown on the computer's screen. Either way its output reaches the phone as it comes ([RunOut]). One line only.
+ * Sealed as "run".
  */
-data class RunCommand(val id: String, val project: String, val line: String, val at: Long) {
+data class RunCommand(val id: String, val project: String, val line: String, val at: Long, val window: Boolean = false) {
     fun encode(): ByteArray = JSONObject().put("app", "YDeck").put("kind", "run").put("v", 1)
-        .put("id", id).put("project", project).put("line", line).put("at", at).toString().toByteArray()
+        .put("id", id).put("project", project).put("line", line).put("at", at).put("window", window).toString().toByteArray()
 
     companion object {
         const val MAX = 500
@@ -335,18 +337,21 @@ data class RunCommand(val id: String, val project: String, val line: String, val
             val o = JSONObject(String(bytes))
             if (o.optString("app") != "YDeck" || o.optString("kind") != "run") return null
             val line = clean(o.optString("line")) ?: return null
-            RunCommand(o.optString("id").take(64), o.optString("project").take(100), line, o.optLong("at"))
+            // A phone from before the choice expects the window it always had.
+            RunCommand(o.optString("id").take(64), o.optString("project").take(100), line, o.optLong("at"), o.optBoolean("window", true))
         }.getOrNull()
     }
 }
 
 /**
  * What became of a [RunCommand]: [ASKING] (waiting for someone at the computer), [RUNNING], [DONE] with its exit
- * [code], or [NO] and why: "off", "stale", "project", "folder", "denied", "timeout", "start".
+ * [code], or [NO] and why: "off", "stale", "project", "folder", "denied", "timeout", "start". [tail]: the last lines it
+ * printed, once it's [DONE] (the live output goes apart, see [RunOut]).
  */
-data class Ran(val id: String, val project: String, val line: String, val state: String, val code: Int = 0, val why: String = "", val at: Long = 0) {
+data class Ran(val id: String, val project: String, val line: String, val state: String, val code: Int = 0, val why: String = "", val at: Long = 0,
+               val tail: String = "") {
     fun toJson(): JSONObject = JSONObject().put("id", id).put("project", project).put("line", line).put("state", state)
-        .put("code", code).put("why", why).put("at", at)
+        .put("code", code).put("why", why).put("at", at).put("tail", tail)
 
     companion object {
         const val ASKING = "asking"
@@ -354,8 +359,55 @@ data class Ran(val id: String, val project: String, val line: String, val state:
         const val DONE = "done"
         const val NO = "no"
 
+        /** How many of the last lines [tail] keeps, and at most how many characters. */
+        const val TAIL_LINES = 30
+        const val TAIL_MAX = 4_000
+
         fun of(o: JSONObject) = Ran(o.optString("id"), o.optString("project"), o.optString("line"), o.optString("state"),
-            o.optInt("code"), o.optString("why"), o.optLong("at"))
+            o.optInt("code"), o.optString("why"), o.optLong("at"), o.optString("tail"))
+
+        /** The end of [text] as [tail] keeps it. */
+        fun tailOf(text: String): String = text.trimEnd().lines().takeLast(TAIL_LINES).joinToString("\n").takeLast(TAIL_MAX)
+    }
+}
+
+/*
+ * A command's output, live: while a phone watches, the computer and the phone hold a line open through the relay
+ * (a WebSocket, /v1/box/<id>/live), and each message on it is sealed like everything else. The relay passes a
+ * message from one side to the other and keeps nothing.
+ */
+
+/**
+ * Computer → phone, sealed as "out": [text] is the command's output from character [from] on (counted from its
+ * start). [done] once it ended, with its exit [code]. A phone that has up to [from] already adds it; one that missed
+ * some asks again ([RunWatch]).
+ */
+data class RunOut(val id: String, val from: Long, val text: String, val done: Boolean = false, val code: Int = 0) {
+    fun encode(): ByteArray = JSONObject().put("app", "YDeck").put("kind", "out").put("id", id).put("from", from)
+        .put("text", text).put("done", done).put("code", code).toString().toByteArray()
+
+    companion object {
+        /** At most this many characters in one message; more goes in the next ones. */
+        const val MAX = 32_000
+
+        fun decode(bytes: ByteArray): RunOut? = runCatching {
+            val o = JSONObject(String(bytes))
+            if (o.optString("app") != "YDeck" || o.optString("kind") != "out") return null
+            RunOut(o.optString("id").take(64), o.optLong("from"), o.optString("text").take(MAX), o.optBoolean("done"), o.optInt("code"))
+        }.getOrNull()
+    }
+}
+
+/** Phone → computer, sealed as "watch": "I'm looking at command [id] and have its output up to [have]; send the rest." */
+data class RunWatch(val id: String, val have: Long) {
+    fun encode(): ByteArray = JSONObject().put("app", "YDeck").put("kind", "watch").put("id", id).put("have", have).toString().toByteArray()
+
+    companion object {
+        fun decode(bytes: ByteArray): RunWatch? = runCatching {
+            val o = JSONObject(String(bytes))
+            if (o.optString("app") != "YDeck" || o.optString("kind") != "watch") return null
+            RunWatch(o.optString("id").take(64), o.optLong("have").coerceAtLeast(0))
+        }.getOrNull()
     }
 }
 

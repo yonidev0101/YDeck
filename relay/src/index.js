@@ -12,6 +12,9 @@
 //   GET    /v1/box/:id/inbox   the computer reads the notes waiting
 //   DELETE /v1/box/:id/inbox/:n   the computer took that note
 //   DELETE /v1/box/:id         unpair: everything in the box is gone
+//   GET    /v1/box/:id/live?role=computer|phone   a WebSocket: what one side sends (sealed) reaches the other side's
+//                              sockets at once, and is kept nowhere. When the computer joins, the phone hears "hello:computer"
+//                              (and the other way round), so it asks again for what it watches.
 //
 // The first PUT claims a box for its token; every later call must present the same token.
 
@@ -19,23 +22,26 @@ const MAX_STATE = 1_500_000; // bytes; projects + logos are ~300 KB today
 const BOX = /^[0-9a-f]{32}$/;
 const MAX_NOTE = 16_000; // bytes, sealed
 const MAX_NOTES = 200;
+const MAX_LIVE = 64_000; // bytes, sealed, per message on the live line
+const ROLES = ['computer', 'phone'];
 
 export default {
   async fetch(req, env) {
     const url = new URL(req.url);
     if (url.pathname === '/' || url.pathname === '/v1') return text('YDeck relay. Sealed boxes only.', 200);
-    const m = url.pathname.match(/^\/v1\/box\/([^/]+)(?:\/(state|meta|inbox(?:\/[0-9a-z-]{1,40})?))?$/);
+    const m = url.pathname.match(/^\/v1\/box\/([^/]+)(?:\/(state|meta|live|inbox(?:\/[0-9a-z-]{1,40})?))?$/);
     if (!m || !BOX.test(m[1])) return text('not found', 404);
     const auth = req.headers.get('authorization') || '';
     const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
     if (token.length < 40 || token.length > 100) return text('unauthorized', 401);
     const stub = env.BOXES.get(env.BOXES.idFromName(m[1]));
-    return stub.fetch(new Request(`https://box/${m[2] || ''}`, req));
+    return stub.fetch(new Request(`https://box/${m[2] || ''}${url.search}`, req));
   },
 };
 
 export class Box {
   constructor(state) {
+    this.ctx = state;
     this.sql = state.storage.sql;
     this.storage = state.storage;
     this.table();
@@ -81,6 +87,19 @@ export class Box {
       return new Response(state, { headers: { 'content-type': 'application/octet-stream', etag, 'cache-control': 'no-store' } });
     }
 
+    if (req.method === 'GET' && what === 'live') {
+      if ((req.headers.get('upgrade') || '').toLowerCase() !== 'websocket') return text('websocket only', 426);
+      const role = new URL(req.url).searchParams.get('role');
+      if (!ROLES.includes(role)) return text('role', 400);
+      // A few at most per side (a phone that reconnects leaves its old socket behind for a moment).
+      for (const old of this.ctx.getWebSockets(role).slice(0, -3)) old.close(1000, 'replaced');
+      const [client, server] = Object.values(new WebSocketPair());
+      // Hibernation: an open line that carries nothing costs nothing.
+      this.ctx.acceptWebSocket(server, [role]);
+      for (const ws of this.ctx.getWebSockets(other(role))) { try { ws.send('hello:' + role); } catch {} }
+      return new Response(null, { status: 101, webSocket: client });
+    }
+
     if (req.method === 'GET' && what === 'meta') {
       return json({ stateAt: num(this.get('stateAt')), readAt: num(this.get('readAt')) });
     }
@@ -106,6 +125,7 @@ export class Box {
     }
 
     if (req.method === 'DELETE' && what === '') {
+      for (const ws of this.ctx.getWebSockets()) { try { ws.close(1000, 'unpaired'); } catch {} }
       await this.storage.deleteAll();
       this.table();
       return json({ ok: true });
@@ -115,6 +135,17 @@ export class Box {
   }
 
   async alarm() { await this.storage.deleteAll(); this.table(); }
+
+  // The live line: sealed bytes from one side, passed to the other side as they are. Text is only "ping".
+  webSocketMessage(ws, msg) {
+    if (typeof msg === 'string') { if (msg === 'ping') ws.send('pong'); return; }
+    if (msg.byteLength === 0 || msg.byteLength > MAX_LIVE) return;
+    const role = this.ctx.getTags(ws)[0];
+    for (const to of this.ctx.getWebSockets(other(role))) { try { to.send(msg); } catch {} }
+  }
+
+  webSocketClose(ws, code) { try { ws.close(code === 1005 || code === 1006 ? 1000 : code, 'bye'); } catch {} }
+  webSocketError(ws) { try { ws.close(1011, 'error'); } catch {} }
 }
 
 async function sha256(data) {
@@ -123,6 +154,7 @@ async function sha256(data) {
   return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 const b64 = (u8) => { let s = ''; for (let i = 0; i < u8.length; i++) s += String.fromCharCode(u8[i]); return btoa(s); };
+const other = (role) => (role === 'computer' ? 'phone' : 'computer');
 const num = (v) => (v == null ? null : Number(v));
 const text = (s, status) => new Response(s, { status, headers: { 'content-type': 'text/plain; charset=utf-8' } });
 const json = (o) => new Response(JSON.stringify(o), { headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });

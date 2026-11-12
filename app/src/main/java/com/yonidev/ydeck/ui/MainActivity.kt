@@ -147,7 +147,7 @@ class MainActivity : ComponentActivity() {
                                 runOn = computer?.canRun == true,
                                 runs = computer?.runs.orEmpty().filter { it.first.project == project.id },
                                 runOk = computer?.runOk?.get(project.id).orEmpty(),
-                                onRun = if (computer?.paired == true) { line -> run(project.id, line) } else null,
+                                onRun = if (computer?.paired == true) { line, window -> run(project.id, line, window) } else null,
                             )
                         } ?: androidx.compose.runtime.LaunchedEffect(p) { page = Page.Home }
                         Page.Scan -> ScanScreen(onCode = { page = Page.Home; scanned(it) }, onClose = { page = Page.Home })
@@ -342,10 +342,10 @@ class MainActivity : ComponentActivity() {
      * A command line for the computer: the phone's owner confirms first, then it goes at once, and is watched while it
      * waits for approval there and runs (a few minutes at most; the page shows what came after).
      */
-    private fun run(projectId: String, line: String) {
+    private fun run(projectId: String, line: String, window: Boolean) {
         confirmOwner("הרצת פקודה במחשב") {
             lifecycleScope.launch {
-                if (!Computer.run(this@MainActivity, projectId, line)) { toast("אין חיבור לאינטרנט. הפקודה לא נשלחה."); return@launch }
+                if (!Computer.run(this@MainActivity, projectId, line, window)) { toast("אין חיבור לאינטרנט. הפקודה לא נשלחה."); return@launch }
                 toast("נשלח למחשב")
                 for (attempt in 0 until 40) {
                     delay(4_000)

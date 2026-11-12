@@ -149,6 +149,9 @@ private fun ApplicationScope.App(background: Boolean, asks: MutableStateFlow<Ask
         Runs.ranAlone.collect { (name, line) -> notify(tr("$name: a command from the phone is running", "$name: פקודה מהטלפון רצה"), line) }
     }
     runAsks.firstOrNull()?.let { q -> key(q.r.id) { RunAskWindow(q, runAsks.size - 1, dark) } }
+    // One that runs inside YDeck (no window): its output in a small panel here, while it runs and after.
+    val runShown by Runs.shown.collectAsState()
+    runShown?.let { s -> key(s.id) { RunOutWindow(s, dark) } }
 
     // The app window keeps its place and size when the language changes; it redraws inside (see AppWindow).
     if (mainOpen) AppWindow(deck, dark, playIntro = !background, onClose = { mainOpen = false }, openPalette = { palette = true }, addWidget = ::addWidget)
