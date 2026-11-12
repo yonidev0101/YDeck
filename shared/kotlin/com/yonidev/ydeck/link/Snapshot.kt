@@ -230,31 +230,74 @@ data class Live(
     }
 }
 
-// ── what the phone writes: a note into one project's memory ──
+// ── what the phone writes: a change to one project ──
 
-/** A decision or a next step written on the phone, or "done" for the next step it names. Data only: the computer
- *  stores it in the project's files. */
-data class Note(val id: String, val project: String, val kind: String, val text: String, val at: Long) {
+/**
+ * A change made on the phone, to YDeck's own data only, never code: the next step, a decision, the three lists, the
+ * archive, the project's details, a new project. Data from a closed list of kinds, applied at once on the computer
+ * (no approval: nothing here runs anything), kept on the phone until the computer says it applied it, so one made
+ * while the computer is off happens when it's back. [text] is the main value; [args] the rest, by kind (see below).
+ */
+data class Note(val id: String, val project: String, val kind: String, val text: String, val at: Long, val args: List<String> = emptyList()) {
     fun encode(): ByteArray = JSONObject().put("app", "YDeck").put("kind", "note").put("v", 1)
-        .put("id", id).put("project", project).put("note", kind).put("text", text).put("at", at).toString().toByteArray()
+        .put("id", id).put("project", project).put("note", kind).put("text", text).put("at", at)
+        .apply { if (args.isNotEmpty()) put("args", JSONArray(args)) }.toString().toByteArray()
 
     companion object {
         const val NEXT = "next"
         const val DECISION = "decision"
         /** The next step [text] is done: the project's next step is cleared. */
         const val DONE = "done"
+
+        /** To the archive (text "1") or back ("0"). */
+        const val ARCHIVE = "archive"
+
+        /** The lists: [text] is the item. LEFT_MOVE's args[0] is the place (0 first); LEFT_EDIT's args[0] the item before. */
+        const val LEFT_ADD = "left.add"
+        const val LEFT_DONE = "left.done"
+        const val LEFT_DROP = "left.drop"
+        const val LEFT_MOVE = "left.move"
+        const val LEFT_EDIT = "left.edit"
+        const val IDEA_ADD = "idea.add"
+        const val IDEA_TAKE = "idea.take"
+        const val IDEA_DROP = "idea.drop"
+        const val DONE_DROP = "done.drop"
+
+        /** The details: NAME the name, COLOR "#RRGGBB", KIND the line under the name. */
+        const val NAME = "name"
+        const val COLOR = "color"
+        const val KIND = "kind"
+        /** Links: [text] the URL; args [service, label] (LINK_EDIT: [service, label, the URL before]). */
+        const val LINK_ADD = "link.add"
+        const val LINK_EDIT = "link.edit"
+        const val LINK_DROP = "link.drop"
+        /** Values to copy: [text] the value, args[0] its label. */
+        const val COPY_ADD = "copy.add"
+        const val COPY_DROP = "copy.drop"
+        /** A new project, with no folder yet: [project] its id (made here), [text] its name, args[0] its colour. */
+        const val NEW_PROJECT = "project.new"
+
+        private val KINDS = setOf(NEXT, DECISION, DONE, ARCHIVE, LEFT_ADD, LEFT_DONE, LEFT_DROP, LEFT_MOVE, LEFT_EDIT, IDEA_ADD, IDEA_TAKE,
+            IDEA_DROP, DONE_DROP, NAME, COLOR, KIND, LINK_ADD, LINK_EDIT, LINK_DROP, COPY_ADD, COPY_DROP, NEW_PROJECT)
+        /** Kinds whose text may be empty. */
+        private val MAY_BE_EMPTY = setOf(DONE, KIND)
+
         /** The longest note the computer accepts. */
         const val MAX = 1000
+
+        /** One line of plain text, never longer than MAX. */
+        fun line(s: String): String = s.filter { !it.isISOControl() || it == '\n' }.replace(Regex("\\s*\\n\\s*"), " ").trim().take(MAX)
 
         fun decode(bytes: ByteArray): Note? = runCatching {
             val o = JSONObject(String(bytes))
             if (o.optString("app") != "YDeck" || o.optString("kind") != "note") return null
-            val kind = o.optString("note").takeIf { it == NEXT || it == DECISION || it == DONE } ?: return null
-            // Plain text only: no control characters, one line for a next step, never longer than MAX.
-            val text = o.optString("text").filter { it == '\n' || !it.isISOControl() }.trim()
-                .let { if (kind != DECISION) it.replace(Regex("\\s*\\n\\s*"), " ") else it }.take(MAX)
-            if (text.isEmpty() && kind != DONE) return null
-            Note(o.optString("id").take(64), o.optString("project").take(100), kind, text, o.optLong("at"))
+            val kind = o.optString("note").takeIf { it in KINDS } ?: return null
+            // Plain text only: no control characters, one line except for a decision, never longer than MAX.
+            val raw = o.optString("text")
+            val text = if (kind == DECISION) raw.filter { it == '\n' || !it.isISOControl() }.trim().take(MAX) else line(raw)
+            if (text.isEmpty() && kind !in MAY_BE_EMPTY) return null
+            val args = o.optJSONArray("args")?.let { a -> (0 until minOf(a.length(), 4)).map { line(a.optString(it)) } } ?: emptyList()
+            Note(o.optString("id").take(64), o.optString("project").take(100), kind, text, o.optLong("at"), args)
         }.getOrNull()
     }
 }

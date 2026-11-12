@@ -274,9 +274,16 @@ object PhoneLink {
     }
 
     /** One note into its project. False when the project is gone (the note is dropped). */
+    /**
+     * A change from the phone, applied here. Only YDeck's own data, from [Note]'s closed list: nothing runs. One that
+     * can't apply (the project or its folder is gone, the item moved on) is let go as applied, so the phone stops
+     * sending it. False only for one that isn't for this deck at all.
+     */
     private fun store(note: Note): Boolean {
-        val project = Repo.deck.value.byId(note.project) ?: return false
+        if (note.kind == Note.NEW_PROJECT) { newProject(note); return true }
+        val project = Repo.deck.value.byId(note.project) ?: return true
         val dir = Settings.state.value.localOf(project.id).dir
+        val arg = { i: Int -> note.args.getOrElse(i) { "" } }
         when (note.kind) {
             Note.NEXT -> {
                 if (dir != null) ProjectFiles.writeNext(dir, note.text)
@@ -291,14 +298,27 @@ object PhoneLink {
                 }
             }
             Note.DECISION -> {
-                dir ?: return false
+                dir ?: return true
                 val date = java.time.Instant.ofEpochMilli(note.at.takeIf { it > 0 } ?: System.currentTimeMillis())
                     .atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString()
                 val now = ProjectFiles.readShared(dir)?.decisions.orEmpty()
                 if (now.none { it.text == note.text }) ProjectFiles.writeDecisions(dir, listOf(Decision(note.text, date)) + now)
             }
+            Note.ARCHIVE -> archiveProject(project, note.text == "1")
+            Note.LEFT_ADD, Note.LEFT_DONE, Note.LEFT_DROP, Note.LEFT_MOVE, Note.LEFT_EDIT, Note.IDEA_ADD, Note.IDEA_TAKE, Note.IDEA_DROP, Note.DONE_DROP ->
+                if (dir != null) PhoneEdits.list(dir, note.kind, note.text, arg(0))
+            Note.NAME, Note.COLOR, Note.KIND, Note.LINK_ADD, Note.LINK_EDIT, Note.LINK_DROP, Note.COPY_ADD, Note.COPY_DROP ->
+                PhoneEdits.details(project, note.kind, note.text, note.args)?.let { saveProject(it) }
         }
         return true
+    }
+
+    /** A project made on the phone: a name and a colour, no folder yet (that is connected here). */
+    private fun newProject(note: Note) {
+        val id = note.project.filter { it.isLetterOrDigit() || it == '-' || it == '_' }.take(40)
+        if (id.isEmpty() || Repo.deck.value.byId(id) != null) return
+        saveProject(Project.blank().copy(id = id, name = note.text.take(80), mono = note.text.trim().take(1).uppercase(),
+            color = DeckJson.parseColor(note.args.getOrElse(0) { "" }) ?: Project.blank().color))
     }
 
     /**
