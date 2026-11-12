@@ -139,6 +139,17 @@ private fun ApplicationScope.App(background: Boolean, asks: MutableStateFlow<Ask
         }
     }
 
+    // A command from the phone: it waits for an answer here, in a window above the others; a line approved always runs
+    // at once, and that is said too, so nothing runs unseen.
+    val runAsks by Runs.asking.collectAsState()
+    LaunchedEffect(runAsks.firstOrNull()?.r?.id) {
+        runAsks.firstOrNull()?.let { notify(tr("${it.project}: the phone asks to run a command", "${it.project}: הטלפון מבקש להריץ פקודה"), it.r.line) }
+    }
+    LaunchedEffect(Unit) {
+        Runs.ranAlone.collect { (name, line) -> notify(tr("$name: a command from the phone is running", "$name: פקודה מהטלפון רצה"), line) }
+    }
+    runAsks.firstOrNull()?.let { q -> key(q.r.id) { RunAskWindow(q, runAsks.size - 1, dark) } }
+
     // The app window keeps its place and size when the language changes; it redraws inside (see AppWindow).
     if (mainOpen) AppWindow(deck, dark, playIntro = !background, onClose = { mainOpen = false }, openPalette = { palette = true }, addWidget = ::addWidget)
 

@@ -62,9 +62,16 @@ class Snapshot(
     val reply: Boolean = false,
     /** What became of the phone's latest replies: sent to the session, or why not. */
     val replied: List<Launched> = emptyList(),
+    /** The phone may ask to run its own commands here ([RunCommand]): on in the computer's settings. Each one still waits
+     *  for someone at the computer, unless that exact line was approved always for that project. */
+    val run: Boolean = false,
+    /** What became of the phone's latest commands. */
+    val ran: List<Ran> = emptyList(),
+    /** The command lines approved always, by project: the phone offers them for one tap. */
+    val runOk: Map<String, List<String>> = emptyMap(),
 ) {
     /** The same state made at another time: what changed, without the time it was made. */
-    fun at(time: Long) = Snapshot(time, computer, deck, memory, live, applied, launch, claude, launched, beat, ask, answers, waiting, reply, replied)
+    fun at(time: Long) = Snapshot(time, computer, deck, memory, live, applied, launch, claude, launched, beat, ask, answers, waiting, reply, replied, run, ran, runOk)
 
     fun encode(): ByteArray = JSONObject().apply {
         put("app", "YDeck")
@@ -85,6 +92,9 @@ class Snapshot(
         put("waiting", JSONArray().apply { waiting.forEach { put(it.toJson()) } })
         put("reply", reply)
         put("replied", JSONArray().apply { replied.forEach { put(JSONObject().put("id", it.id).put("ok", it.ok).put("why", it.why)) } })
+        put("run", run)
+        put("ran", JSONArray().apply { ran.forEach { put(it.toJson()) } })
+        put("runOk", JSONObject().apply { runOk.forEach { (k, v) -> put(k, JSONArray(v)) } })
     }.toString().toByteArray()
 
     companion object {
@@ -110,6 +120,9 @@ class Snapshot(
                 reply = o.optBoolean("reply"),
                 replied = o.optJSONArray("replied")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) } }.orEmpty()
                     .map { Launched(it.optString("id"), it.optBoolean("ok"), it.optString("why")) },
+                run = o.optBoolean("run"),
+                ran = o.optJSONArray("ran")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) } }.orEmpty().map(Ran::of),
+                runOk = o.optJSONObject("runOk")?.let { r -> r.keys().asSequence().associateWith { k -> r.optJSONArray(k)?.let { a -> (0 until a.length()).map { a.optString(it) } }.orEmpty() } }.orEmpty(),
             )
         }
 
@@ -295,6 +308,56 @@ data class Launch(
 
 /** What the computer did with a [Launch]: opened it, or why not (in words the phone shows as they are). */
 data class Launched(val id: String, val ok: Boolean, val why: String = "")
+
+/**
+ * "Run this in the project's folder": a command line typed on the phone. Unlike [Launch] it is the developer's own
+ * line, so the computer never runs it on the phone's say alone: someone at the computer approves it, once or always
+ * (always is that exact line, in that project, nothing wider), unless it was approved always before. It runs in a new
+ * terminal window there, in sight, which stays open. One line only. Sealed as "run".
+ */
+data class RunCommand(val id: String, val project: String, val line: String, val at: Long) {
+    fun encode(): ByteArray = JSONObject().put("app", "YDeck").put("kind", "run").put("v", 1)
+        .put("id", id).put("project", project).put("line", line).put("at", at).toString().toByteArray()
+
+    companion object {
+        const val MAX = 500
+        /** A command that waited longer than this (the computer was off) is dropped, never run late. */
+        const val FRESH_MS = 15 * 60_000L
+
+        /** The line as it will run: one line, no control characters; null when it isn't one (nothing hidden after a newline). */
+        fun clean(line: String): String? {
+            val t = line.trim()
+            if (t.isEmpty() || t.length > MAX || t.any { it == '\n' || it == '\r' || it.isISOControl() }) return null
+            return t
+        }
+
+        fun decode(bytes: ByteArray): RunCommand? = runCatching {
+            val o = JSONObject(String(bytes))
+            if (o.optString("app") != "YDeck" || o.optString("kind") != "run") return null
+            val line = clean(o.optString("line")) ?: return null
+            RunCommand(o.optString("id").take(64), o.optString("project").take(100), line, o.optLong("at"))
+        }.getOrNull()
+    }
+}
+
+/**
+ * What became of a [RunCommand]: [ASKING] (waiting for someone at the computer), [RUNNING], [DONE] with its exit
+ * [code], or [NO] and why: "off", "stale", "project", "folder", "denied", "timeout", "start".
+ */
+data class Ran(val id: String, val project: String, val line: String, val state: String, val code: Int = 0, val why: String = "", val at: Long = 0) {
+    fun toJson(): JSONObject = JSONObject().put("id", id).put("project", project).put("line", line).put("state", state)
+        .put("code", code).put("why", why).put("at", at)
+
+    companion object {
+        const val ASKING = "asking"
+        const val RUNNING = "running"
+        const val DONE = "done"
+        const val NO = "no"
+
+        fun of(o: JSONObject) = Ran(o.optString("id"), o.optString("project"), o.optString("line"), o.optString("state"),
+            o.optInt("code"), o.optString("why"), o.optLong("at"))
+    }
+}
 
 // ── a Claude Code session waits for the developer: its question, YDeck's suggested reply, and the reply ──
 

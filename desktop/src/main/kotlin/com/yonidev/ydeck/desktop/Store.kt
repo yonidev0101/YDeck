@@ -141,6 +141,11 @@ object Settings {
         val sessionReplies: Boolean = true,
         /** The paired phone may reply to a waiting session (see [PhoneLink]). Off until turned on here, at the computer. */
         val phoneReply: Boolean = false,
+        /** The paired phone may ask to run its own command lines in a project (see [Runs]): each waits for approval here,
+         *  once or always. Off until turned on here, at the computer. */
+        val phoneRun: Boolean = false,
+        /** Command lines approved always, by project id: that exact line, in that project. Kept on this PC only. */
+        val runOk: Map<String, List<String>> = emptyMap(),
         /** "system", "en" or "he" (see [I18n]). */
         val language: String = "system",
         /** "system", "light" or "dark". */
@@ -190,6 +195,8 @@ object Settings {
                 put("phoneAsk", s.phoneAsk)
                 put("sessionReplies", s.sessionReplies)
                 put("phoneReply", s.phoneReply)
+                put("phoneRun", s.phoneRun)
+                put("runOk", JSONObject().apply { s.runOk.forEach { (k, v) -> put(k, org.json.JSONArray(v)) } })
                 put("language", s.language)
                 put("appearance", s.appearance)
                 put("appearanceV2", true)
@@ -241,6 +248,8 @@ object Settings {
             phoneAsk = o.optBoolean("phoneAsk", false),
             sessionReplies = o.optBoolean("sessionReplies", true),
             phoneReply = o.optBoolean("phoneReply", false),
+            phoneRun = o.optBoolean("phoneRun", false),
+            runOk = o.optJSONObject("runOk")?.let { r -> r.keys().asSequence().associateWith { k -> r.optJSONArray(k)?.let { a -> (0 until a.length()).map { a.optString(it) } }.orEmpty() } }.orEmpty(),
             language = o.optString("language", "system"),
             // 1.11: dark became the default; a "system" saved before then was the old default, not a choice.
             appearance = if (!o.has("appearanceV2") && o.optString("appearance", "system") == "system") "dark" else o.optString("appearance", "dark"),

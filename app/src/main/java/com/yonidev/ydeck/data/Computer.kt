@@ -74,6 +74,12 @@ object Computer {
         val canReply: Boolean = false,
         /** Replies sent from here, and what the computer did with each (null: not yet). */
         val replies: List<Pair<Reply, Launched?>> = emptyList(),
+        /** The computer takes command lines from here (each waits for approval there, unless allowed always). */
+        val canRun: Boolean = false,
+        /** Commands sent from here, and what became of each (null: not heard yet). */
+        val runs: List<Pair<com.yonidev.ydeck.link.RunCommand, com.yonidev.ydeck.link.Ran?>> = emptyList(),
+        /** Lines allowed always, by project: offered for one tap. */
+        val runOk: Map<String, List<String>> = emptyMap(),
     ) {
         /**
          * A project's live state, as far as it can be trusted now: when the computer has stopped sending (asleep, off,
@@ -146,6 +152,8 @@ object Computer {
             chat = readChat(context),
             waiting = mem?.optJSONArray("waiting")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) } }.orEmpty().map(Waiting::of),
             canReply = mem?.optBoolean("reply") ?: false,
+            canRun = mem?.optBoolean("run") ?: false,
+            runOk = mem?.optJSONObject("runOk")?.let { r -> r.keys().asSequence().associateWith { k -> r.optJSONArray(k)?.let { a -> (0 until a.length()).map { a.optString(it) } }.orEmpty() } }.orEmpty(),
         )
     }
 
@@ -252,6 +260,21 @@ object Computer {
         if (!Relay(p).postNote(p.seal("launch", l.encode()))) return@withContext false
         val s = state(app)
         _state.value = s.copy(launches = (s.launches + (l to null)).takeLast(10))
+        true
+    }
+
+    /**
+     * Asks the computer to run [line] in [projectId]'s folder (see [com.yonidev.ydeck.link.RunCommand]). It waits there
+     * for approval unless that exact line was allowed always. Sent now or never, like [launch].
+     */
+    suspend fun run(context: Context, projectId: String, line: String): Boolean = withContext(Dispatchers.IO) {
+        val app = context.applicationContext
+        val p = pairing ?: return@withContext false
+        val clean = com.yonidev.ydeck.link.RunCommand.clean(line) ?: return@withContext false
+        val r = com.yonidev.ydeck.link.RunCommand(java.util.UUID.randomUUID().toString(), projectId, clean, System.currentTimeMillis())
+        if (!Relay(p).postNote(p.seal("run", r.encode()))) return@withContext false
+        val s = state(app)
+        _state.value = s.copy(runs = (s.runs + (r to null)).takeLast(12))
         true
     }
 
@@ -370,6 +393,8 @@ object Computer {
             put("ask", snapshot.ask)
             put("waiting", org.json.JSONArray().apply { snapshot.waiting.forEach { put(it.toJson()) } })
             put("reply", snapshot.reply)
+            put("run", snapshot.run)
+            put("runOk", JSONObject().apply { snapshot.runOk.forEach { (k, v) -> put(k, org.json.JSONArray(v)) } })
         }.toString())
         // The answers that came: each onto its question.
         val chat = state(app).chat
@@ -381,9 +406,12 @@ object Computer {
         writeLink(app, p, snapshot.computer, got.etag, now)
         val launches = state(app).launches.map { (l, done) -> l to (done ?: snapshot.launched.firstOrNull { it.id == l.id }) }
         val replies = state(app).replies.map { (r, done) -> r to (done ?: snapshot.replied.firstOrNull { it.id == r.id }) }
+        // A command's news changes (asking, running, done): the latest always wins.
+        val runs = state(app).runs.map { (r, was) -> r to (snapshot.ran.firstOrNull { it.id == r.id } ?: was) }
         _state.value = State(paired = true, name = snapshot.computer, stateAt = snapshot.at, checkedAt = now, memory = snapshot.memory, live = snapshot.live,
             pending = outbox.map { it.first }, canLaunch = snapshot.launch, claudeHere = snapshot.claude, launches = launches, beat = snapshot.beat,
-            canAsk = snapshot.ask, chat = state(app).chat, waiting = snapshot.waiting, canReply = snapshot.reply, replies = replies)
+            canAsk = snapshot.ask, chat = state(app).chat, waiting = snapshot.waiting, canReply = snapshot.reply, replies = replies,
+            canRun = snapshot.run, runs = runs, runOk = snapshot.runOk)
         DeckWidget().updateAll(app)
         Result.UPDATED
     }

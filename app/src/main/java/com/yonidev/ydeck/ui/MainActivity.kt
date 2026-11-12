@@ -144,6 +144,10 @@ class MainActivity : ComponentActivity() {
                                 canReply = computer?.canReply == true,
                                 replies = computer?.replies.orEmpty(),
                                 onReply = if (computer?.paired == true) ::reply else null,
+                                runOn = computer?.canRun == true,
+                                runs = computer?.runs.orEmpty().filter { it.first.project == project.id },
+                                runOk = computer?.runOk?.get(project.id).orEmpty(),
+                                onRun = if (computer?.paired == true) { line -> run(project.id, line) } else null,
                             )
                         } ?: androidx.compose.runtime.LaunchedEffect(p) { page = Page.Home }
                         Page.Scan -> ScanScreen(onCode = { page = Page.Home; scanned(it) }, onClose = { page = Page.Home })
@@ -330,6 +334,25 @@ class MainActivity : ComponentActivity() {
                 delay(5_000)
                 if (Computer.sync(this@MainActivity) == Computer.Result.UPDATED) deck = Repo.deck(this@MainActivity)
                 if (Computer.state.value?.launches.orEmpty().none { it.first.project == projectId && it.second == null }) break
+            }
+        }
+    }
+
+    /**
+     * A command line for the computer: the phone's owner confirms first, then it goes at once, and is watched while it
+     * waits for approval there and runs (a few minutes at most; the page shows what came after).
+     */
+    private fun run(projectId: String, line: String) {
+        confirmOwner("הרצת פקודה במחשב") {
+            lifecycleScope.launch {
+                if (!Computer.run(this@MainActivity, projectId, line)) { toast("אין חיבור לאינטרנט. הפקודה לא נשלחה."); return@launch }
+                toast("נשלח למחשב")
+                for (attempt in 0 until 40) {
+                    delay(4_000)
+                    if (Computer.sync(this@MainActivity) == Computer.Result.UPDATED) deck = Repo.deck(this@MainActivity)
+                    val news = Computer.state.value?.runs.orEmpty().lastOrNull { it.first.project == projectId }?.second
+                    if (news != null && (news.state == com.yonidev.ydeck.link.Ran.DONE || news.state == com.yonidev.ydeck.link.Ran.NO)) break
+                }
             }
         }
     }

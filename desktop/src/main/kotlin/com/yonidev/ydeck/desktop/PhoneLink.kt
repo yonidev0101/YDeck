@@ -125,9 +125,11 @@ object PhoneLink {
             var seen = Repo.deck.value
             var claude = ClaudeLink.sessions.value
             var waiting = SessionAsks.waiting.value
+            var asking = Runs.asking.value
             while (true) {
                 Thread.sleep(2_000)
                 if (SessionAsks.waiting.value !== waiting) { waiting = SessionAsks.waiting.value; nudge() }
+                if (Runs.asking.value !== asking) { asking = Runs.asking.value; nudge() }
                 if (Repo.deck.value !== seen) { seen = Repo.deck.value; nudge() }
                 if (ClaudeLink.sessions.value !== claude) { claude = ClaudeLink.sessions.value; nudge() }
             }
@@ -175,6 +177,8 @@ object PhoneLink {
             if (note == null) runCatching { Reply.decode(p.open("reply", sealed)) }.getOrNull()?.let { r ->
                 if (replied.none { it.id == r.id }) { replied += reply(r); asked = true }
             }
+            // Or a command line to run (sealed as "run"): it waits for approval here, see [Runs].
+            if (note == null) runCatching { com.yonidev.ydeck.link.RunCommand.decode(p.open("run", sealed)) }.getOrNull()?.let { r -> Runs.request(r); asked = true }
             // Or a question (sealed as "ask").
             if (note == null) runCatching { Ask.decode(p.open("ask", sealed)) }.getOrNull()?.let { a ->
                 if (answers.none { it.id == a.id }) { ask(a); asked = true }
@@ -338,7 +342,7 @@ object PhoneLink {
     private fun adopt(key: NewKey, samePhone: Boolean) {
         val old = pairing
         val p = Pairing(key.secret)
-        if (!samePhone) { applied.clear(); launched.clear(); answers.clear(); chats.clear(); replied.clear() }
+        if (!samePhone) { applied.clear(); launched.clear(); answers.clear(); chats.clear(); replied.clear(); Runs.ran.clear() }
         val at = if (samePhone) _state.value.pairedAt else System.currentTimeMillis()
         save(p, at)
         pairing = p
@@ -417,7 +421,8 @@ object PhoneLink {
         return Snapshot(System.currentTimeMillis(), computer, JSONObject(Repo.exportJson(deck)), memory, live, applied.toList(),
             launch = settings.phoneLaunch && Tools.claude != null, claude = Tools.claude != null, launched = launched.toList(), beat = HEARTBEAT_MS,
             ask = settings.phoneAsk && Tools.claude != null, answers = answers.toList(),
-            waiting = SessionAsks.waiting.value, reply = settings.phoneReply, replied = replied.toList())
+            waiting = SessionAsks.waiting.value, reply = settings.phoneReply, replied = replied.toList(),
+            run = settings.phoneRun, ran = Runs.ran.toList(), runOk = if (settings.phoneRun) settings.runOk.filterKeys { k -> deck.projects.any { it.id == k } } else emptyMap())
     }
 
     /** What the project's window shows here: git, the agent, the latest receipts, open loops, the dev server. */

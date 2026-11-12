@@ -173,6 +173,37 @@ object Tools {
     fun said(text: String): String? =
         text.replace(Regex("\\s*[\\r\\n]+\\s*"), " ").replace(Regex("[\";&|<>^%!]"), " ").trim().trimStart('-', ' ').trimEnd('\\', ' ').takeIf { it.isNotEmpty() }
 
+    /**
+     * [line] in a new terminal window in the folder, in the chosen shell, in sight; the window stays open after it. When
+     * it ends, its exit code is written to [exit] (0 ok), so whoever asked learns how it went without reading the screen.
+     * The output stays in the window: piping it away would make programs think nobody is there, and stop asking.
+     */
+    fun runWatched(title: String, line: String, dir: File, exit: File): Boolean {
+        val wt = windowsTerminal
+        val shell = Shells.current
+        val e = Shells.exe(shell)?.path ?: return false
+        val args = watchedArgs(shell, e, line, exit)
+            // Windows Terminal reads ";" as "new tab": escaped, it reaches the shell.
+            .map { if (wt != null) it.replace(";", "\\;") else it }
+        return start(
+            if (wt != null) listOf(wt.path, "-w", "new", "-d", dir.path, "--title", title) + args
+            else listOf(cmd.path, "/c", "start", title, "/D", dir.path) + args,
+            dir,
+        )
+    }
+
+    /** The shell's own arguments for [runWatched] (apart, so a test runs them as they are). */
+    internal fun watchedArgs(shell: Shell, e: String, line: String, exit: File): List<String> {
+        val m = exit.absolutePath
+        return when (shell) {
+            // Delayed expansion: !errorlevel! is read after the line ran, not when the line was read.
+            Shell.CMD -> listOf(e, "/v:on", "/k", "$line & echo !errorlevel!> \"$m\"")
+            Shell.POWERSHELL, Shell.PWSH -> listOf(e, "-NoLogo", "-NoExit", "-Command",
+                "$line; \$ydeckOk = \$?; Set-Content -LiteralPath '${m.replace("'", "''")}' -Value \$(if (\$ydeckOk) { 0 } elseif (\$LASTEXITCODE) { \$LASTEXITCODE } else { 1 })")
+            Shell.BASH -> listOf(e, "--login", "-c", "$line; echo \$? > '${m.replace('\\', '/').replace("'", "'\\''")}'; exec bash --login -i")
+        }
+    }
+
     /** A command in a new terminal tab, in the folder; the tab stays open to show what happened. */
     fun run(command: Command, dir: File) {
         val wt = windowsTerminal

@@ -99,11 +99,17 @@ fun ProjectScreen(
     canReply: Boolean = false,
     replies: List<Pair<com.yonidev.ydeck.link.Reply, Launched?>> = emptyList(),
     onReply: ((waiting: String, text: String, choices: Map<String, String>) -> Unit)? = null,
+    /** Commands for the computer: on there, sent from here, the lines allowed always, and sending one. */
+    runOn: Boolean = false,
+    runs: List<Pair<com.yonidev.ydeck.link.RunCommand, com.yonidev.ydeck.link.Ran?>> = emptyList(),
+    runOk: List<String> = emptyList(),
+    onRun: ((String) -> Unit)? = null,
 ) {
     val c = LocalDeck.current
     var tab by rememberSaveable { mutableStateOf(Tab.MEMORY) }
     var writing by remember { mutableStateOf<String?>(null) }
     var launching by remember { mutableStateOf(false) }
+    var running by remember { mutableStateOf(false) }
     val canWrite = onWrite != null && memory != null
     PageScaffold(
         title = p.name, onBack = onBack,
@@ -117,6 +123,7 @@ fun ProjectScreen(
             item(key = "w:" + w.id) { WaitingCard(w, p, canReply, replies.lastOrNull { it.first.waiting == w.id }) { text, choices -> onReply(w.id, text, choices) } }
         }
         if (onLaunch != null && live != null) item { ClaudeCard(launches.lastOrNull(), launchOn) { launching = true } }
+        if (onRun != null && live != null) item { RunCard(runs, runOn, runOk, onRun) { running = true } }
         item { Tabs(tab, mapOf(Tab.GIT to (live?.changes ?: 0), Tab.LINKS to p.actions.size)) { tab = it } }
         when (tab) {
             Tab.MEMORY -> item {
@@ -128,6 +135,7 @@ fun ProjectScreen(
         }
     }
     writing?.let { kind -> WriteSheet(kind, onDismiss = { writing = null }, onSend = { k, text -> writing = null; onWrite?.invoke(k, text) }) }
+    if (running && onRun != null) RunSheet(runOk, onDismiss = { running = false }) { line -> running = false; onRun(line) }
     if (launching) LaunchSheet(live?.sessions.orEmpty(), live, onDismiss = { launching = false }) { mode, session, prompt, remote ->
         launching = false
         onLaunch?.invoke(mode, session, prompt, remote)
@@ -809,6 +817,108 @@ private fun WriteSheet(initial: String, onDismiss: () -> Unit, onSend: (String, 
                     modifier = Modifier.weight(1f).height(50.dp),
                 ) { Text("שליחה למחשב", fontSize = 16.sp, fontWeight = FontWeight.Medium) }
             }
+        }
+    }
+}
+
+// ── a command on the computer ──
+
+/** What became of a command, in words, and the dot that says it (amber waits for you there, indigo runs, green ok). */
+private fun ranWords(r: com.yonidev.ydeck.link.RunCommand, n: com.yonidev.ydeck.link.Ran?): Pair<String, Color> = when {
+    n == null -> (if (System.currentTimeMillis() - r.at > 90_000) "המחשב עוד לא ענה. YDeck פתוח בו?" else "נשלח, מחכה למחשב…") to Color(0xFF8A8A90)
+    n.state == com.yonidev.ydeck.link.Ran.ASKING -> "מחכה לאישור במחשב" to CHANGED_DOT
+    n.state == com.yonidev.ydeck.link.Ran.RUNNING -> "רץ במחשב, בחלון טרמינל" to LIVE_DOT
+    n.state == com.yonidev.ydeck.link.Ran.DONE && n.code == 0 -> "הסתיים בהצלחה · ${ago(n.at)}" to CLEAN_DOT
+    n.state == com.yonidev.ydeck.link.Ran.DONE -> "נכשל · קוד ${n.code} · הפלט בחלון במחשב" to CONFLICT_DOT
+    else -> when (n.why) {
+        "off" -> "הפקודות מהטלפון כבויות במחשב (הגדרות ← טלפון)"
+        "stale" -> "הגיעה מאוחר מדי ולא רצה. אפשר לשלוח שוב."
+        "project", "folder" -> "לפרויקט אין תיקייה במחשב"
+        "denied" -> "לא אושרה במחשב"
+        "timeout" -> "אף אחד לא אישר במחשב תוך 10 דקות"
+        else -> "לא רצה במחשב"
+    } to Color(0xFF8A8A90)
+}
+
+/** "Run a command on the computer": the lines allowed always for one tap, a new one, and the last few, with how they went. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun RunCard(runs: List<Pair<com.yonidev.ydeck.link.RunCommand, com.yonidev.ydeck.link.Ran?>>, on: Boolean, ok: List<String>, onRun: (String) -> Unit, onNew: () -> Unit) {
+    val c = LocalDeck.current
+    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 6.dp)) {
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.surface)) {
+            Row(
+                Modifier.fillMaxWidth().clickable(enabled = on, onClick = onNew).padding(horizontal = 14.dp, vertical = 11.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Box(Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).background(if (on) c.fg else c.surface2), contentAlignment = Alignment.Center) {
+                    Text(">_", color = if (on) c.bg else c.faint, fontSize = 13.sp, fontFamily = PlexMono, fontWeight = FontWeight.Medium,
+                        style = TextStyle(textDirection = TextDirection.Ltr))
+                }
+                Column(Modifier.weight(1f)) {
+                    Text("פקודה במחשב", color = c.fg, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                    Text(if (on) "רצה רק אחרי אישור במחשב, בחלון שנפתח שם" else "כבוי במחשב. מדליקים ב־YDeck במחשב ← הגדרות ← טלפון.",
+                        color = c.muted, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            // Allowed always: one tap, and it runs (the computer still says so on its screen).
+            if (on && ok.isNotEmpty()) androidx.compose.foundation.layout.FlowRow(
+                Modifier.padding(start = 14.dp, end = 14.dp, bottom = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                ok.forEach { line ->
+                    Row(
+                        Modifier.clip(RoundedCornerShape(50)).background(c.surface2).clickable { onRun(line) }.heightIn(min = 36.dp).padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_s_play), null, tint = c.closed, modifier = Modifier.size(13.dp))
+                        Text(line, color = c.fg, fontSize = 13.sp, fontFamily = PlexMono, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            style = TextStyle(textDirection = TextDirection.Ltr), modifier = Modifier.widthIn(max = 220.dp))
+                    }
+                }
+            }
+        }
+        // The last few, newest first: the line, and how it went.
+        runs.takeLast(3).reversed().forEach { (r, n) ->
+            val (words, dot) = ranWords(r, n)
+            Row(Modifier.fillMaxWidth().padding(start = 6.dp, end = 6.dp, top = 10.dp), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(Modifier.padding(top = 7.dp)) { Dot(dot, 7.dp) }
+                Column(Modifier.weight(1f)) {
+                    Text(r.line, color = c.fg, fontSize = 13.sp, fontFamily = PlexMono, maxLines = 1, overflow = TextOverflow.Ellipsis, style = TextStyle(textDirection = TextDirection.Ltr))
+                    Text(words, color = if (n?.state == com.yonidev.ydeck.link.Ran.ASKING) c.openText else c.muted, fontSize = 12.sp)
+                }
+            }
+        }
+    }
+}
+
+/** Typing a command for the computer: one line, as it will run there, in the project's folder. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RunSheet(ok: List<String>, onDismiss: () -> Unit, onSend: (String) -> Unit) {
+    val c = LocalDeck.current
+    var line by remember { mutableStateOf("") }
+    val clean = com.yonidev.ydeck.link.RunCommand.clean(line)
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = c.surface) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp).padding(bottom = 22.dp)) {
+            Text("פקודה במחשב", color = c.fg, fontSize = 22.sp, fontFamily = Display, fontWeight = FontWeight.Light)
+            Text("רצה בתיקיית הפרויקט, בחלון טרמינל חדש שנשאר פתוח. במחשב בוחרים: פעם אחת, תמיד, או לא.",
+                color = c.muted, fontSize = 13.sp, lineHeight = 19.sp, modifier = Modifier.padding(top = 6.dp, bottom = 14.dp))
+            Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.surface2).padding(horizontal = 14.dp, vertical = 14.dp)) {
+                val style = TextStyle(color = c.fg, fontSize = 16.sp, fontFamily = PlexMono, textDirection = TextDirection.Ltr)
+                if (line.isEmpty()) Text("npm run build", style = style.copy(color = c.faint))
+                BasicTextField(line, { line = it.replace("\n", " ").take(com.yonidev.ydeck.link.RunCommand.MAX) }, textStyle = style, singleLine = true,
+                    cursorBrush = SolidColor(c.fg), modifier = Modifier.fillMaxWidth())
+            }
+            if (ok.isNotEmpty()) Text("מאושרות תמיד: " + ok.joinToString(" · "), color = c.faint, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 10.dp))
+            Button(
+                onClick = { clean?.let(onSend) },
+                enabled = clean != null,
+                colors = ButtonDefaults.buttonColors(containerColor = c.fg, contentColor = c.bg, disabledContainerColor = c.surface2, disabledContentColor = c.faint),
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 16.dp).height(50.dp),
+            ) { Text(if (clean != null && clean in ok) "הרצה במחשב" else "שליחה לאישור במחשב", fontSize = 16.sp, fontWeight = FontWeight.Medium) }
         }
     }
 }

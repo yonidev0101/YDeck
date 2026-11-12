@@ -86,6 +86,24 @@ fun PhoneSettings() {
                             "כבוי עד שמדליקים כאן. שאלה של סשן, שמחכה ב־YDeck כשאתה לא ליד המחשב, מופיעה בטלפון עם התשובה המנוסחת; מה ששולחים מגיע ל־Claude כמילים שלך. אף פעם לא הרשאה: אלה נשארות בטרמינל.")) {
                         Toggle(settings.phoneReply) { on -> Settings.update { it.copy(phoneReply = on) }; PhoneLink.nudge() }
                     }
+                    Setting(tr("The phone can ask to run commands", "הטלפון יכול לבקש להריץ פקודות"),
+                        hint = tr("Off until you turn it on here. A command typed on the phone waits for you here: run it once, allow that exact line always in that project, or don't. It runs in a new terminal window, in the project's folder, in sight.",
+                            "כבוי עד שמדליקים כאן. פקודה שנכתבת בטלפון מחכה לך כאן: להריץ פעם אחת, לאשר תמיד את השורה הזו בדיוק בפרויקט הזה, או לא. היא רצה בחלון טרמינל חדש, בתיקיית הפרויקט, לעיני כל.")) {
+                        Toggle(settings.phoneRun) { on -> Settings.update { it.copy(phoneRun = on) }; PhoneLink.nudge() }
+                    }
+                    // What was approved always, each one undone with a click.
+                    settings.runOk.forEach { (pid, lines) ->
+                        val name = Repo.deck.value.byId(pid)?.name ?: return@forEach
+                        lines.forEach { line ->
+                            Item {
+                                Column(Modifier.weight(1f)) {
+                                    Text(line, color = c.fg, fontSize = 13.sp, fontFamily = PlexMono, maxLines = 1)
+                                    Text(tr("Always allowed in $name", "מאושר תמיד ב־$name"), color = c.muted, fontSize = 12.sp, fontFamily = PlexSans)
+                                }
+                                Pill(tr("Remove", "הסרה"), Tone.SOFT, small = true) { Runs.forget(pid, line); PhoneLink.nudge() }
+                            }
+                        }
+                    }
                     Setting(tr("Pair a phone again", "חיבור טלפון מחדש"), hint = tr("A new code; the phone that scans it replaces this one.", "קוד חדש; הטלפון שיסרוק אותו יחליף את המחובר עכשיו."),
                         onClick = { PhoneLink.pair() })
                     Item({ confirm = true }) {
@@ -101,8 +119,8 @@ fun PhoneSettings() {
             }
         }
 
-        Text(tr("Only data goes through, sealed end to end: the relay in between can't read it or change it. The phone can ask this computer for three things, each only once you turn it on above: to open Claude Code in a project's folder, only in those ways; to answer a question, reading only; and to pass your reply to a session that waits for you; never a command of its own, and never a permission. Nothing here listens for connections; both sides only reach out.",
-            "עוברים רק נתונים, מוצפנים מקצה לקצה: הממסר שבאמצע לא יכול לקרוא אותם או לשנות אותם. הטלפון יכול לבקש מהמחשב שלושה דברים, כל אחד רק אחרי שמדליקים אותו למעלה: לפתוח את Claude Code בתיקיית פרויקט, רק בדרכים האלה; לענות על שאלה, בקריאה בלבד; ולהעביר את התשובה שלך לסשן שמחכה לך; אף פעם לא פקודה משלו, ואף פעם לא הרשאה. שום דבר כאן לא מחכה לחיבורים; שני הצדדים רק יוצאים החוצה."),
+        Text(tr("Only data goes through, sealed end to end: the relay in between can't read it or change it. The phone can ask this computer for four things, each only once you turn it on above: to open Claude Code in a project's folder, only in those ways; to answer a question, reading only; to pass your reply to a session that waits for you; and to run a command line, which waits for you here unless you allowed that exact line always. Never a permission for Claude. Nothing here listens for connections; both sides only reach out.",
+            "עוברים רק נתונים, מוצפנים מקצה לקצה: הממסר שבאמצע לא יכול לקרוא אותם או לשנות אותם. הטלפון יכול לבקש מהמחשב ארבעה דברים, כל אחד רק אחרי שמדליקים אותו למעלה: לפתוח את Claude Code בתיקיית פרויקט, רק בדרכים האלה; לענות על שאלה, בקריאה בלבד; להעביר את התשובה שלך לסשן שמחכה לך; ולהריץ פקודה, שמחכה לך כאן אלא אם אישרת את השורה הזו בדיוק לתמיד. אף פעם לא הרשאה ל־Claude. שום דבר כאן לא מחכה לחיבורים; שני הצדדים רק יוצאים החוצה."),
             color = c.faint, fontSize = 12.sp, lineHeight = 18.sp, fontFamily = PlexSans, modifier = Modifier.widthIn(max = 560.dp))
     }
 }
