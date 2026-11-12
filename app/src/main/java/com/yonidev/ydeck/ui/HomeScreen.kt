@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -180,12 +181,13 @@ private fun ProjectRow(p: Project, memory: Memory?, live: com.yonidev.ydeck.link
         else Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) { Logo(p, 40.dp) }
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(p.name, color = c.fg, fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                Text(p.name, color = c.fg, fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 210.dp))
                 if (agent != null) {
                     Spacer(Modifier.width(10.dp))
                     ClaudeDot(agent, 7.dp)
                     Spacer(Modifier.width(6.dp))
-                    Text(claudeText(live), color = if (agent == "OPEN") c.muted else claudeColor(agent), fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    // The name comes first and always shows; Claude's state takes what room is left, short (no "Remote Control" here).
+                    Text(claudeText(live.copy(agentRemote = false)), color = if (agent == "OPEN") c.muted else claudeColor(agent), fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 }
             }
             when {
