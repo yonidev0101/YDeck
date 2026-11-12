@@ -89,14 +89,16 @@ fun HomeScreen(
         val waiting = computer?.waiting.orEmpty()
         // Three numbers before any words: waiting for you, at work, steps left. Each one filters the list below.
         val lives = deck.projects.mapNotNull { computer?.live(it.id) }
-        val waitingN = maxOf(waiting.map { it.project }.distinct().size, lives.count { it.agentMode == "WAITING" })
+        // Amber says one thing everywhere: something here waits for you (Claude asking, or something open: not saved, not pushed).
+        fun needsYou(id: String): Boolean = computer?.live(id)?.let { l -> l.agentMode == "WAITING" || l.loops.any { it.kind != "AGENT" } } == true || waiting.any { it.project == id }
+        val waitingN = deck.projects.count { needsYou(it.id) }
         val workingN = lives.count { it.agentMode == "WORKING" }
         val leftN = deck.projects.sumOf { computer?.memory?.get(it.id)?.left?.size ?: 0 }
         if (paired || leftN > 0) item {
             Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Stat(waitingN, "מחכה לך", Filter.WAITING, filter, Modifier.weight(1f)) { filter = if (filter == it) null else it }
                 Stat(workingN, "עובד", Filter.WORKING, filter, Modifier.weight(1f)) { filter = if (filter == it) null else it }
-                Stat(leftN, "שלבים נשארו", Filter.LEFT, filter, Modifier.weight(1f)) { filter = if (filter == it) null else it }
+                Stat(leftN, "נשארו", Filter.LEFT, filter, Modifier.weight(1f)) { filter = if (filter == it) null else it }
             }
         }
         if (waiting.isNotEmpty()) {
@@ -105,14 +107,13 @@ fun HomeScreen(
                 WaitingCard(w, deck.byId(w.project), computer!!.canReply, computer.replies.lastOrNull { it.first.waiting == w.id }) { text, choices -> onReply(w.id, text, choices) }
             }
         }
-        val open = deck.projects.sumOf { p -> computer?.live(p.id)?.loops.orEmpty().count { it.kind != "AGENT" } }
         val shown = when (filter) {
-            Filter.WAITING -> deck.projects.filter { computer?.live(it.id)?.agentMode == "WAITING" || waiting.any { w -> w.project == it.id } }
+            Filter.WAITING -> deck.projects.filter { needsYou(it.id) }
             Filter.WORKING -> deck.projects.filter { computer?.live(it.id)?.agentMode == "WORKING" }
             Filter.LEFT -> deck.projects.filter { computer?.memory?.get(it.id)?.left?.isNotEmpty() == true }
             null -> deck.projects
         }
-        item { SectionHeader(filter?.label ?: when (open) { 0 -> "פרויקטים"; 1 -> "פרויקטים · דבר אחד פתוח"; else -> "פרויקטים · $open דברים פתוחים" }) }
+        item { SectionHeader(filter?.label ?: "פרויקטים") }
         item { Line() }
         items(shown, key = { it.id }) { p ->
             ProjectRow(p, computer?.memory?.get(p.id), computer?.live(p.id), onClick = { onOpen(p) })
