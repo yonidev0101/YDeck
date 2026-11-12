@@ -36,6 +36,8 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -77,6 +79,9 @@ import com.yonidev.ydeck.link.LiveSession
 import com.yonidev.ydeck.link.Memory
 import com.yonidev.ydeck.link.Note
 
+/** What "save in Git" asks Claude on the computer: commit what is open with a clear message, then push. */
+private const val GIT_PROMPT = "שמור את כל השינויים הפתוחים ב־Git: commit עם הודעה ברורה, ואז push. אל תשנה קוד."
+
 private enum class Tab(val label: String) { MEMORY("סקירה"), GIT("Git"), LINKS("קישורים") }
 
 /**
@@ -93,6 +98,8 @@ fun ProjectScreen(
     pending: List<Note>,
     onBack: () -> Unit,
     onWrite: ((kind: String, text: String) -> Unit)?,
+    /** Changes this project's data on the computer (the lists, the archive, the details; see [Note]); null when not paired. */
+    onEdit: ((kind: String, text: String, args: List<String>) -> Unit)? = null,
     launches: List<Pair<Launch, Launched?>> = emptyList(),
     /** The computer takes launch requests now; when false, the card says where to turn it on. */
     launchOn: Boolean = false,
@@ -121,11 +128,27 @@ fun ProjectScreen(
     var sentAt by remember { mutableStateOf(0L) }
     val context = LocalContext.current
     val canWrite = onWrite != null && memory != null
+    var asking by remember { mutableStateOf<TextAsk?>(null) }
+    var details by remember { mutableStateOf(false) }
+    var menu by remember { mutableStateOf(false) }
+    val edit = if (memory != null) onEdit else null
     PageScaffold(
         title = p.name, onBack = onBack,
         actions = {
             if (onAsk != null) IconButton(onClick = onAsk) { AskMark(askMood(chat, false), 22.dp) }
             if (canWrite) IconButton(onClick = { writing = Note.NEXT }) { Icon(Icons.Outlined.Edit, "כתיבה", tint = c.fg) }
+            // The project's own actions: its details, Git and closing the day (through Claude there), the archive.
+            if (onEdit != null) Box {
+                IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, "עוד", tint = c.fg) }
+                ItemMenu(menu, { menu = false }, buildList {
+                    add("עריכת פרטים וקישורים" to { details = true })
+                    if (onLaunch != null && live != null) {
+                        add("שמירה ב־Git (commit + push)" to { onLaunch(Launch.NEW, "", GIT_PROMPT, false) })
+                        add("סגירה להיום" to { onLaunch(Launch.NEW, "", "/ydeck:close-day", false) })
+                    }
+                    add((if (p.archived) "החזרה מהארכיון" else "העברה לארכיון") to { onEdit(Note.ARCHIVE, if (p.archived) "0" else "1", emptyList()) })
+                })
+            }
         },
     ) {
         item { Header(p, memory, live) }
@@ -141,12 +164,14 @@ fun ProjectScreen(
         when (tab) {
             Tab.MEMORY -> item {
                 MemoryTab(memory, live, pending, if (canWrite) { kind -> writing = kind } else null,
-                    onDone = if (canWrite) { next -> onWrite?.invoke(Note.DONE, next) } else null)
+                    onDone = if (canWrite) { next -> onWrite?.invoke(Note.DONE, next) } else null, edit = edit, ask = { asking = it })
             }
             Tab.GIT -> item { GitTab(live) }
             Tab.LINKS -> item { LinksTab(p, live) }
         }
     }
+    asking?.let { a -> TextSheet(a) { asking = null } }
+    if (details && onEdit != null) DetailsSheet(p, { details = false }, onEdit)
     writing?.let { kind -> WriteSheet(kind, onDismiss = { writing = null }, onSend = { k, text -> writing = null; onWrite?.invoke(k, text) }) }
     if (running && onRun != null) RunSheet(runOk, onDismiss = { running = false }) { line, window ->
         running = false; sentAt = System.currentTimeMillis() - 1_000; onRun(line, window)
@@ -256,7 +281,8 @@ private fun Tabs(selected: Tab, counts: Map<Tab, Int>, onSelect: (Tab) -> Unit) 
 
 @Composable
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
-private fun MemoryTab(m: Memory?, live: Live?, pending: List<Note>, write: ((String) -> Unit)?, onDone: ((String) -> Unit)?) {
+private fun MemoryTab(m: Memory?, live: Live?, pending: List<Note>, write: ((String) -> Unit)?, onDone: ((String) -> Unit)?,
+                      edit: ((String, String, List<String>) -> Unit)? = null, ask: (TextAsk) -> Unit = {}) {
     val c = LocalDeck.current
     if (m == null) {
         FootNote("לפרויקט הזה אין עדיין תיקייה ב־YDeck במחשב, אז אין לו זיכרון. כשמחברים לו תיקייה, יופיעו כאן הצעד הבא, הסשן האחרון, ההחלטות ו־Git.")
@@ -266,8 +292,8 @@ private fun MemoryTab(m: Memory?, live: Live?, pending: List<Note>, write: ((Str
         if (pending.isNotEmpty()) Block("ממתין למחשב") {
             pending.forEachIndexed { i, n ->
                 if (i > 0) Hair()
-                Text(when (n.kind) { Note.DECISION -> "החלטה"; Note.DONE -> "בוצע"; else -> "צעד הבא" }, color = c.faint, fontSize = 12.sp)
-                Body(n.text)
+                Text(com.yonidev.ydeck.data.Overlay.words(n), color = c.faint, fontSize = 12.sp)
+                if (n.text.isNotBlank() && n.kind != Note.ARCHIVE && n.kind != Note.COLOR) Body(n.text)
             }
             Text("יישמר בפרויקט כש־YDeck במחשב פתוח.", color = c.faint, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
         }
@@ -284,7 +310,7 @@ private fun MemoryTab(m: Memory?, live: Live?, pending: List<Note>, write: ((Str
                 style = TextStyle(textDirection = dirOf(m.now)),
             )
         }
-        PathOf(if (closing) m.copy(next = "") else m, write, onDone)
+        PathOf(if (closing) m.copy(next = "") else m, write, onDone, edit, ask)
         if (live != null && live.loops.isNotEmpty()) Section("פתוח עכשיו") {
             live.loops.forEachIndexed { i, l ->
                 Row(Modifier.padding(top = if (i > 0) 12.dp else 0.dp), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -296,12 +322,25 @@ private fun MemoryTab(m: Memory?, live: Live?, pending: List<Note>, write: ((Str
                 }
             }
         }
-        if (m.ideas.isNotEmpty()) Section("רעיונות בצד · ${m.ideas.size}") {
+        if (m.ideas.isNotEmpty() || edit != null) Section(if (m.ideas.isEmpty()) "רעיונות בצד" else "רעיונות בצד · ${m.ideas.size}") {
             androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 m.ideas.forEach { t ->
-                    Text(t, color = c.muted, fontSize = 13.sp, lineHeight = 18.sp, style = TextStyle(textDirection = dirOf(t)),
-                        modifier = Modifier.clip(RoundedCornerShape(50)).background(c.surface2).padding(horizontal = 12.dp, vertical = 7.dp))
+                    // An idea: tapped, it moves on to what's left, or goes.
+                    var open by remember { mutableStateOf(false) }
+                    Box {
+                        Text(t, color = c.muted, fontSize = 13.sp, lineHeight = 18.sp, style = TextStyle(textDirection = dirOf(t)),
+                            modifier = Modifier.clip(RoundedCornerShape(50)).background(c.surface2).then(if (edit != null) Modifier.clickable { open = true } else Modifier)
+                                .padding(horizontal = 12.dp, vertical = 7.dp))
+                        if (edit != null) ItemMenu(open, { open = false }, listOf(
+                            "להעביר ל״נשאר״" to { edit(Note.IDEA_TAKE, t, emptyList()) },
+                            "מחיקה" to { edit(Note.IDEA_DROP, t, emptyList()) },
+                        ), danger = true)
+                    }
                 }
+                if (edit != null) Text("+ רעיון", color = c.accentText, fontSize = 13.sp,
+                    modifier = Modifier.clip(RoundedCornerShape(50)).border(1.dp, c.line, RoundedCornerShape(50)).clickable {
+                        ask(TextAsk("רעיון חדש", "מה הרעיון?") { edit(Note.IDEA_ADD, it, emptyList()) })
+                    }.padding(horizontal = 12.dp, vertical = 7.dp))
             }
         }
         More(m, write)
@@ -327,13 +366,13 @@ private fun Section(label: String, trailing: String? = null, top: androidx.compo
  * on the computer.
  */
 @Composable
-private fun PathOf(m: Memory, write: ((String) -> Unit)?, onDone: ((String) -> Unit)?) {
+private fun PathOf(m: Memory, write: ((String) -> Unit)?, onDone: ((String) -> Unit)?, edit: ((String, String, List<String>) -> Unit)? = null, ask: (TextAsk) -> Unit = {}) {
     val c = LocalDeck.current
     var openDone by remember { mutableStateOf(false) }
     val next = m.next.takeIf { it.isNotBlank() } ?: m.left.firstOrNull()
     val rest = m.left.filter { it != next }
     val hasDone = m.doneItems.isNotEmpty() || m.done.isNotBlank()
-    if (next == null && !hasDone && write == null) return
+    if (next == null && !hasDone && write == null && edit == null) return
     val leftCount = rest.size + (if (next != null) 1 else 0)
     Section("המסלול", trailing = when (leftCount) { 0 -> null; 1 -> "שלב אחד נשאר"; else -> "$leftCount שלבים נשארו" }, top = 26.dp) {
         Column {
@@ -369,6 +408,8 @@ private fun PathOf(m: Memory, write: ((String) -> Unit)?, onDone: ((String) -> U
                         Text("הבא", color = c.accentText, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                         val own = next != null && next == m.next
                         if (own && onDone != null) SmallAction("בוצע") { onDone(m.next) }
+                        // The next step taken from what's left: done, it moves to what was done.
+                        if (!own && next != null && edit != null) SmallAction("בוצע") { edit(Note.LEFT_DONE, next, emptyList()) }
                         if (write != null) SmallAction(if (next != null) "שינוי" else "צעד הבא") { write(Note.NEXT) }
                     }
                     Text(next ?: "עוד אין צעד הבא", color = if (next != null) c.fg else c.faint, fontSize = 16.sp, lineHeight = 23.sp, fontWeight = FontWeight.Medium,
@@ -376,10 +417,31 @@ private fun PathOf(m: Memory, write: ((String) -> Unit)?, onDone: ((String) -> U
                 }
             }
             rest.forEachIndexed { i, t ->
-                PathRow(above = c.line, below = if (i < rest.lastIndex) c.line else null, node = { RingNode() }) {
-                    Text(t, color = c.fg.copy(alpha = 0.86f), fontSize = 15.sp, lineHeight = 22.sp, style = TextStyle(textDirection = dirOf(t)),
-                        modifier = Modifier.heightIn(min = 44.dp).padding(vertical = 11.dp))
+                // A step left: its ring ticks it off; a long press offers the rest.
+                var open by remember { mutableStateOf(false) }
+                PathRow(above = c.line, below = if (i < rest.lastIndex || edit != null) c.line else null,
+                    node = { Box(if (edit != null) Modifier.clip(CircleShape).clickable { edit(Note.LEFT_DONE, t, emptyList()) }.padding(4.dp) else Modifier) { RingNode() } }) {
+                    Box {
+                        Text(t, color = c.fg.copy(alpha = 0.86f), fontSize = 15.sp, lineHeight = 22.sp, style = TextStyle(textDirection = dirOf(t)),
+                            modifier = Modifier.fillMaxWidth().then(if (edit != null) Modifier.combinedClickable(onClick = { open = true }, onLongClick = { open = true }) else Modifier)
+                                .heightIn(min = 44.dp).padding(vertical = 11.dp))
+                        if (edit != null) {
+                            val at = m.left.indexOf(t)
+                            ItemMenu(open, { open = false }, buildList {
+                                add("סימון כנעשה" to { edit(Note.LEFT_DONE, t, emptyList()) })
+                                add("עריכת הטקסט" to { ask(TextAsk("עריכת שלב", "השלב", t) { new -> edit(Note.LEFT_EDIT, new, listOf(t)) }) })
+                                if (at > 0) add("הזזה למעלה" to { edit(Note.LEFT_MOVE, t, listOf("${at - 1}")) })
+                                if (at in 0 until m.left.lastIndex) add("הזזה למטה" to { edit(Note.LEFT_MOVE, t, listOf("${at + 1}")) })
+                                add("מחיקה" to { edit(Note.LEFT_DROP, t, emptyList()) })
+                            }, danger = true)
+                        }
+                    }
                 }
+            }
+            if (edit != null) PathRow(above = c.line, node = { Box(Modifier.size(22.dp), contentAlignment = Alignment.Center) { Text("+", color = c.accentText, fontSize = 16.sp) } }) {
+                Text("הוספת שלב", color = c.accentText, fontSize = 15.sp, modifier = Modifier.fillMaxWidth().clickable {
+                    ask(TextAsk("שלב חדש", "מה עוד צריך לעשות?") { edit(Note.LEFT_ADD, it, emptyList()) })
+                }.heightIn(min = 44.dp).padding(vertical = 11.dp))
             }
         }
     }

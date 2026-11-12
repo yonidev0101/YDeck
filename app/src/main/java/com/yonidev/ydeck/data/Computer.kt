@@ -227,11 +227,11 @@ object Computer {
         _state.value = state(c).copy(pending = list.map { it.first })
     }
 
-    /** A decision or a next step for [projectId]: kept here at once, sent to the relay now or at the next chance. */
-    suspend fun write(context: Context, projectId: String, kind: String, text: String): Boolean = withContext(Dispatchers.IO) {
+    /** A change to [projectId] (see [Note]): kept here at once, sent to the relay now or at the next chance. */
+    suspend fun write(context: Context, projectId: String, kind: String, text: String, args: List<String> = emptyList()): Boolean = withContext(Dispatchers.IO) {
         val app = context.applicationContext
         state(app)
-        val note = Note(java.util.UUID.randomUUID().toString(), projectId, kind, text.trim().take(Note.MAX), System.currentTimeMillis())
+        val note = Note(java.util.UUID.randomUUID().toString(), projectId, kind, text.trim().take(Note.MAX), System.currentTimeMillis(), args.map { it.trim().take(Note.MAX) })
         writeOutbox(app, outbox + (note to false))
         sendPending(app)
     }

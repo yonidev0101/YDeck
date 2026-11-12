@@ -38,6 +38,7 @@ import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import com.yonidev.ydeck.data.Computer
+import com.yonidev.ydeck.data.Overlay
 import com.yonidev.ydeck.data.Deck
 import com.yonidev.ydeck.data.Favicons
 import com.yonidev.ydeck.data.Project
@@ -114,7 +115,7 @@ class MainActivity : ComponentActivity() {
                 AnimatedContent(current, transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(180)) }, label = "page") { p ->
                     when (p) {
                         Page.Home -> HomeScreen(
-                            deck, computer, connecting,
+                            Overlay.deck(deck, computer?.pending.orEmpty()), computer?.let { it.copy(memory = it.memory.mapValues { (id, m) -> Overlay.memory(m, it.pending.filter { n -> n.project == id })!! }) }, connecting,
                             onOpen = { page = Page.Project(it.id) },
                             onPair = ::scan,
                             onSample = ::addSample,
@@ -122,6 +123,7 @@ class MainActivity : ComponentActivity() {
                             onRefresh = { sync(quiet = false) },
                             onAsk = { page = Page.Ask() },
                             onReply = ::reply,
+                            onNewProject = if (computer?.paired == true) { name, color -> write("p" + System.currentTimeMillis().toString(36), com.yonidev.ydeck.link.Note.NEW_PROJECT, name, listOf(color)) } else null,
                         )
                         is Page.Ask -> AskScreen(
                             computer, deck.projects, p.project?.let(deck::byId),
@@ -129,12 +131,14 @@ class MainActivity : ComponentActivity() {
                             onAsk = { q, projectId -> ask(q, projectId) },
                             onNewChat = { Computer.newChat(this@MainActivity) },
                         )
-                        is Page.Project -> deck.byId(p.id)?.let { project ->
+                        is Page.Project -> Overlay.deck(deck, computer?.pending.orEmpty()).byId(p.id)?.let { project ->
+                            val mine = computer?.pending.orEmpty().filter { it.project == project.id }
                             ProjectScreen(
-                                project, computer?.memory?.get(project.id), computer?.live(project.id),
-                                pending = computer?.pending.orEmpty().filter { it.project == project.id },
+                                project, Overlay.memory(computer?.memory?.get(project.id), mine), computer?.live(project.id),
+                                pending = mine,
                                 onBack = { page = Page.Home },
                                 onWrite = if (computer?.paired == true) { kind, text -> write(project.id, kind, text) } else null,
+                                onEdit = if (computer?.paired == true) { kind, text, args -> write(project.id, kind, text, args) } else null,
                                 launches = computer?.launches.orEmpty().filter { it.first.project == project.id },
                                 launchOn = computer?.canLaunch == true,
                                 onLaunch = if (computer?.paired == true && (computer?.claudeHere == true || computer?.canLaunch == true)) { mode, session, prompt, remote -> launch(project.id, mode, session, prompt, remote) } else null,
@@ -282,14 +286,13 @@ class MainActivity : ComponentActivity() {
      * A decision or a next step for a project: kept on the phone at once, sent to the relay, then watched for a
      * minute or so until the computer says it's stored (YDeck on the computer takes notes every 20 seconds).
      */
-    private fun write(projectId: String, kind: String, text: String) {
+    private fun write(projectId: String, kind: String, text: String, args: List<String> = emptyList()) {
         lifecycleScope.launch {
-            val sent = Computer.write(this@MainActivity, projectId, kind, text)
-            toast(when {
-                !sent -> "נשמר בטלפון, יישלח כשיהיה חיבור"
-                kind == com.yonidev.ydeck.link.Note.DONE -> "סומן כבוצע"
-                else -> "נשלח למחשב"
-            })
+            val sent = Computer.write(this@MainActivity, projectId, kind, text, args)
+            // A change in the lists or the details shows at once on the page; only a written note says so in words.
+            val quiet = kind != com.yonidev.ydeck.link.Note.NEXT && kind != com.yonidev.ydeck.link.Note.DECISION && kind != com.yonidev.ydeck.link.Note.DONE
+            if (!sent) toast("נשמר בטלפון, יישלח כשיהיה חיבור")
+            else if (!quiet) toast(if (kind == com.yonidev.ydeck.link.Note.DONE) "סומן כבוצע" else "נשלח למחשב")
             for (attempt in 0 until 8) {
                 delay(10_000)
                 if (Computer.state.value?.pending.orEmpty().none { it.project == projectId }) break

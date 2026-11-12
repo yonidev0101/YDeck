@@ -63,6 +63,8 @@ fun HomeScreen(
     onRefresh: () -> Unit,
     onAsk: () -> Unit,
     onReply: (waiting: String, text: String, choices: Map<String, String>) -> Unit,
+    /** A new project, made here and created on the computer (null when not paired). */
+    onNewProject: ((name: String, color: String) -> Unit)? = null,
 ) {
     val c = LocalDeck.current
     if (connecting != null) return Connecting(connecting)
@@ -70,6 +72,8 @@ fun HomeScreen(
     val paired = computer?.paired == true
     var filter by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf<Filter?>(null) }
     var archiveOpen by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+    var creating by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    if (creating && onNewProject != null) NewProjectSheet({ creating = false }, onNewProject)
     PageScaffold(
         title = "YDeck",
         actions = {
@@ -125,6 +129,13 @@ fun HomeScreen(
         items(shown, key = { it.id }) { p ->
             ProjectRow(p, computer?.memory?.get(p.id), computer?.live(p.id), onClick = { onOpen(p) })
             Divider(inset = 80.dp)
+        }
+        if (filter == null && onNewProject != null) item(key = "new") {
+            Row(Modifier.fillMaxWidth().clickable { creating = true }.padding(horizontal = 24.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) { Text("+", color = c.accentText, fontSize = 22.sp) }
+                Spacer(Modifier.width(16.dp))
+                Text("פרויקט חדש", color = c.accentText, fontSize = 15.sp)
+            }
         }
         // The archive: one quiet line under the list, opened by a tap; projects are set aside and brought back on the computer.
         val archived = deck.archived
