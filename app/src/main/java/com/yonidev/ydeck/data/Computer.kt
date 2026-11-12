@@ -402,7 +402,35 @@ object Computer {
     /** The sample's memory, so "try a sample" shows what a paired phone shows. */
     fun addSample(context: Context) {
         val s = state(context)
-        _state.value = s.copy(memory = s.memory + (Project.sample().id to SAMPLE_MEMORY))
+        _state.value = s.copy(memory = s.memory + (Project.sample().id to SAMPLE_MEMORY), live = s.live + (Project.sample().id to sampleLive()))
+    }
+
+    /** The sample's Git: a session at work with files not yet committed, an earlier one and the commits it made. */
+    private fun sampleLive(): com.yonidev.ydeck.link.Live {
+        val now = System.currentTimeMillis()
+        val h = 3600_000L
+        val files = listOf(
+            com.yonidev.ydeck.link.LiveFile("??", "app/src/main/java/nova/stats/CsvExport.kt"),
+            com.yonidev.ydeck.link.LiveFile(" M", "app/src/main/java/nova/stats/StatsScreen.kt"),
+            com.yonidev.ydeck.link.LiveFile(" M", "app/src/main/res/values/strings.xml"),
+        )
+        return com.yonidev.ydeck.link.Live(
+            branch = "stats-export", changes = files.size, ahead = 2, upstream = "origin/stats-export", hasGit = true,
+            lastAt = now - 3 * h, lastSubject = "Weekly chart on the stats screen",
+            files = files,
+            commits = listOf(
+                com.yonidev.ydeck.link.LiveCommit("a41c9e2", now - 3 * h, "Dana", "Weekly chart on the stats screen"),
+                com.yonidev.ydeck.link.LiveCommit("7d03b18", now - 4 * h, "Dana", "Streak counts in the user's time zone"),
+                com.yonidev.ydeck.link.LiveCommit("e9a2f40", now - 30 * h, "Dana", "New settings screen"),
+            ),
+            agentMode = "WORKING", agentSince = now - 25 * 60_000L, agent = "Claude", agentDetail = "מוסיף כפתור ייצוא למסך הסטטיסטיקה",
+            receipts = listOf(
+                com.yonidev.ydeck.link.LiveReceipt("ייצוא ל־CSV במסך הסטטיסטיקה", "Claude", now - 25 * 60_000L, 0, files, false),
+                com.yonidev.ydeck.link.LiveReceipt("גרף שבועי ותיקון הרצף בחצות", "Claude", now - 5 * h, now - 3 * h + 60_000L,
+                    listOf(com.yonidev.ydeck.link.LiveFile(" M", "app/src/main/java/nova/stats/WeekChart.kt"), com.yonidev.ydeck.link.LiveFile(" M", "app/src/main/java/nova/streak/Streak.kt")), false),
+            ),
+            version = "1.4.0",
+        )
     }
 
     private val SAMPLE_MEMORY = Memory(

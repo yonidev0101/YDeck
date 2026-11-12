@@ -29,6 +29,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -61,6 +63,7 @@ fun HomeScreen(
     if (connecting != null) return Connecting(connecting)
     if (deck.projects.isEmpty()) return Welcome(onPair, onSample)
     val paired = computer?.paired == true
+    var filter by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf<Filter?>(null) }
     PageScaffold(
         title = "YDeck",
         actions = {
@@ -84,6 +87,18 @@ fun HomeScreen(
         // What's left open in all the projects, as the computer's sidebar counts it (Claude's state is shown apart).
         // Sessions waiting for you come first, as on the computer's Now.
         val waiting = computer?.waiting.orEmpty()
+        // Three numbers before any words: waiting for you, at work, steps left. Each one filters the list below.
+        val lives = deck.projects.mapNotNull { computer?.live(it.id) }
+        val waitingN = maxOf(waiting.map { it.project }.distinct().size, lives.count { it.agentMode == "WAITING" })
+        val workingN = lives.count { it.agentMode == "WORKING" }
+        val leftN = deck.projects.sumOf { computer?.memory?.get(it.id)?.left?.size ?: 0 }
+        if (paired || leftN > 0) item {
+            Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Stat(waitingN, "מחכה לך", Filter.WAITING, filter, Modifier.weight(1f)) { filter = if (filter == it) null else it }
+                Stat(workingN, "עובד", Filter.WORKING, filter, Modifier.weight(1f)) { filter = if (filter == it) null else it }
+                Stat(leftN, "שלבים נשארו", Filter.LEFT, filter, Modifier.weight(1f)) { filter = if (filter == it) null else it }
+            }
+        }
         if (waiting.isNotEmpty()) {
             item { SectionHeader(if (waiting.size == 1) "מחכה לך" else "${waiting.size} מחכים לך") }
             items(waiting, key = { "w:" + it.id }) { w ->
@@ -91,9 +106,15 @@ fun HomeScreen(
             }
         }
         val open = deck.projects.sumOf { p -> computer?.live(p.id)?.loops.orEmpty().count { it.kind != "AGENT" } }
-        item { SectionHeader(when (open) { 0 -> "פרויקטים"; 1 -> "פרויקטים · דבר אחד פתוח"; else -> "פרויקטים · $open דברים פתוחים" }) }
+        val shown = when (filter) {
+            Filter.WAITING -> deck.projects.filter { computer?.live(it.id)?.agentMode == "WAITING" || waiting.any { w -> w.project == it.id } }
+            Filter.WORKING -> deck.projects.filter { computer?.live(it.id)?.agentMode == "WORKING" }
+            Filter.LEFT -> deck.projects.filter { computer?.memory?.get(it.id)?.left?.isNotEmpty() == true }
+            null -> deck.projects
+        }
+        item { SectionHeader(filter?.label ?: when (open) { 0 -> "פרויקטים"; 1 -> "פרויקטים · דבר אחד פתוח"; else -> "פרויקטים · $open דברים פתוחים" }) }
         item { Line() }
-        items(deck.projects, key = { it.id }) { p ->
+        items(shown, key = { it.id }) { p ->
             ProjectRow(p, computer?.memory?.get(p.id), computer?.live(p.id), onClick = { onOpen(p) })
             Divider(inset = 80.dp)
         }
@@ -104,6 +125,33 @@ fun HomeScreen(
                     Text("חיבור למחשב", color = c.accentText, fontSize = 15.sp, fontWeight = FontWeight.Medium)
                 }
             }
+        }
+    }
+}
+
+private enum class Filter(val label: String) { WAITING("מחכים לך"), WORKING("Claude עובד"), LEFT("עם שלבים שנשארו") }
+
+/** One of the three numbers: the count large, a dot in its state's colour and the word. Tapping it filters the list. */
+@Composable
+private fun Stat(n: Int, word: String, f: Filter, on: Filter?, modifier: Modifier, onTap: (Filter) -> Unit) {
+    val c = LocalDeck.current
+    val hot = f == Filter.WAITING && n > 0
+    val selected = on == f
+    val shape = RoundedCornerShape(16.dp)
+    Column(
+        modifier.clip(shape).background(if (hot) CHANGED_DOT.copy(alpha = 0.10f) else c.surface)
+            .then(if (selected) Modifier.border(1.5.dp, c.fg, shape) else Modifier)
+            .clickable { onTap(f) }.padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text("$n", color = if (hot) c.openText else c.fg, fontSize = 28.sp, lineHeight = 32.sp, fontFamily = PlexMono, fontWeight = FontWeight.Medium)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            when (f) {
+                Filter.WAITING -> Dot(CHANGED_DOT, 7.dp)
+                Filter.WORKING -> Dot(claudeColor("WORKING"), 7.dp)
+                Filter.LEFT -> Box(Modifier.size(7.dp).clip(androidx.compose.foundation.shape.CircleShape).border(1.5.dp, c.faint, androidx.compose.foundation.shape.CircleShape))
+            }
+            Text(word, color = if (hot) c.openText else c.muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }

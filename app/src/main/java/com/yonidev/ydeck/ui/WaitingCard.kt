@@ -11,7 +11,9 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -57,7 +59,8 @@ fun WaitingCard(
     var picked by remember(w.id, w.draftChoices) { mutableStateOf(w.draftChoices) }
     val ready = if (w.kind == Waiting.CHOICE) w.questions.all { picked[it.question] != null } else text.isNotBlank()
     Column(
-        Modifier.padding(horizontal = 16.dp, vertical = 6.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(CHANGED_DOT.copy(alpha = 0.14f)).padding(16.dp),
+        Modifier.padding(horizontal = 16.dp, vertical = 6.dp).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(c.surface)
+            .border(1.dp, CHANGED_DOT.copy(alpha = 0.35f), RoundedCornerShape(20.dp)).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -69,14 +72,27 @@ fun WaitingCard(
             Text(ago(w.at), color = c.muted, fontSize = 12.sp)
         }
         if (w.kind == Waiting.CHOICE) w.questions.forEach { q ->
-            Text(q.question, color = c.fg, fontSize = 15.sp, lineHeight = 22.sp, style = TextStyle(textDirection = dirOf(q.question)))
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // The question large and thin; the choices as big buttons, one tap each. YDeck's draft is marked "הצעה".
+            Text(q.question, color = c.fg, fontSize = 21.sp, lineHeight = 29.sp, fontFamily = Display, fontWeight = FontWeight.Light,
+                style = TextStyle(textDirection = dirOf(q.question)), modifier = Modifier.padding(top = 2.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 q.options.forEach { o ->
                     val on = picked[q.question] == o
-                    val shape = RoundedCornerShape(99.dp)
-                    Text(o, color = if (on) c.bg else c.fg, fontSize = 14.sp,
-                        modifier = Modifier.clip(shape).background(if (on) c.fg else c.surface).border(1.dp, if (on) c.fg else c.line, shape)
-                            .clickable(enabled = canReply) { picked = picked + (q.question to o) }.padding(horizontal = 14.dp, vertical = 7.dp))
+                    val shape = RoundedCornerShape(16.dp)
+                    Row(
+                        Modifier.fillMaxWidth().clip(shape).border(if (on) 2.dp else 1.dp, if (on) c.fg else androidx.compose.ui.graphics.Color(0xFF2E2E34), shape)
+                            .clickable(enabled = canReply) { picked = picked + (q.question to o) }.heightIn(min = 52.dp).padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Box(
+                            Modifier.size(22.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                                .then(if (on) Modifier.background(c.fg) else Modifier.border(2.dp, androidx.compose.ui.graphics.Color(0xFF4A4A52), androidx.compose.foundation.shape.CircleShape)),
+                            contentAlignment = Alignment.Center,
+                        ) { if (on) Box(Modifier.size(8.dp).clip(androidx.compose.foundation.shape.CircleShape).background(c.surface)) }
+                        Text(o, color = c.fg, fontSize = 15.sp, lineHeight = 21.sp, fontWeight = FontWeight.Medium, style = TextStyle(textDirection = dirOf(o)), modifier = Modifier.weight(1f))
+                        if (w.draftChoices[q.question] == o) Text("הצעה", color = c.accentText, fontSize = 11.sp,
+                            modifier = Modifier.clip(RoundedCornerShape(50)).background(c.accentTint).padding(horizontal = 8.dp, vertical = 2.dp))
+                    }
                 }
             }
         } else {
@@ -112,9 +128,9 @@ fun WaitingCard(
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             val shape = RoundedCornerShape(99.dp)
-            Text("לשלוח ל־Claude", color = if (ready) c.bg else c.muted, fontSize = 14.sp, fontWeight = FontWeight.Medium,
+            Text("לשלוח ל־Claude", color = if (ready) c.bg else c.muted, fontSize = 15.sp, fontWeight = FontWeight.Medium,
                 modifier = Modifier.clip(shape).background(if (ready) c.fg else c.line).clickable(enabled = ready) { onSend(text.trim(), picked) }
-                    .padding(horizontal = 16.dp, vertical = 9.dp))
+                    .heightIn(min = 44.dp).padding(horizontal = 20.dp, vertical = 11.dp))
             if (status != null) Text(status, color = c.muted, fontSize = 13.sp, maxLines = 2)
         }
     }

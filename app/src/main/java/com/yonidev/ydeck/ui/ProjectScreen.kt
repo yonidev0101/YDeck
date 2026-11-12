@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -156,7 +157,7 @@ private fun Header(p: Project, m: Memory?, live: Live?) {
                     val left = progress.second - progress.first
                     Text(if (left == 0) "הכול נעשה" else "נעשו · נשארו $left", color = c.muted, fontSize = 13.sp)
                 } else if (about.isNotBlank()) Text(about, color = c.muted, fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                if (live != null && live.agentMode.isNotBlank()) Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                if (live != null && live.agentMode.isNotBlank() && live.agentMode != "WORKING" && live.agentMode != "WAITING") Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                     ClaudeDot(live.agentMode, 7.dp)
                     Text(claudeText(live), color = if (live.agentMode == "DONE" || live.agentMode == "OPEN") c.muted else claudeColor(live.agentMode), fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
@@ -165,10 +166,14 @@ private fun Header(p: Project, m: Memory?, live: Live?) {
         // One quiet line under it: what it is, the branch and what's not saved, the server running.
         if (live != null || progress != null) {
             val parts = buildList<@Composable () -> Unit> {
-                val about = listOfNotNull(p.kind.takeIf { it.isNotBlank() }, live?.version?.takeIf { it.isNotBlank() }?.let { "⁦$it⁩" }).joinToString(" · ")
+                val about = p.kind
                 if (progress != null && about.isNotBlank()) add { Text(about, color = c.faint, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                 if (live != null && live.hasGit && live.branch.isNotBlank()) add { Text(live.branch, color = c.faint, fontSize = 13.sp, fontFamily = PlexMono, maxLines = 1) }
-                if (live != null && live.hasGit) add { Text(gitWords(live), color = if (live.changes > 0 || live.ahead > 0) c.openText else c.faint, fontSize = 13.sp, maxLines = 1) }
+                // One short word for Git here (the Git tab says the rest), so the line never runs out of room.
+                if (live != null && live.hasGit) add {
+                    val short = when { live.changes == 1 -> "שינוי אחד לא שמור"; live.changes > 1 -> "${live.changes} לא שמורים"; live.ahead > 0 -> "${live.ahead} לדחוף"; else -> "הכול שמור" }
+                    Text(short, color = if (live.changes > 0 || live.ahead > 0) c.openText else c.faint, fontSize = 13.sp, maxLines = 1)
+                }
                 live?.ports?.firstOrNull()?.let { port -> add { Dot(LIVE_DOT, 6.dp); Text(":$port", color = c.accentText, fontSize = 13.sp, fontFamily = PlexMono) } }
             }
             if (parts.isNotEmpty()) Row(Modifier.padding(top = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -474,58 +479,175 @@ private fun GitTab(live: Live?) {
         FootNote(if (live == null) "לפרויקט הזה אין תיקייה ב־YDeck במחשב." else "התיקייה של הפרויקט הזה עוד לא ריפו של Git.")
         return
     }
+    var showFiles by remember { mutableStateOf(false) }
     Column {
-        Block("ענף") {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("⁦${live.branch}⁩", color = c.fg, fontSize = 17.sp, fontFamily = PlexMono, modifier = Modifier.weight(1f, fill = false))
-                if (live.upstream.isNotBlank()) Text("← ⁦${live.upstream}⁩", color = c.faint, fontSize = 13.sp, fontFamily = PlexMono, maxLines = 1)
+        // The ring: closed and green when all is saved and pushed; open, with how many, while something isn't.
+        val unsaved = live.changes
+        Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+            val saved = unsaved == 0 && live.ahead == 0
+            ProgressMark(if (saved) 1 else 0, 1, 84.dp) {
+                if (unsaved > 0) Text("$unsaved", color = c.fg, fontSize = 22.sp, fontFamily = PlexMono, fontWeight = FontWeight.Medium)
+                else if (live.ahead > 0) Text("↑${live.ahead}", color = c.fg, fontSize = 18.sp, fontFamily = PlexMono, fontWeight = FontWeight.Medium)
             }
-            Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Chip(if (live.changes == 0) "נקי" else if (live.changes == 1) "שינוי אחד" else "${live.changes} שינויים",
-                    color = if (live.changes > 0) c.openText else c.closed, bg = (if (live.changes > 0) c.open else c.closed).copy(alpha = 0.12f))
-                if (live.ahead > 0) Chip("↑${live.ahead} לא נדחפו", color = c.openText, bg = c.open.copy(alpha = 0.12f))
-                if (live.behind > 0) Chip("↓${live.behind} חדשים בשרת", color = c.accentText, bg = c.accentTint)
-            }
-            if (live.lastAt > 0) Text("קומיט אחרון ${ago(live.lastAt)}: ${live.lastSubject}", color = c.muted, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                style = TextStyle(textDirection = TextDirection.Rtl), modifier = Modifier.padding(top = 10.dp))
-            if (live.web.isNotBlank()) SmallAction("פתיחת הריפו", Modifier.padding(top = 10.dp)) {
-                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(live.web))) }
-            }
-        }
-        if (live.files.isNotEmpty()) Block(if (live.changes > live.files.size) "שינויים · ${live.files.size} מתוך ${live.changes}" else "שינויים") {
-            Files(live.files)
-        }
-        if (live.receipts.isNotEmpty()) Block("סשנים") {
-            live.receipts.forEachIndexed { i, r ->
-                if (i > 0) Hair()
-                ReceiptRow(r)
-            }
-        }
-        if (live.commits.isNotEmpty()) Block("קומיטים") {
-            live.commits.forEachIndexed { i, cm ->
-                if (i > 0) Hair()
-                Body(cm.subject)
-                Row(Modifier.padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(cm.hash, color = c.faint, fontSize = 12.sp, fontFamily = PlexMono)
-                    Text("${cm.author} · ${ago(cm.at)}", color = c.faint, fontSize = 12.sp)
+            Column(Modifier.weight(1f)) {
+                val title = when {
+                    unsaved == 1 -> "קובץ אחד לא שמור"
+                    unsaved > 1 -> "$unsaved קבצים לא שמורים"
+                    live.ahead == 1 -> "קומיט אחד לדחוף"
+                    live.ahead > 1 -> "${live.ahead} קומיטים לדחוף"
+                    else -> "הכול שמור"
+                }
+                Text(
+                    androidx.compose.ui.text.buildAnnotatedString { append(title); pushStyle(androidx.compose.ui.text.SpanStyle(color = if (unsaved == 0 && live.ahead == 0) c.closed else c.open)); append("."); pop() },
+                    color = c.fg, fontSize = 23.sp, lineHeight = 30.sp, fontFamily = Display, fontWeight = FontWeight.Light,
+                )
+                val where = listOfNotNull(
+                    when { live.upstream.isBlank() -> "עוד לא בשרת"; live.ahead > 0 && unsaved > 0 -> "${live.ahead} לדחוף"; else -> null },
+                    if (live.behind > 0) "${live.behind} חדשים בשרת" else null,
+                ).joinToString(" · ")
+                Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("⁦${live.branch}⁩", color = c.muted, fontSize = 13.sp, fontFamily = PlexMono, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    if (where.isNotBlank()) { Text("·", color = c.faint, fontSize = 13.sp); Text(where, color = c.faint, fontSize = 13.sp, maxLines = 1) }
                 }
             }
+        }
+        // What changed, as one bar: new in green, changed in amber, removed in red. The files themselves on a tap.
+        if (live.files.isNotEmpty()) {
+            val kinds = live.files.groupingBy { fileKind(it) }.eachCount()
+            Column(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 22.dp)) {
+                Row(Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(50)), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                    FileKind.entries.forEach { k -> kinds[k]?.let { n -> Box(Modifier.weight(n.toFloat()).fillMaxHeight().background(k.color(c))) } }
+                }
+                Row(
+                    Modifier.fillMaxWidth().padding(top = 6.dp).clip(RoundedCornerShape(12.dp)).clickable { showFiles = !showFiles }.heightIn(min = 44.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    FileKind.entries.forEach { k ->
+                        kinds[k]?.let { n ->
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Box(Modifier.size(8.dp).clip(RoundedCornerShape(2.dp)).background(k.color(c)))
+                                Text("$n ${k.word}", color = c.muted, fontSize = 13.sp)
+                            }
+                        }
+                    }
+                    Box(Modifier.weight(1f))
+                    Text(if (showFiles) "הסתרה" else "הקבצים", color = c.accentText, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    Chevron(showFiles)
+                }
+                if (showFiles) Column(Modifier.padding(top = 4.dp)) {
+                    Files(live.files)
+                    if (live.changes > live.files.size) Text("ועוד ${live.changes - live.files.size}", color = c.faint, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                }
+            }
+        }
+        // What happened: one line in time. Each Claude session a point, the commits that came out of it under it.
+        val story = storyOf(live)
+        if (story.isNotEmpty()) Section("מה קרה", trailing = "סשנים וקומיטים", top = 26.dp) {
+            Column {
+                story.forEachIndexed { i, e ->
+                    val last = i == story.lastIndex
+                    when (e) {
+                        is Story.Session -> PathRow(nodeTop = 2.dp, above = null, below = if (last) null else c.line, node = { SessionNode(e) }) {
+                            SessionRow(e)
+                        }
+                        is Story.Commit -> PathRow(nodeTop = 8.dp, below = if (last) null else c.line, node = { Box(Modifier.size(22.dp, 10.dp), contentAlignment = Alignment.Center) { Dot(c.closed, 8.dp) } }) {
+                            CommitLine(e.c, Modifier.padding(bottom = 14.dp), dot = false)
+                        }
+                    }
+                }
+            }
+        }
+        if (live.web.isNotBlank()) SmallAction("פתיחת הריפו", Modifier.padding(start = 16.dp, top = 18.dp)) {
+            runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(live.web))) }
         }
         FootNote("לקריאה בלבד: קומיט, דחיפה ושאר הפעולות נעשים במחשב.")
     }
 }
 
-/** One agent session: what it was asked, when, and the files it touched (tap to see them). */
+private enum class FileKind(val word: String) {
+    ADDED("חדשים"), CHANGED("שונו"), REMOVED("נמחקו"), MOVED("הועברו");
+    fun color(c: DeckColors): Color = when (this) { ADDED -> c.closed; CHANGED -> c.open; REMOVED -> c.danger; MOVED -> c.accentText }
+}
+
+private fun fileKind(f: LiveFile): FileKind {
+    val code = f.code.trim()
+    return when {
+        f.code == "??" || 'A' in code -> FileKind.ADDED
+        'D' in code -> FileKind.REMOVED
+        'R' in code -> FileKind.MOVED
+        else -> FileKind.CHANGED
+    }
+}
+
+/** The Git tab's line: sessions (with the commits made while they ran) and commits made outside any, newest first. */
+private sealed class Story {
+    abstract val at: Long
+    class Session(val r: LiveReceipt, val commits: List<com.yonidev.ydeck.link.LiveCommit>) : Story() {
+        override val at get() = maxOf(r.endAt, r.startAt, commits.maxOfOrNull { it.at } ?: 0)
+        val open get() = r.endAt <= 0
+    }
+    class Commit(val c: com.yonidev.ydeck.link.LiveCommit) : Story() { override val at get() = c.at }
+}
+
+private fun storyOf(live: Live): List<Story> {
+    val sessions = live.receipts.sortedByDescending { it.startAt }
+    val taken = mutableMapOf<LiveReceipt, MutableList<com.yonidev.ydeck.link.LiveCommit>>()
+    val loose = mutableListOf<com.yonidev.ydeck.link.LiveCommit>()
+    live.commits.forEach { cm ->
+        // A commit belongs to the latest session that had started by then and hadn't ended long before.
+        val s = sessions.firstOrNull { it.startAt in 1..cm.at && (it.endAt <= 0 || cm.at <= it.endAt + 30 * 60_000L) }
+        if (s != null) taken.getOrPut(s) { mutableListOf() }.add(cm) else loose.add(cm)
+    }
+    return (sessions.map { Story.Session(it, taken[it].orEmpty().sortedByDescending { c -> c.at }) } + loose.map { Story.Commit(it) })
+        .sortedByDescending { it.at }
+}
+
+/** A session's point: indigo while it runs, green once what it did was committed, an empty ring when it wasn't. */
 @Composable
-private fun ReceiptRow(r: LiveReceipt) {
+private fun SessionNode(s: Story.Session) {
+    when {
+        s.open -> NextNode(true)
+        s.commits.isNotEmpty() -> DoneNode()
+        else -> Box(Modifier.size(22.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(12.dp).clip(CircleShape).background(LocalDeck.current.bg).border(2.dp, Color(0xFF4A4A52), CircleShape))
+        }
+    }
+}
+
+/** One session: who and when, what it was asked; the files it touched on a tap, its commits under it. */
+@Composable
+private fun SessionRow(s: Story.Session) {
     val c = LocalDeck.current
+    val r = s.r
     var open by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxWidth().clickable(enabled = r.files.isNotEmpty()) { open = !open }) {
-        Body(r.title)
-        val files = when (r.files.size) { 0 -> "בלי שינויים בקבצים"; 1 -> "קובץ אחד"; else -> "${r.files.size} קבצים" }
-        Text(listOfNotNull(r.agent, ago(r.endAt.takeIf { it > 0 } ?: r.startAt), files, if (r.rewound) "הוחזר" else null).joinToString(" · "),
-            color = c.faint, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
-        if (open) Column(Modifier.padding(top = 8.dp)) { Files(r.files) }
+    Column(Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(enabled = r.files.isNotEmpty()) { open = !open }) {
+            Text((r.agent.ifBlank { "Claude" }) + " · " + (if (s.open) "עכשיו" else ago(r.endAt.takeIf { it > 0 } ?: r.startAt)),
+                color = if (s.open) c.accentText else c.faint, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            Text(r.title, color = c.fg, fontSize = 15.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium, maxLines = 3, overflow = TextOverflow.Ellipsis,
+                style = TextStyle(textDirection = dirOf(r.title)), modifier = Modifier.padding(top = 2.dp))
+            val files = when (r.files.size) { 0 -> null; 1 -> "קובץ אחד"; else -> "${r.files.size} קבצים" }
+            val tags = listOfNotNull(files, if (r.rewound) "הוחזר" else null, if (!s.open && s.commits.isEmpty() && r.files.isNotEmpty()) "לא נשמר בקומיט" else null)
+            if (tags.isNotEmpty()) Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                tags.forEach { t ->
+                    val warn = t == "לא נשמר בקומיט"
+                    Chip(t, color = if (warn) c.openText else c.muted, bg = if (warn) c.open.copy(alpha = 0.12f) else c.surface2)
+                }
+            }
+            if (open) Column(Modifier.padding(top = 8.dp)) { Files(r.files) }
+        }
+        s.commits.forEach { cm -> CommitLine(cm, Modifier.padding(top = 8.dp)) }
+    }
+}
+
+@Composable
+private fun CommitLine(cm: com.yonidev.ydeck.link.LiveCommit, modifier: Modifier = Modifier, dot: Boolean = true) {
+    val c = LocalDeck.current
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (dot) Dot(c.closed, 6.dp)
+        Text(cm.subject, color = c.fg.copy(alpha = 0.86f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            style = TextStyle(textDirection = dirOf(cm.subject)), modifier = Modifier.weight(1f))
+        Text(cm.hash, color = c.faint, fontSize = 11.sp, fontFamily = PlexMono)
     }
 }
 
@@ -553,37 +675,65 @@ private fun Files(files: List<LiveFile>) {
 // ── links ──
 
 @Composable
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 private fun LinksTab(p: Project, live: Live?) {
     val c = LocalDeck.current
     val context = LocalContext.current
     Column {
-        if (p.actions.isNotEmpty()) SectionCard("קישורים", hint = p.googleEmail?.let { "שירותי גוגל נפתחים בחשבון $it" }) {
-            p.actions.forEachIndexed { i, a ->
-                if (i > 0) Divider(inset = 58.dp)
-                ListRow(
-                    onClick = { Router.open(context, p, a) },
-                    leading = { ServiceIcon(a.service, a.faviconHost) },
-                    title = a.label,
-                    subtitle = Router.displayUrl(a.url),
-                    trailing = { val b = Router.browserFor(p, a); if (b.pkg != Router.CHROME) Chip(b.label) },
-                )
+        if (p.actions.isNotEmpty()) {
+            // The first link is the main one: a large tile in the project's colour. The rest, a grid of tiles.
+            val main = p.actions.first()
+            val tint = Color(p.color).let { if (android.graphics.Color.luminance(p.color) < 0.03f) c.accent else it }
+            Row(
+                Modifier.padding(start = 16.dp, end = 16.dp, top = 20.dp).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(tint)
+                    .clickable { Router.open(context, p, main) }.heightIn(min = 76.dp).padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Box(Modifier.size(44.dp).clip(RoundedCornerShape(13.dp)).background(Color.White.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) {
+                    ServiceMark(main.service, main.faviconHost, 24.dp, tint = Color.White)
+                }
+                Column(Modifier.weight(1f)) {
+                    Text(main.label, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(Router.displayUrl(main.url), color = Color.White.copy(alpha = 0.75f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        style = TextStyle(textDirection = TextDirection.Ltr))
+                }
+            }
+            p.actions.drop(1).chunked(3).forEach { row ->
+                Row(Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    row.forEach { a ->
+                        Column(
+                            Modifier.weight(1f).clip(RoundedCornerShape(18.dp)).background(c.surface).clickable { Router.open(context, p, a) }
+                                .heightIn(min = 100.dp).padding(12.dp),
+                            verticalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            ServiceIcon(a.service, a.faviconHost, 36.dp)
+                            Text(a.label, color = c.fg, fontSize = 14.sp, fontWeight = FontWeight.Medium, lineHeight = 19.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(top = 14.dp))
+                        }
+                    }
+                    repeat(3 - row.size) { Box(Modifier.weight(1f)) }
+                }
             }
         } else FootNote("אין לפרויקט קישורים. מוסיפים אותם ב־YDeck במחשב.")
-        if (p.copies.isNotEmpty()) SectionCard("העתקה") {
-            p.copies.forEachIndexed { i, item ->
-                if (i > 0) Divider(inset = 58.dp)
-                ListRow(
-                    onClick = {
-                        context.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText(item.label, item.value))
-                        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) Toast.makeText(context, "הועתק", Toast.LENGTH_SHORT).show()
-                    },
-                    leading = { IconBox(R.drawable.ic_s_copy) },
-                    title = item.label,
-                    subtitle = item.value,
-                )
+        if (p.copies.isNotEmpty()) Section("העתקה בנגיעה") {
+            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                p.copies.forEach { item ->
+                    Row(
+                        Modifier.clip(RoundedCornerShape(50)).background(c.surface2).clickable {
+                            context.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText(item.label, item.value))
+                            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) Toast.makeText(context, "הועתק", Toast.LENGTH_SHORT).show()
+                        }.heightIn(min = 40.dp).padding(horizontal = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_s_copy), null, tint = c.muted, modifier = Modifier.size(15.dp))
+                        Text(item.label, color = c.fg, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                        Text(item.value, color = c.muted, fontSize = 12.sp, fontFamily = PlexMono, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            style = TextStyle(textDirection = TextDirection.Ltr), modifier = Modifier.widthIn(max = 160.dp))
+                    }
+                }
             }
         }
-        if (live != null && (live.ports.isNotEmpty() || live.missingEnv.isNotEmpty())) Block("במחשב") {
+        if (live != null && (live.ports.isNotEmpty() || live.missingEnv.isNotEmpty())) Section("במחשב") {
             if (live.ports.isNotEmpty()) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Dot(LIVE_DOT, 6.dp)
@@ -596,6 +746,7 @@ private fun LinksTab(p: Project, live: Live?) {
                 Text(live.missingEnv.joinToString("  "), color = c.fg, fontSize = 13.sp, fontFamily = PlexMono, style = TextStyle(textDirection = TextDirection.Ltr), modifier = Modifier.padding(top = 4.dp))
             }
         }
+        p.googleEmail?.let { FootNote("שירותי גוגל נפתחים בחשבון ⁦$it⁩.") }
     }
 }
 
