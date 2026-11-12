@@ -103,7 +103,7 @@ object ClaudeFill {
     }
 
     /** Claude Code's permission rules for the files that hold keys. */
-    private val SECRETS = listOf("Read(./.env)", "Read(./.env.*)", "Read(**/.env)", "Read(**/.env.*)", "Read(**/*.pem)", "Read(**/*.key)")
+    val SECRETS = listOf("Read(./.env)", "Read(./.env.*)", "Read(**/.env)", "Read(**/.env.*)", "Read(**/*.pem)", "Read(**/*.key)")
 
     /** What Claude is doing, in words, from a step of its stream: the file it reads, what it looks for. */
     fun stepOf(o: JSONObject, dir: File): String? {

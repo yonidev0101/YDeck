@@ -1,5 +1,7 @@
 package com.yonidev.ydeck.desktop
 
+import com.yonidev.ydeck.link.Answer
+import com.yonidev.ydeck.link.Ask
 import com.yonidev.ydeck.link.Launch
 import com.yonidev.ydeck.link.Launched
 import com.yonidev.ydeck.link.Live
@@ -14,6 +16,7 @@ import com.yonidev.ydeck.link.MemRelease
 import com.yonidev.ydeck.link.Memory
 import com.yonidev.ydeck.link.NewKey
 import com.yonidev.ydeck.link.Pairing
+import com.yonidev.ydeck.link.Reply
 import com.yonidev.ydeck.link.Relay
 import com.yonidev.ydeck.link.Snapshot
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,8 +34,9 @@ import java.util.Base64
  * (git, the agent, receipts, open loops), seals them with the pairing's key (shared/kotlin/.../Link.kt) and puts them
  * in the box on the relay when anything changed. Every 20 seconds it takes the notes the phone left (a decision, a next
  * step) and writes them into the project's files, where the next Claude session reads them. Notes are data: they are
- * stored, never run. The one request the phone can make is to open Claude Code in a project's folder ([launch]): a
- * closed list of ways, checked here, never a command line of its own. Nothing listens here; both sides only reach out.
+ * stored, never run. The phone can ask for two things, each only once it's on in Settings: to open Claude Code in a
+ * project's folder ([launch]), a closed list of ways, checked here, never a command line of its own; and to answer a
+ * question with Ask YDeck ([ask]), which only reads. Nothing listens here; both sides only reach out.
  * The pairing's secret lives in %LOCALAPPDATA%\YDeck Data\phone.json, never in a backup or a project.
  */
 object PhoneLink {
@@ -62,10 +66,21 @@ object PhoneLink {
     @Volatile private var lastSentAt = 0L
     /** The state goes out at least this often; a phone that hasn't heard for [com.yonidev.ydeck.link.Live.FRESH_MS] stops trusting it. */
     private const val HEARTBEAT_MS = 5L * 60 * 1000
+    /** How many answers the state carries. */
+    private const val ANSWERS = 6
     /** The phone's notes stored lately (ids, newest last), told back to the phone in every state. */
     private val applied = java.util.concurrent.CopyOnWriteArrayList<String>()
     /** What became of the phone's latest launch requests (newest last), told back to it in every state. */
     private val launched = java.util.concurrent.CopyOnWriteArrayList<Launched>()
+    /** The answers to the phone's latest questions (newest last), and the one being worked on, told back in every state. */
+    private val answers = java.util.concurrent.CopyOnWriteArrayList<Answer>()
+    /** What became of the phone's latest replies to waiting sessions (newest last), told back in every state. */
+    private val replied = java.util.concurrent.CopyOnWriteArrayList<Launched>()
+    /** The phone's conversations: its name for one → Claude Code's session and the folder it runs in, so a question
+     *  goes on where the last one was. */
+    private val chats = java.util.concurrent.ConcurrentHashMap<String, Pair<String, String>>()
+    /** One question at a time, apart from the link's own thread (an answer can take a minute). */
+    private val asking = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "phone-ask").apply { isDaemon = true } }
     /** The last commits of each folder, read again only when its last commit changes. */
     private val logs = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, List<GitCommit>>>()
     private val wake = Object()
@@ -87,6 +102,10 @@ object PhoneLink {
             _state.value = State(paired = true, pairedAt = o.optLong("pairedAt"))
             o.optJSONArray("applied")?.let { a -> (0 until a.length()).forEach { applied += a.getString(it) } }
             o.optJSONArray("launched")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.forEach { launched += Launched(it.optString("id"), it.optBoolean("ok"), it.optString("why")) } }
+            // An answer cut off when YDeck closed is told as such.
+            o.optJSONArray("answers")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map(Answer::of)
+                .forEach { answers += if (it.done) it else it.copy(done = true, step = "", error = tr("YDeck closed before the answer came. Ask again.", "YDeck נסגר לפני שהתשובה הגיעה. אפשר לשאול שוב.")) } }
+            o.optJSONObject("chats")?.let { c -> c.keys().forEach { k -> c.optJSONObject(k)?.let { v -> chats[k] = v.optString("session") to v.optString("home") } } }
         }
         Thread({
             var last = 0L
@@ -105,8 +124,10 @@ object PhoneLink {
         Thread({
             var seen = Repo.deck.value
             var claude = ClaudeLink.sessions.value
+            var waiting = SessionAsks.waiting.value
             while (true) {
                 Thread.sleep(2_000)
+                if (SessionAsks.waiting.value !== waiting) { waiting = SessionAsks.waiting.value; nudge() }
                 if (Repo.deck.value !== seen) { seen = Repo.deck.value; nudge() }
                 if (ClaudeLink.sessions.value !== claude) { claude = ClaudeLink.sessions.value; nudge() }
             }
@@ -119,7 +140,9 @@ object PhoneLink {
 
     private fun save(p: Pairing, pairedAt: Long) {
         file.writeText(JSONObject().put("secret", Pairing.b64(p.secret)).put("pairedAt", pairedAt).put("applied", org.json.JSONArray(applied.takeLast(50)))
-            .put("launched", org.json.JSONArray().apply { launched.takeLast(10).forEach { put(JSONObject().put("id", it.id).put("ok", it.ok).put("why", it.why)) } }).toString())
+            .put("launched", org.json.JSONArray().apply { launched.takeLast(10).forEach { put(JSONObject().put("id", it.id).put("ok", it.ok).put("why", it.why)) } })
+            .put("answers", org.json.JSONArray().apply { answers.takeLast(ANSWERS).forEach { put(it.toJson()) } })
+            .put("chats", JSONObject().apply { chats.forEach { (k, v) -> put(k, JSONObject().put("session", v.first).put("home", v.second)) } }).toString())
     }
 
     /**
@@ -148,11 +171,21 @@ object PhoneLink {
             if (note == null) runCatching { Launch.decode(p.open("launch", sealed)) }.getOrNull()?.let { l ->
                 if (launched.none { it.id == l.id }) { launched += launch(l); asked = true }
             }
+            // Or a reply to a waiting session (sealed as "reply").
+            if (note == null) runCatching { Reply.decode(p.open("reply", sealed)) }.getOrNull()?.let { r ->
+                if (replied.none { it.id == r.id }) { replied += reply(r); asked = true }
+            }
+            // Or a question (sealed as "ask").
+            if (note == null) runCatching { Ask.decode(p.open("ask", sealed)) }.getOrNull()?.let { a ->
+                if (answers.none { it.id == a.id }) { ask(a); asked = true }
+            }
             relay.dropNote(n)
         }
         if (stored || asked) {
             while (applied.size > 50) applied.removeAt(0)
             while (launched.size > 10) launched.removeAt(0)
+            while (answers.size > ANSWERS) answers.removeAt(0)
+            while (replied.size > 10) replied.removeAt(0)
             save(p, _state.value.pairedAt)
             if (stored) ProjectFiles.sync()
             pendingSend = true
@@ -181,6 +214,57 @@ object PhoneLink {
         val ok = Tools.claudeIn(dir, project.name, resume, remote = project.name.takeIf { l.remote }, prompt = l.prompt.ifBlank { null })
         if (ok) opened.tryEmit(project.name)
         return if (ok) Launched(l.id, true) else no("start")
+    }
+
+    /**
+     * A question from the phone, answered by Ask YDeck as on this computer: Claude Code reads, never changes. Only while
+     * it's on in Settings → Phone, and only when fresh. While Claude works, what it reads goes out every few seconds;
+     * the answer goes out the moment it comes.
+     */
+    private fun ask(a: Ask) {
+        fun no(why: String) { answers += Answer(a.id, a.chat, done = true, error = why) }
+        if (!Settings.state.value.phoneAsk) return no("off")
+        if (Tools.claude == null) return no("claude")
+        if (kotlin.math.abs(System.currentTimeMillis() - a.at) > Ask.FRESH_MS) return no("stale")
+        answers += Answer(a.id, a.chat)
+        asking.execute {
+            val start = System.currentTimeMillis()
+            var reads = 0
+            var told = 0L
+            fun put(answer: Answer) { val i = answers.indexOfFirst { it.id == a.id }; if (i >= 0) answers[i] = answer }
+            val focus = Repo.deck.value.byId(a.project)
+            val before = chats[a.chat]?.takeIf { java.io.File(it.second).isDirectory }
+            val home = before?.let { java.io.File(it.second) } ?: Assistant.homeOf(focus)
+            val r = runCatching {
+                Assistant.answer(a.question, focus, before?.first, home, phone = true,
+                    onSession = { chats[a.chat] = it to home.path },
+                    onStep = { step ->
+                        reads++
+                        put(Answer(a.id, a.chat, step = step.take(200), reads = reads))
+                        if (System.currentTimeMillis() - told > 4_000) { told = System.currentTimeMillis(); nudge() }
+                    },
+                    onProcess = {})
+            }
+            val seconds = ((System.currentTimeMillis() - start) / 1000).toInt()
+            put(r.fold({ Answer(a.id, a.chat, done = true, answer = it.take(Answer.MAX), reads = reads, seconds = seconds) },
+                { Answer(a.id, a.chat, done = true, error = it.message ?: tr("Claude didn't answer", "Claude לא ענה"), reads = reads, seconds = seconds) }))
+            // A conversation that never answered starts afresh next time.
+            if (r.isFailure && chats[a.chat] != null && answers.none { it.chat == a.chat && it.answer.isNotEmpty() }) chats.remove(a.chat)
+            while (chats.size > 5) chats.remove(chats.keys.first())
+            pairing?.let { save(it, _state.value.pairedAt) }
+            nudge()
+        }
+    }
+
+    /**
+     * The phone replies to a session waiting for the developer ([SessionAsks]): only while that's on in Settings →
+     * Phone, only when fresh, and only to a question still waiting. Words for Claude, never a permission.
+     */
+    private fun reply(r: Reply): Launched {
+        fun no(why: String) = Launched(r.id, false, why)
+        if (!Settings.state.value.phoneReply) return no("off")
+        if (kotlin.math.abs(System.currentTimeMillis() - r.at) > Reply.FRESH_MS) return no("stale")
+        return if (SessionAsks.reply(r.waiting, SessionAsks.Answer(r.text, r.choices))) Launched(r.id, true) else no("gone")
     }
 
     /** One note into its project. False when the project is gone (the note is dropped). */
@@ -254,7 +338,7 @@ object PhoneLink {
     private fun adopt(key: NewKey, samePhone: Boolean) {
         val old = pairing
         val p = Pairing(key.secret)
-        if (!samePhone) { applied.clear(); launched.clear() }
+        if (!samePhone) { applied.clear(); launched.clear(); answers.clear(); chats.clear(); replied.clear() }
         val at = if (samePhone) _state.value.pairedAt else System.currentTimeMillis()
         save(p, at)
         pairing = p
@@ -287,7 +371,7 @@ object PhoneLink {
         val snapshot = snapshot()
         val plain = snapshot.encode()
         // What changed, without the time it was made.
-        val hash = sha(Snapshot(0, snapshot.computer, snapshot.deck, snapshot.memory, snapshot.live, snapshot.applied, snapshot.launch, snapshot.claude, snapshot.launched).encode())
+        val hash = sha(snapshot.at(0).encode())
         var sentAt: Long? = null
         var offline = false
         // Sent again now and then even when nothing changed, so the phone knows this is still current (Claude's state
@@ -330,7 +414,9 @@ object PhoneLink {
         }
         val live = deck.projects.mapNotNull { p -> settings.localOf(p.id).folder?.let { p.id to live(it) } }.toMap()
         return Snapshot(System.currentTimeMillis(), computer, JSONObject(Repo.exportJson(deck)), memory, live, applied.toList(),
-            launch = settings.phoneLaunch && Tools.claude != null, claude = Tools.claude != null, launched = launched.toList(), beat = HEARTBEAT_MS)
+            launch = settings.phoneLaunch && Tools.claude != null, claude = Tools.claude != null, launched = launched.toList(), beat = HEARTBEAT_MS,
+            ask = settings.phoneAsk && Tools.claude != null, answers = answers.toList(),
+            waiting = SessionAsks.waiting.value, reply = settings.phoneReply, replied = replied.toList())
     }
 
     /** What the project's window shows here: git, the agent, the latest receipts, open loops, the dev server. */

@@ -30,6 +30,7 @@ fun main(args: Array<String>) {
     Hotkey.start()
     FolderStrip.start()
     ClaudeLink.start()
+    SessionAsks.start()
     PhoneLink.start()
     UsageStats.start()
     Updates.start()
@@ -195,7 +196,8 @@ private fun ApplicationScope.App(background: Boolean, asks: MutableStateFlow<Ask
             }
         }
 
-        if (palette) PaletteWindow(deck, settings, dark, onRun = { e -> palette = false; runEntry(e, Settings.state.value) { open(Screen.Project(it.id)) } }, onClose = { palette = false })
+        if (palette) PaletteWindow(deck, settings, dark, onRun = { e -> palette = false; runEntry(e, Settings.state.value) { open(Screen.Project(it.id)) } },
+            onExpand = { palette = false; Assistant.show(); open() }, onClose = { palette = false })
 
     }
 }

@@ -29,8 +29,10 @@ import javax.crypto.spec.SecretKeySpec
  *   token   - proves to the relay that a call comes from one of the two (the relay keeps only its hash)
  *   key     - AES-256-GCM, seals everything that goes through the relay
  * The relay (relay/src/index.js) can neither read a box nor forge one. Only data goes through: the phone never
- * receives anything it runs. The computer runs nothing from the phone but one thing from a closed list: opening
- * Claude Code in a project's folder (see Launch in Snapshot.kt), and only once that's turned on at the computer.
+ * receives anything it runs. The computer runs nothing from the phone but three things from a closed list, each only
+ * once it's turned on at the computer: opening Claude Code in a project's folder (see Launch in Snapshot.kt),
+ * answering a question with Ask YDeck, which only reads (see Ask), and passing the developer's reply to a session that
+ * waits for them (see Reply), as words, never a permission.
  */
 
 /** The relay. Outbound HTTPS from both sides; nothing listens on the computer. */

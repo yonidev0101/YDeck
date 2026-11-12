@@ -220,6 +220,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.ProjectsNav(deck: Dec
     Spacer(Modifier.height(12.dp))
     val open = openLoopCount(deck)
     NavRow(Glyph.CHECK, tr("Now", "עכשיו"), route is Screen.Loops || route is Screen.CloseDay, badge = open.takeIf { it > 0 }?.toString()) { Nav.set(Screen.Loops) }
+    NavRow(Glyph.SPARKLE, ASK_TITLE, Assistant.open.collectAsState().value, lead = { AskMark(askMood(false), 17.dp) }) { Assistant.toggle() }
     Spacer(Modifier.height(14.dp))
     GroupLabel(tr("Projects", "פרויקטים"), Modifier.padding(start = 6.dp))
     val selected = (route as? Screen.Project)?.id ?: (route as? Screen.Details)?.id
@@ -266,12 +267,12 @@ private fun ProjectNavRow(p: Project, selected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun NavRow(glyph: Glyph, text: String, selected: Boolean, badge: String? = null, onClick: () -> Unit) {
+private fun NavRow(glyph: Glyph, text: String, selected: Boolean, badge: String? = null, lead: (@Composable () -> Unit)? = null, onClick: () -> Unit) {
     val c = LocalDeck.current
     val shape = RoundedCornerShape(10.dp)
     Row(Modifier.fillMaxWidth().padding(vertical = 1.dp).clip(shape).then(if (selected) Modifier.background(c.bg).border(1.dp, c.line, shape) else Modifier)
         .clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
-        GlyphIcon(glyph, 18.dp, if (selected) c.fg else c.muted)
+        if (lead != null) Box(Modifier.size(18.dp), contentAlignment = Alignment.Center) { lead() } else GlyphIcon(glyph, 18.dp, if (selected) c.fg else c.muted)
         Spacer(Modifier.width(12.dp))
         Text(text, color = c.fg, fontSize = 14.sp, fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal, fontFamily = PlexSans, modifier = Modifier.weight(1f))
         if (badge != null) Text(badge, color = c.amberText, fontSize = 12.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans,
@@ -407,5 +408,6 @@ fun AppContent(deck: Deck, route: Screen, dark: Boolean, actions: AppActions, we
                 Screen.CloseDay -> CloseDayPage(deck)
             }
         }
+        if (Assistant.open.collectAsState().value) AssistantPanel(deck, route)
     }
 }

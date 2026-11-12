@@ -95,16 +95,28 @@ object ClaudeLink {
                 val ok = ex.requestMethod == "POST" && ex.requestHeaders.getFirst("X-YDeck") == key
                 val reply = if (!ok) null else runCatching {
                     // The hook's process is still connected now: its `claude` is found through it.
-                    handle(JSONObject(ex.requestBody.readNBytes(1 shl 20).toString(Charsets.UTF_8)), System.currentTimeMillis()) {
-                        Callers.claudeAt(ex.remoteAddress.port)
-                    }
+                    // One event at a time, in the order they come, as before the server had threads of its own.
+                    val e = JSONObject(ex.requestBody.readNBytes(1 shl 20).toString(Charsets.UTF_8))
+                    synchronized(this) { handle(e, System.currentTimeMillis()) { Callers.claudeAt(ex.remoteAddress.port) } }
                 }.getOrNull()
                 val body = (reply ?: JSONObject()).toString().toByteArray(Charsets.UTF_8)
                 ex.responseHeaders.add("Content-Type", "application/json")
                 ex.sendResponseHeaders(if (ok) 200 else 403, body.size.toLong())
                 ex.responseBody.use { it.write(body) }
             }
-            server.executor = null
+            // A session waiting for the developer, held until it's answered from YDeck or let go (see [SessionAsks]).
+            server.createContext("/claude/ask") { ex ->
+                val ok = ex.requestMethod == "POST" && ex.requestHeaders.getFirst("X-YDeck") == key
+                val reply = if (!ok) "" else runCatching { SessionAsks.hold(JSONObject(ex.requestBody.readNBytes(1 shl 20).toString(Charsets.UTF_8))) }.getOrDefault("")
+                val body = reply.toByteArray(Charsets.UTF_8)
+                ex.responseHeaders.add("Content-Type", if (reply.startsWith("{")) "application/json" else "text/plain; charset=utf-8")
+                ex.sendResponseHeaders(if (ok) 200 else 403, if (body.isEmpty()) -1 else body.size.toLong())
+                ex.responseBody.use { if (body.isNotEmpty()) it.write(body) }
+            }
+            // YDeck as an MCP server for the sessions (read only, see [YDeckMcp]).
+            server.createContext("/mcp") { ex -> runCatching { YDeckMcp.serve(ex, key) }; ex.close() }
+            // Threads of its own: a held question waits, and a search takes a moment.
+            server.executor = java.util.concurrent.Executors.newCachedThreadPool { r -> Thread(r, "ydeck-link").apply { isDaemon = true } }
             server.start()
         }
         runCatching { restore(System.currentTimeMillis()) }
@@ -120,6 +132,12 @@ object ClaudeLink {
                 Thread.sleep(2000)
             }
         }, "ydeck-claude").apply { isDaemon = true; start() }
+    }
+
+    /** A question YDeck holds ([SessionAsks]): the session waits for the developer, on [detail]. */
+    fun markWaiting(id: String, detail: String) = synchronized(this) {
+        val s = _sessions.value[id] ?: return@synchronized
+        _sessions.value = _sessions.value + (id to s.copy(mode = ClaudeMode.WAITING, since = System.currentTimeMillis(), detail = firstLine(detail)))
     }
 
     /**
@@ -143,6 +161,8 @@ object ClaudeLink {
                 return context(cwd)
             }
             "UserPromptSubmit" -> {
+                // Answered in the terminal: a question YDeck held for it is let go.
+                SessionAsks.release(id)
                 set(ClaudeMode.WORKING, firstLine(e.optString("prompt")), workStart = now)
                 Receipts.begin(id, Agent.CLAUDE, cwd, e.optString("prompt"), now)
             }
@@ -155,7 +175,8 @@ object ClaudeLink {
                 }
             }
             "Stop" -> {
-                set(ClaudeMode.DONE, firstLine(e.optString("last_assistant_message")))
+                // A question YDeck holds for the developer keeps the session waiting.
+                if (!SessionAsks.isHeld(id)) set(ClaudeMode.DONE, firstLine(e.optString("last_assistant_message")))
                 if (before != null && (before.mode == ClaudeMode.WORKING || before.mode == ClaudeMode.WAITING) && now - before.workStart >= LONG_TASK_MS) {
                     _alerts.tryEmit(ClaudeAlert(cwd, ClaudeMode.DONE, firstLine(e.optString("last_assistant_message"))))
                 }
@@ -163,6 +184,7 @@ object ClaudeLink {
                 onStop(cwd)
             }
             "SessionEnd" -> {
+                SessionAsks.release(id)
                 _sessions.value = _sessions.value - id
                 Receipts.end(id, now)
                 // Where the work stands, for the next session: once the receipt is done.
@@ -447,7 +469,8 @@ object ClaudePlugin {
         val claude = Tools.claude?.exe ?: return
         // The hooks and the command, as written here and as in Claude Code's copy.
         fun of(dir: File): String? = runCatching {
-            JSONObject(File(dir, "hooks/hooks.json").readText()).toString() + File(dir, "commands/$CLOSE_DAY.md").readText()
+            JSONObject(File(dir, "hooks/hooks.json").readText()).toString() + File(dir, "commands/$CLOSE_DAY.md").readText() +
+                (File(dir, ".mcp.json").takeIf { it.isFile }?.let { JSONObject(it.readText()).toString() } ?: "")
         }.getOrNull()
         val ours = of(File(root, "plugins/ydeck")) ?: return
         val cache = File(System.getProperty("user.home"), ".claude/plugins/cache/ydeck/ydeck")
@@ -474,12 +497,17 @@ object ClaudePlugin {
                 .put("description", "Claude Code's state on the YDeck widgets, and each project's context from YDeck")))
             .toString(2))
         File(plugin, ".claude-plugin/plugin.json").writeText(JSONObject()
-            .put("name", "ydeck").put("version", "1.2.0").put("author", JSONObject().put("name", "YoniDev"))
+            .put("name", "ydeck").put("version", "1.3.0").put("author", JSONObject().put("name", "YoniDev"))
             .put("description", "Claude Code's state on the YDeck widgets, and each project's context from YDeck")
             .toString(2))
         File(plugin, "hooks/hooks.json").writeText(hooks().toString(2))
+        File(plugin, ".mcp.json").writeText(mcp().toString(2))
         File(plugin, "commands/$CLOSE_DAY.md").writeText(closeDay())
     }
+
+    /** YDeck's MCP server ([YDeckMcp]) for every session: on this computer only, with the hooks' key. */
+    fun mcp(): JSONObject = JSONObject().put("mcpServers", JSONObject().put("ydeck", JSONObject()
+        .put("type", "http").put("url", "http://127.0.0.1:${ClaudeLink.PORT}/mcp").put("headers", JSONObject().put("X-YDeck", ClaudeLink.key))))
 
     /** The command's name: /ydeck:close-day in Claude Code (or /close-day, when no other command has that name). */
     const val CLOSE_DAY = "close-day"
@@ -526,10 +554,24 @@ object ClaudePlugin {
         val start = (if (c != null) command(cmd.path, listOf("/d", "/s", "/c", "${c.path} $post || exit /b 0"))
             else command(Ps.exe, listOf("-NoProfile", "-NonInteractive", "-Command", ps))).put("timeout", 5)
         fun event(h: JSONObject) = JSONArray().put(JSONObject().put("hooks", JSONArray().put(h)))
+        // A session waiting for the developer (see [SessionAsks]). A choice waits here, at most 10 minutes, and only while
+        // nobody is at the computer (YDeck answers at once otherwise); a closed YDeck adds nothing.
+        val askUrl = "http://127.0.0.1:${ClaudeLink.PORT}/claude/ask"
+        val choice = (if (c != null) command(cmd.path, listOf("/d", "/s", "/c", "${c.path} -s -m 600 -H Content-Type:application/json -H X-YDeck:$key --data-binary @- $askUrl || exit /b 0"))
+            else command(Ps.exe, listOf("-NoProfile", "-NonInteractive", "-Command", ps.replace(url, askUrl).replace("-TimeoutSec 2", "-TimeoutSec 600")))).put("timeout", 610)
+        // A question at the end of a turn waits in the background: a reply wakes the session with it (exit 2, the
+        // reply on stderr); nothing, or a message typed in the terminal, ends it quietly.
+        val wake = "[Console]::InputEncoding=[Text.Encoding]::UTF8; [Console]::OutputEncoding=[Text.Encoding]::UTF8; " +
+            "try { \$r = Invoke-WebRequest -UseBasicParsing -Uri '$askUrl' -Method Post -TimeoutSec 3500 -ContentType 'application/json; charset=utf-8' " +
+            "-Headers @{'X-YDeck'='$key'} -Body ([Text.Encoding]::UTF8.GetBytes([Console]::In.ReadToEnd())); " +
+            "if (\$r.Content) { [Console]::Error.Write(\$r.Content); exit 2 } } catch {}; exit 0"
+        val text = command(Ps.exe, listOf("-NoProfile", "-NonInteractive", "-Command", wake)).put("asyncRewake", true).put("timeout", 3600)
         return JSONObject().put("description", "YDeck: Claude Code's state on the YDeck widgets, and each project's context from YDeck")
             .put("hooks", JSONObject().apply {
                 put("SessionStart", event(start))
-                listOf("UserPromptSubmit", "Notification", "Stop", "SessionEnd").forEach { put(it, event(background)) }
+                listOf("UserPromptSubmit", "Notification", "SessionEnd").forEach { put(it, event(background)) }
+                put("Stop", JSONArray().put(JSONObject().put("hooks", JSONArray().put(background).put(text))))
+                put("PreToolUse", JSONArray().put(JSONObject().put("matcher", "AskUserQuestion").put("hooks", JSONArray().put(choice))))
             })
     }
 

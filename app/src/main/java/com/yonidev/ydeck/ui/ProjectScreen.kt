@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -67,7 +68,7 @@ import com.yonidev.ydeck.link.LiveSession
 import com.yonidev.ydeck.link.Memory
 import com.yonidev.ydeck.link.Note
 
-private enum class Tab(val label: String) { MEMORY("זיכרון"), GIT("Git"), LINKS("קישורים") }
+private enum class Tab(val label: String) { MEMORY("סקירה"), GIT("Git"), LINKS("קישורים") }
 
 /**
  * One project, everything the computer knows about it, in three tabs: its memory (what's next, what's open, the last
@@ -87,6 +88,14 @@ fun ProjectScreen(
     /** The computer takes launch requests now; when false, the card says where to turn it on. */
     launchOn: Boolean = false,
     onLaunch: ((mode: String, session: String, prompt: String, remote: Boolean) -> Unit)? = null,
+    /** Ask YDeck about this project (null before the phone is paired). */
+    onAsk: (() -> Unit)? = null,
+    chat: com.yonidev.ydeck.data.Computer.Chat? = null,
+    /** This project's sessions waiting for the developer, and replying to them. */
+    waiting: List<com.yonidev.ydeck.link.Waiting> = emptyList(),
+    canReply: Boolean = false,
+    replies: List<Pair<com.yonidev.ydeck.link.Reply, Launched?>> = emptyList(),
+    onReply: ((waiting: String, text: String, choices: Map<String, String>) -> Unit)? = null,
 ) {
     val c = LocalDeck.current
     var tab by rememberSaveable { mutableStateOf(Tab.MEMORY) }
@@ -95,11 +104,17 @@ fun ProjectScreen(
     val canWrite = onWrite != null && memory != null
     PageScaffold(
         title = p.name, onBack = onBack,
-        actions = { if (canWrite) IconButton(onClick = { writing = Note.NEXT }) { Icon(Icons.Outlined.Edit, "כתיבה", tint = c.fg) } },
+        actions = {
+            if (onAsk != null) IconButton(onClick = onAsk) { AskMark(askMood(chat, false), 22.dp) }
+            if (canWrite) IconButton(onClick = { writing = Note.NEXT }) { Icon(Icons.Outlined.Edit, "כתיבה", tint = c.fg) }
+        },
     ) {
         item { Header(p, live) }
+        if (onReply != null) waiting.forEach { w ->
+            item(key = "w:" + w.id) { WaitingCard(w, p, canReply, replies.lastOrNull { it.first.waiting == w.id }) { text, choices -> onReply(w.id, text, choices) } }
+        }
         if (onLaunch != null && live != null) item { ClaudeCard(launches.lastOrNull(), launchOn) { launching = true } }
-        item { Tabs(tab) { tab = it } }
+        item { Tabs(tab, mapOf(Tab.GIT to (live?.changes ?: 0), Tab.LINKS to p.actions.size)) { tab = it } }
         when (tab) {
             Tab.MEMORY -> item {
                 MemoryTab(memory, live, pending, if (canWrite) { kind -> writing = kind } else null,
@@ -128,46 +143,65 @@ private fun Header(p: Project, live: Live?) {
                 Text(p.googleEmail ?: "חשבון גוגל לא הוגדר", color = c.faint, fontSize = 13.sp, fontFamily = if (p.googleEmail != null) PlexMono else PlexSans)
             }
         }
-        // The agent in the folder, as on the computer: working (indigo), waiting for you (amber), done (green).
-        if (live != null && live.agentMode.isNotBlank()) {
-            val name = live.agent.ifBlank { "Claude" }
-            val (color, words) = when (live.agentMode) {
-                "WORKING" -> c.accentText to "$name עובד"
-                "WAITING" -> c.open to "$name מחכה לך"
-                "OPEN" -> c.muted to "$name פתוח"
-                else -> c.closed to "$name סיים"
-            }
-            val extra = listOfNotNull(
-                "Remote Control".takeIf { live.agentRemote && live.agentMode != "DONE" },
-                "${live.agentOpen} סשנים פתוחים".takeIf { live.agentOpen > 1 },
-            )
-            Row(
-                Modifier.padding(top = 14.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.surface).padding(horizontal = 14.dp, vertical = 11.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                if (live.agentMode == "OPEN") Box(Modifier.size(8.dp).border(1.5.dp, color, CircleShape))
-                else Box(Modifier.size(8.dp).clip(CircleShape).background(color))
-                Column(Modifier.weight(1f)) {
-                    Text((listOf(words) + extra).joinToString(" · ") + if (live.agentSince > 0) " · ${ago(live.agentSince)}" else "", color = c.fg, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                    if (live.agentDetail.isNotBlank()) Text(live.agentDetail, color = c.muted, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, style = TextStyle(textDirection = dirOf(live.agentDetail)))
+        // As the computer's project page says it: Claude's state, the branch and what's not saved, the server running.
+        if (live != null) {
+            val parts = buildList<@Composable () -> Unit> {
+                if (live.agentMode.isNotBlank()) add {
+                    ClaudeDot(live.agentMode, 7.dp)
+                    Text(claudeText(live), color = if (live.agentMode == "DONE" || live.agentMode == "OPEN") c.muted else claudeColor(live.agentMode), fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1)
                 }
+                if (live.hasGit && live.branch.isNotBlank()) add { Text(live.branch, color = c.muted, fontSize = 13.sp, fontFamily = PlexMono, maxLines = 1) }
+                if (live.hasGit) add { Text(gitWords(live), color = c.muted, fontSize = 13.sp, maxLines = 1) }
+                live.ports.firstOrNull()?.let { port -> add { Text("● :$port", color = c.accentText, fontSize = 13.sp, fontFamily = PlexMono) } }
+            }
+            if (parts.isNotEmpty()) Row(Modifier.padding(top = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                parts.forEachIndexed { i, part -> if (i > 0) Text("/", color = c.line, fontSize = 13.sp); part() }
+            }
+        }
+        // Claude at work or waiting here, and on what; nothing otherwise.
+        if (live != null && (live.agentMode == "WORKING" || live.agentMode == "WAITING")) {
+            val waiting = live.agentMode == "WAITING"
+            val extra = listOfNotNull("Remote Control".takeIf { live.agentRemote }, "${live.agentOpen} סשנים פתוחים".takeIf { live.agentOpen > 1 })
+            Column(
+                Modifier.padding(top = 14.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(if (waiting) CHANGED_DOT.copy(alpha = 0.14f) else c.accentTint).padding(18.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    ClaudeDot(live.agentMode, 8.dp)
+                    Text((listOf(claudeText(live)) + extra).joinToString(" · "), color = if (waiting) c.openText else claudeColor(live.agentMode), fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                    if (live.agentSince > 0) Text(ago(live.agentSince), color = c.muted, fontSize = 12.sp)
+                }
+                if (live.agentDetail.isNotBlank()) Text(if (waiting) live.agentDetail else "״${live.agentDetail}״", color = c.fg, fontSize = 14.sp, lineHeight = 21.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                    style = TextStyle(textDirection = dirOf(live.agentDetail)), modifier = Modifier.padding(start = 18.dp, top = 6.dp))
             }
         }
     }
 }
 
+/** Git in words, as the computer says it: what's not committed, not pushed, or that all is saved. */
+private fun gitWords(l: Live): String = buildList {
+    if (l.changes > 0) add(if (l.changes == 1) "שינוי אחד לא שמור" else "${l.changes} לא שמורים")
+    if (l.ahead > 0) add(if (l.ahead == 1) "קומיט אחד לדחוף" else "${l.ahead} לדחוף")
+    if (l.behind > 0) add("${l.behind} חדשים בשרת")
+}.joinToString(" · ").ifEmpty { "הכול שמור" }
+
+
 /** The tabs: one quiet segmented control, as on the computer. */
 @Composable
-private fun Tabs(selected: Tab, onSelect: (Tab) -> Unit) {
+private fun Tabs(selected: Tab, counts: Map<Tab, Int>, onSelect: (Tab) -> Unit) {
     val c = LocalDeck.current
-    Row(Modifier.padding(horizontal = 20.dp, vertical = 10.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.surface2).padding(3.dp)) {
-        Tab.entries.forEach { t ->
-            val on = t == selected
-            Box(
-                Modifier.weight(1f).clip(RoundedCornerShape(9.dp)).background(if (on) c.line else Color.Transparent).clickable { onSelect(t) }.padding(vertical = 8.dp),
-                contentAlignment = Alignment.Center,
-            ) { Text(t.label, color = if (on) c.fg else c.muted, fontSize = 14.sp, fontWeight = if (on) FontWeight.Medium else FontWeight.Normal) }
+    // As on the computer: words with a line under the chosen one, a count beside what has some.
+    Column(Modifier.padding(start = 24.dp, end = 24.dp, top = 14.dp, bottom = 6.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+            Tab.entries.forEach { t ->
+                val on = t == selected
+                val label = t.label + (counts[t]?.takeIf { it > 0 }?.let { "  $it" } ?: "")
+                Column(Modifier.width(androidx.compose.foundation.layout.IntrinsicSize.Max).clickable { onSelect(t) }, horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(label, color = if (on) c.fg else c.muted, fontSize = 15.sp, fontWeight = if (on) FontWeight.Medium else FontWeight.Normal, modifier = Modifier.padding(top = 6.dp, bottom = 11.dp))
+                    Box(Modifier.height(2.dp).fillMaxWidth().background(if (on) c.fg else Color.Transparent))
+                }
+            }
         }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(c.line))
     }
 }
 
@@ -196,7 +230,7 @@ private fun MemoryTab(m: Memory?, live: Live?, pending: List<Note>, write: ((Str
             live.loops.forEachIndexed { i, l ->
                 if (i > 0) Hair()
                 Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Box(Modifier.padding(top = 8.dp).size(6.dp).clip(CircleShape).background(c.open))
+                    Box(Modifier.padding(top = 8.dp)) { Dot(loopDot(l.kind), 6.dp) }
                     Column(Modifier.weight(1f)) {
                         Body(l.title)
                         if (l.detail.isNotBlank()) Text(l.detail, color = c.muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, style = TextStyle(textDirection = dirOf(l.detail)))
@@ -220,20 +254,19 @@ private fun MemoryTab(m: Memory?, live: Live?, pending: List<Note>, write: ((Str
     }
 }
 
-/** The one thing the page is for: what's next, in amber; or, in green, that nothing is left open. */
+/** The one thing the page is for: what's next. Words, not a colour: as on the computer, amber is kept for what's open. */
 @Composable
 private fun NextBlock(m: Memory, write: ((String) -> Unit)?, onDone: ((String) -> Unit)?) {
     val c = LocalDeck.current
     Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box(Modifier.size(8.dp).clip(CircleShape).background(if (m.open) c.open else c.closed))
-            Text(if (m.open) "הבא" else "סגור", color = if (m.open) c.openText else c.closed, fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+            Text("הבא", color = c.faint, fontSize = 13.sp, modifier = Modifier.weight(1f))
             if (m.open && onDone != null) SmallAction("בוצע") { onDone(m.next) }
             if (write != null) SmallAction(if (m.open) "שינוי" else "צעד הבא") { write(Note.NEXT) }
         }
         Text(
-            if (m.open) m.next else "שום דבר לא נשאר פתוח.",
-            color = c.fg, fontSize = 22.sp, lineHeight = 30.sp, fontFamily = Display, fontWeight = FontWeight.Light,
+            if (m.open) m.next else "עוד אין צעד הבא",
+            color = if (m.open) c.fg else c.faint, fontSize = 22.sp, lineHeight = 30.sp, fontFamily = Display, fontWeight = FontWeight.Light,
             style = TextStyle(textDirection = dirOf(if (m.open) m.next else "א")), modifier = Modifier.padding(top = 8.dp),
         )
     }
@@ -378,7 +411,7 @@ private fun LinksTab(p: Project, live: Live?) {
         if (live != null && (live.ports.isNotEmpty() || live.missingEnv.isNotEmpty())) Block("במחשב") {
             if (live.ports.isNotEmpty()) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Box(Modifier.size(6.dp).clip(CircleShape).background(c.closed))
+                    Dot(LIVE_DOT, 6.dp)
                     Text("שרת פיתוח רץ · ⁦localhost:${live.ports.first()}⁩", color = c.fg, fontSize = 15.sp)
                 }
             }

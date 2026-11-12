@@ -48,7 +48,20 @@ class Snapshot(
     val launched: List<Launched> = emptyList(),
     /** The computer sends its state at least this often (ms), changed or not; 0 from a YDeck that doesn't. */
     val beat: Long = 0,
+    /** The computer answers the phone's questions ([Ask]): on in its settings, and Claude Code is there. */
+    val ask: Boolean = false,
+    /** The answers to the phone's latest questions, and the one being worked on. */
+    val answers: List<Answer> = emptyList(),
+    /** Claude Code sessions waiting for the developer, with YDeck's suggested reply. */
+    val waiting: List<Waiting> = emptyList(),
+    /** The phone may reply to them ([Reply]): on in the computer's settings. */
+    val reply: Boolean = false,
+    /** What became of the phone's latest replies: sent to the session, or why not. */
+    val replied: List<Launched> = emptyList(),
 ) {
+    /** The same state made at another time: what changed, without the time it was made. */
+    fun at(time: Long) = Snapshot(time, computer, deck, memory, live, applied, launch, claude, launched, beat, ask, answers, waiting, reply, replied)
+
     fun encode(): ByteArray = JSONObject().apply {
         put("app", "YDeck")
         put("kind", "state")
@@ -63,6 +76,11 @@ class Snapshot(
         put("claude", claude)
         put("launched", JSONArray().apply { launched.forEach { put(JSONObject().put("id", it.id).put("ok", it.ok).put("why", it.why)) } })
         put("beat", beat)
+        put("ask", ask)
+        put("answers", JSONArray().apply { answers.forEach { put(it.toJson()) } })
+        put("waiting", JSONArray().apply { waiting.forEach { put(it.toJson()) } })
+        put("reply", reply)
+        put("replied", JSONArray().apply { replied.forEach { put(JSONObject().put("id", it.id).put("ok", it.ok).put("why", it.why)) } })
     }.toString().toByteArray()
 
     companion object {
@@ -82,6 +100,12 @@ class Snapshot(
                 launched = o.optJSONArray("launched")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) } }.orEmpty()
                     .map { Launched(it.optString("id"), it.optBoolean("ok"), it.optString("why")) },
                 beat = o.optLong("beat"),
+                ask = o.optBoolean("ask"),
+                answers = o.optJSONArray("answers")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) } }.orEmpty().map(Answer::of),
+                waiting = o.optJSONArray("waiting")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) } }.orEmpty().map(Waiting::of),
+                reply = o.optBoolean("reply"),
+                replied = o.optJSONArray("replied")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) } }.orEmpty()
+                    .map { Launched(it.optString("id"), it.optBoolean("ok"), it.optString("why")) },
             )
         }
 
@@ -264,3 +288,131 @@ data class Launch(
 
 /** What the computer did with a [Launch]: opened it, or why not (in words the phone shows as they are). */
 data class Launched(val id: String, val ok: Boolean, val why: String = "")
+
+// ── a Claude Code session waits for the developer: its question, YDeck's suggested reply, and the reply ──
+
+/** One question of a choice Claude asks (its AskUserQuestion tool): the question, its short header, the options. */
+data class Choice(val question: String, val header: String, val options: List<String>, val multi: Boolean) {
+    fun toJson(): JSONObject = JSONObject().put("question", question).put("header", header).put("options", JSONArray(options)).put("multi", multi)
+
+    companion object {
+        fun of(o: JSONObject) = Choice(o.optString("question"), o.optString("header"),
+            o.optJSONArray("options")?.let { a -> (0 until a.length()).map { a.optString(it) } }.orEmpty(), o.optBoolean("multi"))
+    }
+}
+
+/**
+ * A Claude Code session waiting for the developer, held by YDeck so it can be answered away from the terminal: a
+ * choice ([CHOICE], its [questions]) or a question in words at the end of its turn ([TEXT], Claude's own [text]).
+ * YDeck drafts a reply from what the project has recorded: [draft] (or [draftChoices]), where it comes from ([source]),
+ * and whether a record settles it ([sure]). Never a permission: those stay in the terminal.
+ */
+data class Waiting(
+    val id: String,
+    val project: String,
+    val kind: String,
+    val text: String = "",
+    val questions: List<Choice> = emptyList(),
+    val draft: String = "",
+    val draftChoices: Map<String, String> = emptyMap(),
+    val source: String = "",
+    val sure: Boolean = false,
+    /** The draft is still being written. */
+    val drafting: Boolean = false,
+    val at: Long = 0,
+) {
+    fun toJson(): JSONObject = JSONObject().put("id", id).put("project", project).put("kind", kind).put("text", text)
+        .put("questions", JSONArray().apply { questions.forEach { put(it.toJson()) } })
+        .put("draft", draft).put("draftChoices", JSONObject(draftChoices)).put("source", source).put("sure", sure)
+        .put("drafting", drafting).put("at", at)
+
+    companion object {
+        const val CHOICE = "choice"
+        const val TEXT = "text"
+
+        fun of(o: JSONObject) = Waiting(
+            o.optString("id"), o.optString("project"), o.optString("kind"), o.optString("text"),
+            o.optJSONArray("questions")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) } }.orEmpty().map(Choice::of),
+            o.optString("draft"), o.optJSONObject("draftChoices")?.let { d -> d.keys().asSequence().associateWith { d.optString(it) } }.orEmpty(),
+            o.optString("source"), o.optBoolean("sure"), o.optBoolean("drafting"), o.optLong("at"),
+        )
+    }
+}
+
+/**
+ * The developer's reply to a [Waiting], from the phone: words ([text]) or, for a choice, the option picked for each
+ * question ([choices]). Text for Claude to read, never a command, and never a permission. Sealed as "reply".
+ */
+data class Reply(val id: String, val waiting: String, val text: String = "", val choices: Map<String, String> = emptyMap(), val at: Long) {
+    fun encode(): ByteArray = JSONObject().put("app", "YDeck").put("kind", "reply").put("v", 1)
+        .put("id", id).put("waiting", waiting).put("text", text).put("choices", JSONObject(choices)).put("at", at).toString().toByteArray()
+
+    companion object {
+        const val MAX = 4000
+        /** A reply that waited longer than this (the computer was off) is dropped: the session has moved on. */
+        const val FRESH_MS = 15 * 60_000L
+
+        fun decode(bytes: ByteArray): Reply? = runCatching {
+            val o = JSONObject(String(bytes))
+            if (o.optString("app") != "YDeck" || o.optString("kind") != "reply") return null
+            val text = o.optString("text").filter { it == '\n' || !it.isISOControl() }.trim().take(MAX)
+            val choices = o.optJSONObject("choices")?.let { c -> c.keys().asSequence().take(8).associate { it.take(500) to c.optString(it).take(500) } }.orEmpty()
+            if (text.isEmpty() && choices.isEmpty()) return null
+            Reply(o.optString("id").take(64), o.optString("waiting").take(64), text, choices, o.optLong("at"))
+        }.getOrNull()
+    }
+}
+
+// ── what the phone asks: a question for Ask YDeck on the computer ──
+
+/**
+ * A question typed on the phone, answered on the computer by Ask YDeck: the developer's Claude Code, reading only.
+ * [chat] names the phone's conversation, so the next question goes on in the same one; [project] is the page it was
+ * asked from ("this project"). Text, never a command. Sealed as "ask", so it can't pass for a note or a launch.
+ */
+data class Ask(val id: String, val chat: String, val question: String, val project: String = "", val at: Long) {
+    fun encode(): ByteArray = JSONObject().put("app", "YDeck").put("kind", "ask").put("v", 1)
+        .put("id", id).put("chat", chat).put("question", question).put("project", project).put("at", at).toString().toByteArray()
+
+    companion object {
+        /** The longest question the computer accepts. */
+        const val MAX = 2000
+        /** A question that waited longer than this (the computer was off) is told it came too late, not answered. */
+        const val FRESH_MS = 15 * 60_000L
+
+        fun decode(bytes: ByteArray): Ask? = runCatching {
+            val o = JSONObject(String(bytes))
+            if (o.optString("app") != "YDeck" || o.optString("kind") != "ask") return null
+            val q = o.optString("question").filter { it == '\n' || !it.isISOControl() }.trim().take(MAX)
+            if (q.isEmpty()) return null
+            Ask(o.optString("id").take(64), o.optString("chat").take(64), q, o.optString("project").take(100), o.optLong("at"))
+        }.getOrNull()
+    }
+}
+
+/**
+ * The computer's answer to an [Ask]. While Claude works, [done] is false and [step] says what it reads. Once done:
+ * [answer] (Markdown), or [error]: "off" (asking from the phone is off at the computer), "claude" (no Claude Code
+ * there), "stale" (the question waited too long), or why, in words.
+ */
+data class Answer(
+    val id: String,
+    val chat: String,
+    val done: Boolean = false,
+    val answer: String = "",
+    val error: String = "",
+    val step: String = "",
+    val reads: Int = 0,
+    val seconds: Int = 0,
+) {
+    fun toJson(): JSONObject = JSONObject().put("id", id).put("chat", chat).put("done", done).put("answer", answer)
+        .put("error", error).put("step", step).put("reads", reads).put("seconds", seconds)
+
+    companion object {
+        /** The longest answer sent. */
+        const val MAX = 12_000
+
+        fun of(o: JSONObject) = Answer(o.optString("id"), o.optString("chat"), o.optBoolean("done"), o.optString("answer"),
+            o.optString("error"), o.optString("step"), o.optInt("reads"), o.optInt("seconds"))
+    }
+}

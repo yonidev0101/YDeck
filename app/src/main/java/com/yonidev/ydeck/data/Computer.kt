@@ -9,6 +9,8 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.glance.appwidget.updateAll
+import com.yonidev.ydeck.link.Answer
+import com.yonidev.ydeck.link.Ask
 import com.yonidev.ydeck.link.Launch
 import com.yonidev.ydeck.link.Launched
 import com.yonidev.ydeck.link.Live
@@ -17,6 +19,8 @@ import com.yonidev.ydeck.link.NewKey
 import com.yonidev.ydeck.link.Note
 import com.yonidev.ydeck.link.Pairing
 import com.yonidev.ydeck.link.Relay
+import com.yonidev.ydeck.link.Reply
+import com.yonidev.ydeck.link.Waiting
 import com.yonidev.ydeck.link.Snapshot
 import com.yonidev.ydeck.widget.DeckWidget
 import kotlinx.coroutines.Dispatchers
@@ -37,6 +41,7 @@ import java.util.concurrent.TimeUnit
  *                                   moves to (see [moveKey]). Never in a backup.
  *   filesDir/memory.json            the memory of every project, as the computer last sent it.
  *   filesDir/projects.json          the projects themselves (Repo), replaced by every new state.
+ *   filesDir/ask.json               the conversation with Ask YDeck: the questions asked here and the answers.
  */
 object Computer {
 
@@ -59,6 +64,16 @@ object Computer {
         val launches: List<Pair<Launch, Launched?>> = emptyList(),
         /** The computer sends its state at least this often (0: an older YDeck that doesn't). */
         val beat: Long = 0,
+        /** The computer answers questions (see [ask]): on in its settings, and Claude Code is there. */
+        val canAsk: Boolean = false,
+        /** The conversation with Ask YDeck. */
+        val chat: Chat = Chat(),
+        /** Claude Code sessions waiting for the developer, held on the computer, with YDeck's drafted reply. */
+        val waiting: List<Waiting> = emptyList(),
+        /** The phone may reply to them (on in the computer's settings). */
+        val canReply: Boolean = false,
+        /** Replies sent from here, and what the computer did with each (null: not yet). */
+        val replies: List<Pair<Reply, Launched?>> = emptyList(),
     ) {
         /**
          * A project's live state, as far as it can be trusted now: when the computer has stopped sending (asleep, off,
@@ -69,6 +84,20 @@ object Computer {
             return if (beat > 0 && now - stateAt > 2 * beat + 60_000) l.withoutAgent() else l
         }
     }
+
+    /** A question asked here, and the computer's answer (null: not taken yet; not [Answer.done]: Claude is at work). */
+    data class Turn(val ask: Ask, val answer: Answer? = null) {
+        val done: Boolean get() = answer?.done == true
+    }
+
+    /** One conversation with Ask YDeck: the next question goes on in it, until a new one starts. */
+    data class Chat(val id: String = java.util.UUID.randomUUID().toString(), val turns: List<Turn> = emptyList()) {
+        /** A question still waits for its answer. */
+        val busy: Boolean get() = turns.any { !it.done && System.currentTimeMillis() - it.ask.at < WAIT_MS }
+    }
+
+    /** How long a question waits for its answer before the phone stops waiting (the computer gives up on its own at 5 minutes). */
+    const val WAIT_MS = 7 * 60_000L
 
     enum class Result { UPDATED, SAME, EMPTY, OFFLINE, REFUSED, BROKEN }
 
@@ -89,6 +118,7 @@ object Computer {
     private fun memoryFile(c: Context) = File(c.applicationContext.filesDir, "memory.json")
     /** Notes not yet stored by the computer, and whether each has reached the relay. */
     private fun outboxFile(c: Context) = File(c.applicationContext.filesDir, "outbox.json")
+    private fun chatFile(c: Context) = File(c.applicationContext.filesDir, "ask.json")
 
     private fun load(context: Context): State {
         val link = runCatching { JSONObject(linkFile(context).readText()) }.getOrNull()
@@ -112,8 +142,61 @@ object Computer {
             canLaunch = mem?.optBoolean("launch") ?: false,
             claudeHere = mem?.optBoolean("claude") ?: false,
             beat = mem?.optLong("beat") ?: 0,
+            canAsk = mem?.optBoolean("ask") ?: false,
+            chat = readChat(context),
+            waiting = mem?.optJSONArray("waiting")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) } }.orEmpty().map(Waiting::of),
+            canReply = mem?.optBoolean("reply") ?: false,
         )
     }
+
+    // ── Ask YDeck: questions answered on the computer ──
+
+    private fun readChat(c: Context): Chat = runCatching {
+        val o = JSONObject(chatFile(c).readText())
+        val a = o.getJSONArray("turns")
+        Chat(o.getString("id"), (0 until a.length()).mapNotNull { i ->
+            val t = a.getJSONObject(i)
+            Ask.decode(t.getString("ask").toByteArray())?.let { Turn(it, t.optJSONObject("answer")?.let(Answer::of)) }
+        })
+    }.getOrDefault(Chat())
+
+    private fun writeChat(c: Context, chat: Chat) {
+        chatFile(c).writeText(JSONObject().put("id", chat.id).put("turns", org.json.JSONArray().apply {
+            chat.turns.takeLast(30).forEach { t -> put(JSONObject().put("ask", String(t.ask.encode())).apply { t.answer?.let { put("answer", it.toJson()) } }) }
+        }).toString())
+        _state.value = state(c).copy(chat = chat)
+    }
+
+    /**
+     * Asks Ask YDeck on the computer: [projectId] is the project the question was asked from ("this project"). Sent now
+     * or not at all; the answer comes in a later state (see [sync]).
+     */
+    suspend fun ask(context: Context, question: String, projectId: String?): Boolean = withContext(Dispatchers.IO) {
+        val app = context.applicationContext
+        val p = pairing ?: return@withContext false
+        val chat = state(app).chat
+        val a = Ask(java.util.UUID.randomUUID().toString(), chat.id, question.trim().take(Ask.MAX), projectId.orEmpty(), System.currentTimeMillis())
+        if (!Relay(p).postNote(p.seal("ask", a.encode()))) return@withContext false
+        writeChat(app, chat.copy(turns = chat.turns + Turn(a)))
+        true
+    }
+
+    /**
+     * Replies to a session waiting for the developer: words, or the option picked for each question of a choice. Sent
+     * now or not at all (a session doesn't wait forever); the computer says what it did in a later state.
+     */
+    suspend fun reply(context: Context, waiting: String, text: String, choices: Map<String, String>): Boolean = withContext(Dispatchers.IO) {
+        val app = context.applicationContext
+        val p = pairing ?: return@withContext false
+        val r = Reply(java.util.UUID.randomUUID().toString(), waiting, text.trim().take(Reply.MAX), choices, System.currentTimeMillis())
+        if (!Relay(p).postNote(p.seal("reply", r.encode()))) return@withContext false
+        val s = state(app)
+        _state.value = s.copy(replies = (s.replies + (r to null)).takeLast(10))
+        true
+    }
+
+    /** A new conversation: the next question starts afresh, with what YDeck knows. */
+    fun newChat(context: Context) = writeChat(context.applicationContext, Chat())
 
     // ── writing: notes into a project's memory ──
 
@@ -284,14 +367,23 @@ object Computer {
             put("launch", snapshot.launch)
             put("claude", snapshot.claude)
             put("beat", snapshot.beat)
+            put("ask", snapshot.ask)
+            put("waiting", org.json.JSONArray().apply { snapshot.waiting.forEach { put(it.toJson()) } })
+            put("reply", snapshot.reply)
         }.toString())
+        // The answers that came: each onto its question.
+        val chat = state(app).chat
+        if (chat.turns.any { t -> !t.done && snapshot.answers.any { it.id == t.ask.id && it != t.answer } })
+            writeChat(app, chat.copy(turns = chat.turns.map { t -> if (t.done) t else snapshot.answers.firstOrNull { it.id == t.ask.id }?.let { t.copy(answer = it) } ?: t }))
         // Notes the computer has stored are done; the rest wait.
         if (outbox.any { it.first.id in snapshot.applied }) writeOutbox(app, outbox.filterNot { it.first.id in snapshot.applied })
         etag = got.etag
         writeLink(app, p, snapshot.computer, got.etag, now)
         val launches = state(app).launches.map { (l, done) -> l to (done ?: snapshot.launched.firstOrNull { it.id == l.id }) }
+        val replies = state(app).replies.map { (r, done) -> r to (done ?: snapshot.replied.firstOrNull { it.id == r.id }) }
         _state.value = State(paired = true, name = snapshot.computer, stateAt = snapshot.at, checkedAt = now, memory = snapshot.memory, live = snapshot.live,
-            pending = outbox.map { it.first }, canLaunch = snapshot.launch, claudeHere = snapshot.claude, launches = launches, beat = snapshot.beat)
+            pending = outbox.map { it.first }, canLaunch = snapshot.launch, claudeHere = snapshot.claude, launches = launches, beat = snapshot.beat,
+            canAsk = snapshot.ask, chat = state(app).chat, waiting = snapshot.waiting, canReply = snapshot.reply, replies = replies)
         DeckWidget().updateAll(app)
         Result.UPDATED
     }

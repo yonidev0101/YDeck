@@ -32,18 +32,6 @@ fun Mark(size: Dp, ring: Color = LocalDeck.current.fg, dot: Color = LocalDeck.cu
     }
 }
 
-/** A project's state as one dot: amber when a next step waits, green when nothing is left open. */
-@Composable
-fun StateDot(memory: Memory?, size: Dp = 8.dp) {
-    val c = LocalDeck.current
-    val color = when {
-        memory == null -> return
-        memory.open -> c.open
-        else -> c.closed
-    }
-    Box(Modifier.size(size).clip(CircleShape).background(color))
-}
-
 /** "עכשיו", "לפני 5 דקות", "אתמול"… */
 fun ago(ms: Long, now: Long = System.currentTimeMillis()): String {
     val min = ((now - ms) / 60_000).coerceAtLeast(0)

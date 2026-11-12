@@ -57,6 +57,8 @@ sealed class Page {
     data object Settings : Page()
     /** YDeck's own scanner, when Google's can't open. */
     data object Scan : Page()
+    /** Ask YDeck; [project]: the project it was opened from. */
+    data class Ask(val project: String? = null) : Page()
 }
 
 /**
@@ -91,7 +93,8 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 while (true) {
-                    delay(10_000)
+                    // Quicker while a question waits for its answer.
+                    delay(if (Computer.state.value?.chat?.busy == true || Computer.state.value?.waiting?.isNotEmpty() == true) 2_500 else 10_000)
                     if (Computer.state.value?.paired == true && Computer.sync(this@MainActivity) == Computer.Result.UPDATED) deck = Repo.deck(this@MainActivity)
                 }
             }
@@ -107,7 +110,7 @@ class MainActivity : ComponentActivity() {
             DeckTheme {
                 val computer by Computer.state.collectAsState()
                 val current = page
-                BackHandler(enabled = current != Page.Home) { page = Page.Home }
+                BackHandler(enabled = current != Page.Home) { page = (current as? Page.Ask)?.project?.let { Page.Project(it) } ?: Page.Home }
                 AnimatedContent(current, transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(180)) }, label = "page") { p ->
                     when (p) {
                         Page.Home -> HomeScreen(
@@ -117,6 +120,14 @@ class MainActivity : ComponentActivity() {
                             onSample = ::addSample,
                             onSettings = { page = Page.Settings },
                             onRefresh = { sync(quiet = false) },
+                            onAsk = { page = Page.Ask() },
+                            onReply = ::reply,
+                        )
+                        is Page.Ask -> AskScreen(
+                            computer, deck.projects, p.project?.let(deck::byId),
+                            onBack = { page = p.project?.let { Page.Project(it) } ?: Page.Home },
+                            onAsk = { q, projectId -> ask(q, projectId) },
+                            onNewChat = { Computer.newChat(this@MainActivity) },
                         )
                         is Page.Project -> deck.byId(p.id)?.let { project ->
                             ProjectScreen(
@@ -127,6 +138,12 @@ class MainActivity : ComponentActivity() {
                                 launches = computer?.launches.orEmpty().filter { it.first.project == project.id },
                                 launchOn = computer?.canLaunch == true,
                                 onLaunch = if (computer?.paired == true && (computer?.claudeHere == true || computer?.canLaunch == true)) { mode, session, prompt, remote -> launch(project.id, mode, session, prompt, remote) } else null,
+                                onAsk = if (computer?.paired == true) { { page = Page.Ask(project.id) } } else null,
+                                chat = computer?.chat,
+                                waiting = computer?.waiting.orEmpty().filter { it.project == project.id },
+                                canReply = computer?.canReply == true,
+                                replies = computer?.replies.orEmpty(),
+                                onReply = if (computer?.paired == true) ::reply else null,
                             )
                         } ?: androidx.compose.runtime.LaunchedEffect(p) { page = Page.Home }
                         Page.Scan -> ScanScreen(onCode = { page = Page.Home; scanned(it) }, onClose = { page = Page.Home })
@@ -164,12 +181,13 @@ class MainActivity : ComponentActivity() {
         val debuggable = applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
         intent.getStringExtra("debug_pair")?.takeIf { debuggable }?.let { intent.removeExtra("debug_pair"); pair(it); return }
         if (debuggable && intent.getBooleanExtra("debug_scan", false)) { intent.removeExtra("debug_scan"); page = Page.Scan }
+        if (debuggable && intent.getBooleanExtra("debug_ask", false)) { intent.removeExtra("debug_ask"); page = Page.Ask() }
         sync(quiet = true)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        outState.putString(STATE_PAGE, when (val p = page) { Page.Home, Page.Scan -> "home"; Page.Settings -> "settings"; is Page.Project -> "p:" + p.id })
+        outState.putString(STATE_PAGE, when (val p = page) { Page.Home, Page.Scan -> "home"; Page.Settings -> "settings"; is Page.Project -> "p:" + p.id; is Page.Ask -> "ask:" + p.project.orEmpty() })
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -180,6 +198,7 @@ class MainActivity : ComponentActivity() {
 
     private fun pageOf(s: String): Page = when {
         s == "settings" -> Page.Settings
+        s.startsWith("ask:") -> Page.Ask(s.removePrefix("ask:").ifEmpty { null })
         s.startsWith("p:") -> Page.Project(s.removePrefix("p:"))
         else -> Page.Home
     }
@@ -281,17 +300,17 @@ class MainActivity : ComponentActivity() {
      */
     private fun launch(projectId: String, mode: String, session: String, prompt: String, remote: Boolean) {
         // Whoever has the phone in hand proves it's theirs first: its screen lock (PIN, pattern, password or a finger).
-        confirmOwner { send(projectId, mode, session, prompt, remote) }
+        confirmOwner("פתיחת Claude במחשב") { send(projectId, mode, session, prompt, remote) }
     }
 
     /** Runs [then] after the phone's own unlock is confirmed; at once when the phone has no screen lock. */
-    private fun confirmOwner(then: () -> Unit) {
+    private fun confirmOwner(title: String, then: () -> Unit) {
         val keyguard = getSystemService(android.app.KeyguardManager::class.java)
         if (keyguard?.isDeviceSecure != true) { then(); return }
         val auth = android.hardware.biometrics.BiometricManager.Authenticators.BIOMETRIC_WEAK or
             android.hardware.biometrics.BiometricManager.Authenticators.DEVICE_CREDENTIAL
         android.hardware.biometrics.BiometricPrompt.Builder(this)
-            .setTitle("פתיחת Claude במחשב")
+            .setTitle(title)
             .setSubtitle("אישור שזה אתה")
             .setAllowedAuthenticators(auth)
             .build()
@@ -311,6 +330,30 @@ class MainActivity : ComponentActivity() {
                 delay(5_000)
                 if (Computer.sync(this@MainActivity) == Computer.Result.UPDATED) deck = Repo.deck(this@MainActivity)
                 if (Computer.state.value?.launches.orEmpty().none { it.first.project == projectId && it.second == null }) break
+            }
+        }
+    }
+
+    /** A question for Ask YDeck: sent now, or said that it couldn't be; the answer comes with the next states. */
+    private fun ask(question: String, projectId: String?) {
+        lifecycleScope.launch {
+            if (!Computer.ask(this@MainActivity, question, projectId)) toast("אין חיבור לאינטרנט. השאלה לא נשלחה.")
+        }
+    }
+
+    /**
+     * A reply to a session waiting on the computer: the phone's owner confirms first (as for opening Claude), then it
+     * goes at once, and is watched until the computer says it reached Claude.
+     */
+    private fun reply(waiting: String, text: String, choices: Map<String, String>) {
+        confirmOwner("תשובה ל־Claude במחשב") {
+            lifecycleScope.launch {
+                if (!Computer.reply(this@MainActivity, waiting, text, choices)) { toast("אין חיבור לאינטרנט. התשובה לא נשלחה."); return@launch }
+                for (attempt in 0 until 24) {
+                    delay(2_500)
+                    if (Computer.sync(this@MainActivity) == Computer.Result.UPDATED) deck = Repo.deck(this@MainActivity)
+                    if (Computer.state.value?.replies.orEmpty().none { it.first.waiting == waiting && it.second == null }) break
+                }
             }
         }
     }

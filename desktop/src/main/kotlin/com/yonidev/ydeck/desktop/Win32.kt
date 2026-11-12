@@ -53,6 +53,13 @@ object Win32 {
         runCatching { dwm?.DwmSetWindowAttribute(hwnd(window), 33 /* DWMWA_WINDOW_CORNER_PREFERENCE */, IntByReference(2 /* ROUND */), 4) }
     }
 
+    /** How long since the last key or mouse movement on this computer (ms); 0 when Windows won't say. */
+    fun idleMs(): Long = runCatching {
+        val info = WinUser.LASTINPUTINFO()
+        if (!user32.GetLastInputInfo(info)) return 0
+        (com.sun.jna.platform.win32.Kernel32.INSTANCE.GetTickCount() - info.dwTime.toLong()).coerceAtLeast(0)
+    }.getOrDefault(0)
+
     private val HWND_BOTTOM = WinDef.HWND(Pointer.createConstant(1))
     private const val GWLP_HWNDPARENT = -8
     private const val SWP_NOSIZE = 0x0001

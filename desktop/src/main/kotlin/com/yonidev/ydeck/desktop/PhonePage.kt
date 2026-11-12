@@ -76,6 +76,16 @@ fun PhoneSettings() {
                             "כבוי עד שמדליקים כאן. בתיקיית הפרויקט, בטרמינל חדש: סשן חדש, האחרון או סשן קודם, עם Remote Control אם ביקשו. Claude עובד במצב ההרשאות הרגיל שלך, וכל פתיחה מופיעה כהתראה.")) {
                         Toggle(settings.phoneLaunch) { on -> Settings.update { it.copy(phoneLaunch = on) }; PhoneLink.nudge() }
                     }
+                    if (Tools.claude != null) Setting(tr("The phone can ask YDeck", "הטלפון יכול לשאול את YDeck"),
+                        hint = tr("Off until you turn it on here. Questions typed on the phone are answered here by your Claude Code, as in Ask YDeck: it reads the projects' folders, never changes them, and never reads the files that hold keys.",
+                            "כבוי עד שמדליקים כאן. שאלות שנכתבות בטלפון נענות כאן על ידי ה־Claude Code שלך, כמו ב״לשאול את YDeck״: הוא קורא את תיקיות הפרויקטים, אף פעם לא משנה אותן, ולא קורא קבצים שמחזיקים מפתחות.")) {
+                        Toggle(settings.phoneAsk) { on -> Settings.update { it.copy(phoneAsk = on) }; PhoneLink.nudge() }
+                    }
+                    if (Tools.claude != null) Setting(tr("The phone can reply to waiting sessions", "הטלפון יכול לענות לסשנים שמחכים"),
+                        hint = tr("Off until you turn it on here. A session's question, held in YDeck while you're away, shows on the phone with the drafted reply; what you send goes to Claude as your words. Never a permission: those stay in the terminal.",
+                            "כבוי עד שמדליקים כאן. שאלה של סשן, שמחכה ב־YDeck כשאתה לא ליד המחשב, מופיעה בטלפון עם התשובה המנוסחת; מה ששולחים מגיע ל־Claude כמילים שלך. אף פעם לא הרשאה: אלה נשארות בטרמינל.")) {
+                        Toggle(settings.phoneReply) { on -> Settings.update { it.copy(phoneReply = on) }; PhoneLink.nudge() }
+                    }
                     Setting(tr("Pair a phone again", "חיבור טלפון מחדש"), hint = tr("A new code; the phone that scans it replaces this one.", "קוד חדש; הטלפון שיסרוק אותו יחליף את המחובר עכשיו."),
                         onClick = { PhoneLink.pair() })
                     Item({ confirm = true }) {
@@ -91,8 +101,8 @@ fun PhoneSettings() {
             }
         }
 
-        Text(tr("Only data goes through, sealed end to end: the relay in between can't read it or change it. The one thing the phone can ask this computer to do is open Claude Code in a project's folder, only once you turn it on above, and only in those ways; never a command of its own. Nothing here listens for connections; both sides only reach out.",
-            "עוברים רק נתונים, מוצפנים מקצה לקצה: הממסר שבאמצע לא יכול לקרוא אותם או לשנות אותם. הדבר היחיד שהטלפון יכול לבקש מהמחשב הוא לפתוח את Claude Code בתיקיית פרויקט, רק אחרי שמדליקים את זה למעלה, ורק בדרכים האלה; אף פעם לא פקודה משלו. שום דבר כאן לא מחכה לחיבורים; שני הצדדים רק יוצאים החוצה."),
+        Text(tr("Only data goes through, sealed end to end: the relay in between can't read it or change it. The phone can ask this computer for three things, each only once you turn it on above: to open Claude Code in a project's folder, only in those ways; to answer a question, reading only; and to pass your reply to a session that waits for you; never a command of its own, and never a permission. Nothing here listens for connections; both sides only reach out.",
+            "עוברים רק נתונים, מוצפנים מקצה לקצה: הממסר שבאמצע לא יכול לקרוא אותם או לשנות אותם. הטלפון יכול לבקש מהמחשב שלושה דברים, כל אחד רק אחרי שמדליקים אותו למעלה: לפתוח את Claude Code בתיקיית פרויקט, רק בדרכים האלה; לענות על שאלה, בקריאה בלבד; ולהעביר את התשובה שלך לסשן שמחכה לך; אף פעם לא פקודה משלו, ואף פעם לא הרשאה. שום דבר כאן לא מחכה לחיבורים; שני הצדדים רק יוצאים החוצה."),
             color = c.faint, fontSize = 12.sp, lineHeight = 18.sp, fontFamily = PlexSans, modifier = Modifier.widthIn(max = 560.dp))
     }
 }

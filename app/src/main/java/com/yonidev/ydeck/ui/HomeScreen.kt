@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -53,6 +54,8 @@ fun HomeScreen(
     onSample: () -> Unit,
     onSettings: () -> Unit,
     onRefresh: () -> Unit,
+    onAsk: () -> Unit,
+    onReply: (waiting: String, text: String, choices: Map<String, String>) -> Unit,
 ) {
     val c = LocalDeck.current
     if (connecting != null) return Connecting(connecting)
@@ -64,6 +67,8 @@ fun HomeScreen(
             if (paired) IconButton(onClick = onRefresh) { Icon(Icons.Outlined.Refresh, "עדכון", tint = c.muted) }
             IconButton(onClick = onSettings) { Icon(Icons.Outlined.Settings, "הגדרות", tint = c.muted) }
         },
+        // Ask YDeck at the bottom, as the search window is on the computer: one reach away from anywhere.
+        bottomBar = { if (paired) AskBar(computer?.chat, onAsk) },
     ) {
         item {
             Text(
@@ -76,8 +81,17 @@ fun HomeScreen(
                 modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 6.dp),
             )
         }
-        val open = deck.projects.count { computer?.memory?.get(it.id)?.open == true }
-        item { SectionHeader(when (open) { 0 -> "פרויקטים"; 1 -> "פרויקטים · אחד פתוח"; else -> "פרויקטים · $open פתוחים" }) }
+        // What's left open in all the projects, as the computer's sidebar counts it (Claude's state is shown apart).
+        // Sessions waiting for you come first, as on the computer's Now.
+        val waiting = computer?.waiting.orEmpty()
+        if (waiting.isNotEmpty()) {
+            item { SectionHeader(if (waiting.size == 1) "מחכה לך" else "${waiting.size} מחכים לך") }
+            items(waiting, key = { "w:" + it.id }) { w ->
+                WaitingCard(w, deck.byId(w.project), computer!!.canReply, computer.replies.lastOrNull { it.first.waiting == w.id }) { text, choices -> onReply(w.id, text, choices) }
+            }
+        }
+        val open = deck.projects.sumOf { p -> computer?.live(p.id)?.loops.orEmpty().count { it.kind != "AGENT" } }
+        item { SectionHeader(when (open) { 0 -> "פרויקטים"; 1 -> "פרויקטים · דבר אחד פתוח"; else -> "פרויקטים · $open דברים פתוחים" }) }
         item { Line() }
         items(deck.projects, key = { it.id }) { p ->
             ProjectRow(p, computer?.memory?.get(p.id), computer?.live(p.id), onClick = { onOpen(p) })
@@ -97,17 +111,15 @@ fun HomeScreen(
 @Composable
 private fun Line() = Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(1.dp).background(LocalDeck.current.line))
 
+/**
+ * A project as Now lists it on the computer, in two lanes that never mix: Claude's state beside the name (its dot and
+ * its words), and under it what's left open in the project (a loop's dot), else the next step in words.
+ */
 @Composable
 private fun ProjectRow(p: Project, memory: Memory?, live: com.yonidev.ydeck.link.Live?, onClick: () -> Unit) {
     val c = LocalDeck.current
-    val agent = live?.agent?.ifBlank { "Claude" } ?: "Claude"
-    val line = when {
-        live?.agentMode == "WAITING" -> "$agent מחכה לך"
-        live?.agentMode == "WORKING" -> "$agent עובד" + (live.agentDetail.takeIf { it.isNotBlank() }?.let { ": $it" } ?: "")
-        memory?.next?.isNotBlank() == true -> memory.next
-        memory?.summary?.isNotBlank() == true -> memory.summary
-        else -> p.kind
-    }
+    val loops = live?.loops.orEmpty().filter { it.kind != "AGENT" }
+    val agent = live?.agentMode?.takeIf { it == "WORKING" || it == "WAITING" || it == "OPEN" }
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 24.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -115,18 +127,27 @@ private fun ProjectRow(p: Project, memory: Memory?, live: com.yonidev.ydeck.link
     ) {
         Logo(p, 40.dp)
         Column(Modifier.weight(1f)) {
-            Text(p.name, color = c.fg, fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (line.isNotBlank()) Text(
-                line, color = if (memory?.open == true) c.fg.copy(alpha = 0.78f) else c.muted, fontSize = 13.sp, lineHeight = 18.sp,
-                maxLines = 2, overflow = TextOverflow.Ellipsis, style = TextStyle(textDirection = dirOf(line)),
-            )
-        }
-        when (live?.agentMode) {
-            "WORKING" -> Box(Modifier.size(8.dp).clip(androidx.compose.foundation.shape.CircleShape).background(c.accentText))
-            "WAITING" -> Box(Modifier.size(8.dp).clip(androidx.compose.foundation.shape.CircleShape).background(c.open))
-            // A session runs there, not busy: a ring.
-            "OPEN" -> Box(Modifier.size(8.dp).border(1.5.dp, c.muted, androidx.compose.foundation.shape.CircleShape))
-            else -> StateDot(memory)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(p.name, color = c.fg, fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                if (agent != null) {
+                    Spacer(Modifier.width(10.dp))
+                    ClaudeDot(agent, 7.dp)
+                    Spacer(Modifier.width(6.dp))
+                    Text(claudeText(live), color = if (agent == "OPEN") c.muted else claudeColor(agent), fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            when {
+                loops.isNotEmpty() -> Row(Modifier.padding(top = 3.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Dot(loopDot(loops.first().kind), 6.dp)
+                    val text = if (loops.size > 1) "${loops.size} דברים פתוחים · ${loops.first().title}" else loops.first().title
+                    Text(text, color = c.muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, style = TextStyle(textDirection = dirOf(text)))
+                }
+                memory?.next?.isNotBlank() == true -> Text("הבא: ${memory.next}", color = c.faint, fontSize = 13.sp, lineHeight = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    style = TextStyle(textDirection = dirOf(memory.next)), modifier = Modifier.padding(top = 2.dp))
+                else -> (memory?.summary?.takeIf { it.isNotBlank() } ?: p.kind).takeIf { it.isNotBlank() }?.let { t ->
+                    Text(t, color = c.faint, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, style = TextStyle(textDirection = dirOf(t)), modifier = Modifier.padding(top = 2.dp))
+                }
+            }
         }
     }
 }

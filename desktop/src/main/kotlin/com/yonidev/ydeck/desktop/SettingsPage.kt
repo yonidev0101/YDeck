@@ -197,6 +197,11 @@ private fun ClaudeSettings(deck: Deck) {
                 }
             }
             if (installed) Setting(tr("Notify me when Claude needs me", "התראה כש־Claude מחכה לי"), hint = tr("A Windows notification when it waits for an answer, or ends a long task.", "התראה של Windows כשהוא מחכה לתשובה, או מסיים משימה ארוכה.")) { Toggle(s.claudeAlerts) { on -> Settings.update { it.copy(claudeAlerts = on) } } }
+            if (installed) Setting(tr("Answer waiting sessions from YDeck", "לענות לסשנים שמחכים מתוך YDeck"),
+                hint = tr("While you're away from the computer, a session's question waits in Ask YDeck with a reply drafted from the project's records, and you send it from there. The moment you're back, the question shows in the terminal as always. Questions only: permissions always stay in the terminal.",
+                    "כשאתה לא ליד המחשב, שאלה של סשן מחכה ב״לשאול את YDeck״ עם תשובה שנוסחה מתוך מה שרשום בפרויקט, ושולחים אותה משם. ברגע שחוזרים למחשב, השאלה מופיעה בטרמינל כרגיל. רק שאלות: בקשות הרשאה תמיד נשארות בטרמינל.")) {
+                Toggle(s.sessionReplies) { on -> Settings.update { it.copy(sessionReplies = on) } }
+            }
             if (installed) Setting(tr("Sum up each session when it ends", "סיכום בסוף כל סשן"), hint = tr("What was done and the next step, on the project's overview.", "מה נעשה ומה הצעד הבא, במסך הסקירה של הפרויקט.")) { Toggle(s.handoffs) { on -> Settings.update { it.copy(handoffs = on) } } }
             if (installed) Setting(tr("Claude updates files in the repository", "Claude מעדכן קבצים בריפו"), hint = tr("The project's .ydeck.json (summary, decisions, links, releases), committed with the code, and YDeck's block in an AGENTS.md that's already there. Off for work and team repositories: only the personal .ydeck.local.json is written, kept out of git.",
                 "‏.ydeck.json של הפרויקט (תקציר, החלטות, קישורים, גרסאות), שנכנס ל־git עם הקוד, והבלוק של YDeck בקובץ AGENTS.md אם כבר קיים. כבוי לריפו של עבודה או צוות: נכתב רק .ydeck.local.json האישי, שלא נכנס ל־git.")) { Toggle(s.repoFiles) { on -> Settings.update { it.copy(repoFiles = on) } } }

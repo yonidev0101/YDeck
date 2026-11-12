@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -23,6 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -139,14 +141,19 @@ object Search {
     }
 }
 
-/** The search window: a field and the results, high in the middle of the screen, gone on Esc or a click elsewhere. */
+/**
+ * The search window: a field and the results, high in the middle of the screen, gone on Esc or a click elsewhere.
+ * A question typed there goes to Ask YDeck, and the window becomes the conversation ([onExpand]: on in the app).
+ */
 @Composable
-fun ApplicationScope.PaletteWindow(deck: Deck, settings: Settings.State, dark: Boolean, onRun: (Entry) -> Unit, onClose: () -> Unit) {
+fun ApplicationScope.PaletteWindow(deck: Deck, settings: Settings.State, dark: Boolean, onRun: (Entry) -> Unit, onExpand: () -> Unit, onClose: () -> Unit) {
     val w = 640f
     val h = 470f
     val screen = Toolkit.getDefaultToolkit().screenSize
     val scale = java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().defaultScreenDevice.defaultConfiguration.defaultTransform.scaleX.toFloat()
     val state = rememberWindowState(position = WindowPosition(((screen.width / scale - w) / 2).dp, (screen.height / scale * 0.16f).dp), size = DpSize(w.dp, h.dp))
+    var asking by remember { mutableStateOf(false) }
+    LaunchedEffect(asking) { state.size = DpSize(w.dp, (if (asking) 620f else h).dp) }
     Window(onCloseRequest = onClose, state = state, undecorated = true, transparent = true, resizable = false, alwaysOnTop = true, title = "YDeck",
         icon = androidx.compose.ui.res.painterResource("icons/app.png")) {
         DisposableEffect(Unit) {
@@ -156,20 +163,42 @@ fun ApplicationScope.PaletteWindow(deck: Deck, settings: Settings.State, dark: B
             runCatching { User32.INSTANCE.SetForegroundWindow(WinDef.HWND(Native.getComponentPointer(window))) }
             onDispose { window.removeWindowFocusListener(l) }
         }
-        DeckTheme(dark) { PaletteCard(deck, settings, dark, onRun, onClose) }
+        DeckTheme(dark) {
+            if (asking) AskCard(onExpand, onClose)
+            else PaletteCard(deck, settings, dark, onRun, onClose, onAsk = { q -> if (q.isNotBlank()) Assistant.ask(q, null); asking = true })
+        }
+    }
+}
+
+/** The search window as a conversation: Ask YDeck, the same card's shape. */
+@Composable
+private fun AskCard(onExpand: () -> Unit, onClose: () -> Unit) {
+    val c = LocalDeck.current
+    val shape = RoundedCornerShape(22.dp)
+    Column(Modifier.padding(14.dp).fillMaxWidth().fillMaxHeight().shadow(22.dp, shape).clip(shape).background(c.surface).border(1.dp, c.line, shape)
+        .onPreviewKeyEvent { e -> if (e.type == KeyEventType.KeyDown && e.key == Key.Escape) { onClose(); true } else false }) {
+        AskInWindow(onExpand)
     }
 }
 
 /** The search itself: the field and the results (a card, so it also draws without a window). */
 @Composable
-fun PaletteCard(deck: Deck, settings: Settings.State, dark: Boolean, onRun: (Entry) -> Unit, onClose: () -> Unit, initialQuery: String = "") {
+fun PaletteCard(deck: Deck, settings: Settings.State, dark: Boolean, onRun: (Entry) -> Unit, onClose: () -> Unit, initialQuery: String = "",
+                onAsk: ((String) -> Unit)? = null) {
     val c = LocalDeck.current
     val all = remember(deck, settings) { Search.entries(deck, settings) }
     var query by remember { mutableStateOf(initialQuery) }
     val results = remember(query, all) { Search.match(query, all) }
-    var selected by remember(results) { mutableStateOf(0) }
+    // Ask YDeck, first in the list: with a question typed, or to go back to the conversation. It is the one picked
+    // when the words read as a question or find nothing; otherwise Enter still opens the first thing found.
+    val talking = Assistant.turns.collectAsState().value.isNotEmpty()
+    val ask = onAsk != null && (query.isNotBlank() || talking)
+    val shift = if (ask) 1 else 0
+    val total = results.size + shift
+    var selected by remember(results, ask) { mutableStateOf(if (ask && query.isNotBlank() && (results.isEmpty() || looksLikeQuestion(query))) 0 else shift) }
     val list = rememberLazyListState()
-    LaunchedEffect(selected) { if (results.isNotEmpty()) list.animateScrollToItem((selected - 3).coerceAtLeast(0)) }
+    LaunchedEffect(selected) { if (total > 0) list.animateScrollToItem((selected - 3).coerceAtLeast(0)) }
+    fun pick(i: Int) { if (ask && i == 0) onAsk?.invoke(query) else results.getOrNull(i - shift)?.let(onRun) }
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focus.requestFocus() }
     val shape = RoundedCornerShape(22.dp)
@@ -178,16 +207,17 @@ fun PaletteCard(deck: Deck, settings: Settings.State, dark: Boolean, onRun: (Ent
             if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
             when (e.key) {
                 Key.Escape -> { onClose(); true }
-                Key.DirectionDown -> { if (results.isNotEmpty()) selected = (selected + 1) % results.size; true }
-                Key.DirectionUp -> { if (results.isNotEmpty()) selected = (selected - 1 + results.size) % results.size; true }
-                Key.Enter, Key.NumPadEnter -> { results.getOrNull(selected)?.let(onRun); true }
+                Key.DirectionDown -> { if (total > 0) selected = (selected + 1) % total; true }
+                Key.DirectionUp -> { if (total > 0) selected = (selected - 1 + total) % total; true }
+                Key.Enter, Key.NumPadEnter -> { pick(selected); true }
+                Key.Tab -> { if (ask) { onAsk?.invoke(query); true } else false }
                 else -> false
             }
         }) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f)) {
                 val style = TextStyle(color = c.fg, fontSize = 21.sp, fontFamily = PlexSans, textDirection = TextDirection.ContentOrRtl, textAlign = androidx.compose.ui.text.style.TextAlign.Right)
-                if (query.isEmpty()) Text(tr("A project and what to open, like nova firebase", "פרויקט ומה לפתוח, למשל \u200Enova firebase\u200F"), color = c.faint, style = style.copy(color = c.faint), maxLines = 1, modifier = Modifier.fillMaxWidth())
+                if (query.isEmpty()) Text(if (onAsk != null) tr("A project and what to open, or a question", "פרויקט ומה לפתוח, או שאלה") else tr("A project and what to open, like nova firebase", "פרויקט ומה לפתוח, למשל \u200Enova firebase\u200F"), color = c.faint, style = style.copy(color = c.faint), maxLines = 1, modifier = Modifier.fillMaxWidth())
                 BasicTextField(query, { query = it }, singleLine = true, textStyle = style, cursorBrush = SolidColor(c.accent),
                     modifier = Modifier.fillMaxWidth().focusRequester(focus))
             }
@@ -195,13 +225,31 @@ fun PaletteCard(deck: Deck, settings: Settings.State, dark: Boolean, onRun: (Ent
             Text(Hotkey.LABEL, color = c.faint, fontSize = 12.sp, fontFamily = PlexMono)
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(c.line))
-        if (results.isEmpty()) {
+        if (total == 0) {
             Text(tr("Nothing found. Search by a project, a service, a tool or a command.", "לא נמצא. אפשר לחפש לפי שם פרויקט, שירות, כלי או פקודה."), color = c.muted, fontSize = 14.sp, fontFamily = PlexSans, modifier = Modifier.padding(20.dp))
         } else {
             LazyColumn(Modifier.fillMaxWidth().heightIn(max = 360.dp).padding(vertical = 6.dp), state = list) {
-                itemsIndexed(results) { i, e -> ResultRow(e, i == selected, dark) { onRun(e) } }
+                if (ask) item { AskRow(query, selected == 0) { pick(0) } }
+                itemsIndexed(results) { i, e -> ResultRow(e, i + shift == selected, dark) { onRun(e) } }
             }
         }
+    }
+}
+
+/** "Ask YDeck · the question", or with nothing typed, back to the conversation. */
+@Composable
+private fun AskRow(query: String, selected: Boolean, onClick: () -> Unit) {
+    val c = LocalDeck.current
+    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp).clip(RoundedCornerShape(12.dp)).background(if (selected) c.accentTint else Color.Transparent)
+        .clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Box(Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(c.surface2), contentAlignment = Alignment.Center) { AskMark(Mood.READY, 20.dp) }
+        Column(Modifier.weight(1f)) {
+            Text(ASK_TITLE, color = c.accentText, fontSize = 15.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans, maxLines = 1)
+            Text(query.trim().ifEmpty { tr("Go back to the conversation", "לחזור לשיחה") }, color = c.muted, fontSize = 12.sp, fontFamily = PlexSans, maxLines = 1,
+                overflow = TextOverflow.Ellipsis, style = TextStyle(textDirection = TextDirection.Content))
+        }
+        Text("Tab", color = c.faint, fontSize = 11.sp, fontFamily = PlexMono)
     }
 }
 

@@ -133,6 +133,14 @@ object Settings {
         /** The paired phone may open Claude Code in a project's folder (a closed list of ways, see [PhoneLink.launch]). Off
          *  until turned on here, at the computer. */
         val phoneLaunch: Boolean = false,
+        /** The paired phone may ask Ask YDeck questions, answered here by Claude Code, reading only (see [PhoneLink.ask]).
+         *  Off until turned on here, at the computer. */
+        val phoneAsk: Boolean = false,
+        /** A session waiting for the developer is held in YDeck while nobody is at the computer, with a drafted reply
+         *  (see [SessionAsks]). Questions only, never a permission. */
+        val sessionReplies: Boolean = true,
+        /** The paired phone may reply to a waiting session (see [PhoneLink]). Off until turned on here, at the computer. */
+        val phoneReply: Boolean = false,
         /** "system", "en" or "he" (see [I18n]). */
         val language: String = "system",
         /** "system", "light" or "dark". */
@@ -179,6 +187,9 @@ object Settings {
                 put("folderGit", s.folderGit)
                 put("siteIcons", s.siteIcons)
                 put("phoneLaunchOn", s.phoneLaunch)
+                put("phoneAsk", s.phoneAsk)
+                put("sessionReplies", s.sessionReplies)
+                put("phoneReply", s.phoneReply)
                 put("language", s.language)
                 put("appearance", s.appearance)
                 put("appearanceV2", true)
@@ -227,6 +238,9 @@ object Settings {
             siteIcons = o.optBoolean("siteIcons", true),
             // Off until turned on here; 1.16.0 saved "phoneLaunch" on for everyone, so that one is not read.
             phoneLaunch = o.optBoolean("phoneLaunchOn", false),
+            phoneAsk = o.optBoolean("phoneAsk", false),
+            sessionReplies = o.optBoolean("sessionReplies", true),
+            phoneReply = o.optBoolean("phoneReply", false),
             language = o.optString("language", "system"),
             // 1.11: dark became the default; a "system" saved before then was the old default, not a choice.
             appearance = if (!o.has("appearanceV2") && o.optString("appearance", "system") == "system") "dark" else o.optString("appearance", "dark"),

@@ -119,7 +119,6 @@ class ClaudeLinkTest {
 
     @Test fun thePluginsHooksPostInTheBackground() {
         val hooks = ClaudePlugin.hooks().getJSONObject("hooks")
-        assertEquals(setOf("SessionStart", "UserPromptSubmit", "Notification", "Stop", "SessionEnd"), hooks.keySet())
         val h = hooks.getJSONArray("Stop").getJSONObject(0).getJSONArray("hooks").getJSONObject(0)
         assertEquals("command", h.getString("type"))
         assertTrue(h.getBoolean("async"))
@@ -130,6 +129,31 @@ class ClaudeLinkTest {
         assertFalse(start.optBoolean("async"))
         assertTrue(start.getJSONArray("args").toList().last().toString().endsWith("|| exit /b 0"))
         assertTrue(args.contains("http://127.0.0.1:${ClaudeLink.PORT}/claude"))
+    }
+
+    @Test fun thePluginHoldsQuestionsOnlyNeverPermissions() {
+        val hooks = ClaudePlugin.hooks().getJSONObject("hooks")
+        assertEquals(setOf("SessionStart", "UserPromptSubmit", "Notification", "Stop", "SessionEnd", "PreToolUse"), hooks.keySet())
+        assertFalse(hooks.has("PermissionRequest"))
+        // Before a tool: only Claude's choice question, never any other tool.
+        val pre = hooks.getJSONArray("PreToolUse")
+        assertEquals(1, pre.length())
+        assertEquals("AskUserQuestion", pre.getJSONObject(0).getString("matcher"))
+        val choice = pre.getJSONObject(0).getJSONArray("hooks").getJSONObject(0)
+        assertTrue(choice.getJSONArray("args").toList().last().toString().endsWith("|| exit /b 0"))
+        assertTrue(choice.getInt("timeout") <= 610)
+        // At the end of a turn: the background report, and the question that waits in the background (it blocks nothing).
+        val stop = hooks.getJSONArray("Stop").getJSONObject(0).getJSONArray("hooks")
+        assertEquals(2, stop.length())
+        assertTrue(stop.getJSONObject(1).getBoolean("asyncRewake"))
+        assertTrue(stop.getJSONObject(1).getJSONArray("args").toList().joinToString(" ").contains("/claude/ask"))
+    }
+
+    @Test fun thePluginGivesSessionsYDecksReadOnlyServer() {
+        val server = ClaudePlugin.mcp().getJSONObject("mcpServers").getJSONObject("ydeck")
+        assertEquals("http", server.getString("type"))
+        assertEquals("http://127.0.0.1:${ClaudeLink.PORT}/mcp", server.getString("url"))
+        assertEquals(ClaudeLink.key, server.getJSONObject("headers").getString("X-YDeck"))
     }
 
     @Test fun aSessionStillRunningIsOpenAndGoesWithItsProcess() {
