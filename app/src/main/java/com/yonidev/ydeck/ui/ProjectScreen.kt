@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -55,6 +56,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.yonidev.ydeck.R
 import com.yonidev.ydeck.data.Project
@@ -109,7 +111,7 @@ fun ProjectScreen(
             if (canWrite) IconButton(onClick = { writing = Note.NEXT }) { Icon(Icons.Outlined.Edit, "כתיבה", tint = c.fg) }
         },
     ) {
-        item { Header(p, live) }
+        item { Header(p, memory, live) }
         if (onReply != null) waiting.forEach { w ->
             item(key = "w:" + w.id) { WaitingCard(w, p, canReply, replies.lastOrNull { it.first.waiting == w.id }) { text, choices -> onReply(w.id, text, choices) } }
         }
@@ -132,30 +134,45 @@ fun ProjectScreen(
 }
 
 @Composable
-private fun Header(p: Project, live: Live?) {
+private fun Header(p: Project, m: Memory?, live: Live?) {
     val c = LocalDeck.current
-    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 6.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Logo(p, 44.dp)
+    val progress = m?.progress()
+    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 4.dp, bottom = 6.dp)) {
+        // The mark is the progress: the ring fills with what was done out of what was planned, the logo inside it.
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+            if (progress != null) ProgressMark(progress.first, progress.second, 112.dp) { Logo(p, 46.dp) }
+            else Logo(p, 56.dp)
             Column(Modifier.weight(1f)) {
-                val line = listOfNotNull(p.kind.takeIf { it.isNotBlank() }, live?.version?.takeIf { it.isNotBlank() }?.let { "גרסה ⁦$it⁩" }).joinToString(" · ")
-                if (line.isNotBlank()) Text(line, color = c.muted, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(p.googleEmail ?: "חשבון גוגל לא הוגדר", color = c.faint, fontSize = 13.sp, fontFamily = if (p.googleEmail != null) PlexMono else PlexSans)
+                val about = listOfNotNull(p.kind.takeIf { it.isNotBlank() }, live?.version?.takeIf { it.isNotBlank() }?.let { "גרסה ⁦$it⁩" }).joinToString(" · ")
+                if (progress != null) {
+                    Text(
+                        androidx.compose.ui.text.buildAnnotatedString {
+                            append("${progress.first}")
+                            pushStyle(androidx.compose.ui.text.SpanStyle(color = c.faint)); append("/${progress.second}"); pop()
+                        },
+                        color = c.fg, fontSize = 30.sp, lineHeight = 36.sp, fontFamily = PlexMono, fontWeight = FontWeight.Medium,
+                        letterSpacing = (-0.02).em, style = TextStyle(textDirection = TextDirection.Ltr),
+                    )
+                    val left = progress.second - progress.first
+                    Text(if (left == 0) "הכול נעשה" else "נעשו · נשארו $left", color = c.muted, fontSize = 13.sp)
+                } else if (about.isNotBlank()) Text(about, color = c.muted, fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                if (live != null && live.agentMode.isNotBlank()) Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                    ClaudeDot(live.agentMode, 7.dp)
+                    Text(claudeText(live), color = if (live.agentMode == "DONE" || live.agentMode == "OPEN") c.muted else claudeColor(live.agentMode), fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
             }
         }
-        // As the computer's project page says it: Claude's state, the branch and what's not saved, the server running.
-        if (live != null) {
+        // One quiet line under it: what it is, the branch and what's not saved, the server running.
+        if (live != null || progress != null) {
             val parts = buildList<@Composable () -> Unit> {
-                if (live.agentMode.isNotBlank()) add {
-                    ClaudeDot(live.agentMode, 7.dp)
-                    Text(claudeText(live), color = if (live.agentMode == "DONE" || live.agentMode == "OPEN") c.muted else claudeColor(live.agentMode), fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1)
-                }
-                if (live.hasGit && live.branch.isNotBlank()) add { Text(live.branch, color = c.muted, fontSize = 13.sp, fontFamily = PlexMono, maxLines = 1) }
-                if (live.hasGit) add { Text(gitWords(live), color = c.muted, fontSize = 13.sp, maxLines = 1) }
-                live.ports.firstOrNull()?.let { port -> add { Text("● :$port", color = c.accentText, fontSize = 13.sp, fontFamily = PlexMono) } }
+                val about = listOfNotNull(p.kind.takeIf { it.isNotBlank() }, live?.version?.takeIf { it.isNotBlank() }?.let { "⁦$it⁩" }).joinToString(" · ")
+                if (progress != null && about.isNotBlank()) add { Text(about, color = c.faint, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                if (live != null && live.hasGit && live.branch.isNotBlank()) add { Text(live.branch, color = c.faint, fontSize = 13.sp, fontFamily = PlexMono, maxLines = 1) }
+                if (live != null && live.hasGit) add { Text(gitWords(live), color = if (live.changes > 0 || live.ahead > 0) c.openText else c.faint, fontSize = 13.sp, maxLines = 1) }
+                live?.ports?.firstOrNull()?.let { port -> add { Dot(LIVE_DOT, 6.dp); Text(":$port", color = c.accentText, fontSize = 13.sp, fontFamily = PlexMono) } }
             }
-            if (parts.isNotEmpty()) Row(Modifier.padding(top = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                parts.forEachIndexed { i, part -> if (i > 0) Text("/", color = c.line, fontSize = 13.sp); part() }
+            if (parts.isNotEmpty()) Row(Modifier.padding(top = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                parts.forEachIndexed { i, part -> if (i > 0) Text("·", color = c.faint, fontSize = 13.sp); part() }
             }
         }
         // Claude at work or waiting here, and on what; nothing otherwise.
@@ -208,6 +225,7 @@ private fun Tabs(selected: Tab, counts: Map<Tab, Int>, onSelect: (Tab) -> Unit) 
 // ── memory ──
 
 @Composable
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 private fun MemoryTab(m: Memory?, live: Live?, pending: List<Note>, write: ((String) -> Unit)?, onDone: ((String) -> Unit)?) {
     val c = LocalDeck.current
     if (m == null) {
@@ -225,13 +243,22 @@ private fun MemoryTab(m: Memory?, live: Live?, pending: List<Note>, write: ((Str
         }
         // A "done" on its way: the next step already shows as closed here.
         val closing = pending.any { it.kind == Note.DONE }
-        NextBlock(if (closing) m.copy(next = "") else m, write, onDone)
-        PlanBlocks(m)
-        if (live != null && live.loops.isNotEmpty()) Block("פתוח עכשיו") {
+        // What's in progress: one sentence, ending in the brand's amber point.
+        if (m.now.isNotBlank()) Section("עכשיו", top = 18.dp) {
+            Text(
+                androidx.compose.ui.text.buildAnnotatedString {
+                    append(m.now.trimEnd('.', ' '))
+                    pushStyle(androidx.compose.ui.text.SpanStyle(color = c.open)); append("."); pop()
+                },
+                color = c.fg, fontSize = 26.sp, lineHeight = 35.sp, fontFamily = Display, fontWeight = FontWeight.Light,
+                style = TextStyle(textDirection = dirOf(m.now)),
+            )
+        }
+        PathOf(if (closing) m.copy(next = "") else m, write, onDone)
+        if (live != null && live.loops.isNotEmpty()) Section("פתוח עכשיו") {
             live.loops.forEachIndexed { i, l ->
-                if (i > 0) Hair()
-                Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Box(Modifier.padding(top = 8.dp)) { Dot(loopDot(l.kind), 6.dp) }
+                Row(Modifier.padding(top = if (i > 0) 12.dp else 0.dp), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Box(Modifier.padding(top = 8.dp)) { Dot(loopDot(l.kind), 7.dp) }
                     Column(Modifier.weight(1f)) {
                         Body(l.title)
                         if (l.detail.isNotBlank()) Text(l.detail, color = c.muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, style = TextStyle(textDirection = dirOf(l.detail)))
@@ -239,59 +266,183 @@ private fun MemoryTab(m: Memory?, live: Live?, pending: List<Note>, write: ((Str
                 }
             }
         }
-        if (m.now.isNotBlank()) Block("עכשיו") { Body(m.now) }
-        if (m.done.isNotBlank()) Block("בסשן האחרון" + (if (m.doneAt > 0) " · ${ago(m.doneAt)}" else "") + (if (m.agent.isNotBlank()) " · ${m.agent}" else "")) { Body(m.done) }
-        if (m.summary.isNotBlank()) Block("על הפרויקט") { Body(m.summary, muted = true) }
-        Decisions(m, write)
-        m.releases.firstOrNull()?.let { r ->
-            Block("גרסה אחרונה") {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(r.version, color = c.fg, fontSize = 15.sp, fontFamily = PlexMono)
-                    if (r.date.isNotBlank()) Text(r.date, color = c.faint, fontSize = 13.sp, fontFamily = PlexMono)
+        if (m.ideas.isNotEmpty()) Section("רעיונות בצד · ${m.ideas.size}") {
+            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                m.ideas.forEach { t ->
+                    Text(t, color = c.muted, fontSize = 13.sp, lineHeight = 18.sp, style = TextStyle(textDirection = dirOf(t)),
+                        modifier = Modifier.clip(RoundedCornerShape(50)).background(c.surface2).padding(horizontal = 12.dp, vertical = 7.dp))
                 }
-                if (r.note.isNotBlank()) Body(r.note, muted = true)
+            }
+        }
+        More(m, write)
+    }
+}
+
+/** A quiet section: a small label (and a count at its end), then its content. No boxes, no lines. */
+@Composable
+private fun Section(label: String, trailing: String? = null, top: androidx.compose.ui.unit.Dp = 30.dp, content: @Composable () -> Unit) {
+    val c = LocalDeck.current
+    Column(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = top)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(label, style = SectionLabelStyle, color = c.faint, modifier = Modifier.weight(1f))
+            if (trailing != null) Text(trailing, color = c.faint, fontSize = 12.sp)
+        }
+        Column(Modifier.padding(top = 10.dp)) { content() }
+    }
+}
+
+/**
+ * The path: what was done (folded into one green point), the next step (the one that matters, in a card), and what's
+ * left after it as empty rings, on one line. The next step is closed or changed here; the rest is kept by Claude and
+ * on the computer.
+ */
+@Composable
+private fun PathOf(m: Memory, write: ((String) -> Unit)?, onDone: ((String) -> Unit)?) {
+    val c = LocalDeck.current
+    var openDone by remember { mutableStateOf(false) }
+    val next = m.next.takeIf { it.isNotBlank() } ?: m.left.firstOrNull()
+    val rest = m.left.filter { it != next }
+    val hasDone = m.doneItems.isNotEmpty() || m.done.isNotBlank()
+    if (next == null && !hasDone && write == null) return
+    val leftCount = rest.size + (if (next != null) 1 else 0)
+    Section("המסלול", trailing = when (leftCount) { 0 -> null; 1 -> "שלב אחד נשאר"; else -> "$leftCount שלבים נשארו" }, top = 26.dp) {
+        Column {
+            if (hasDone) PathRow(nodeTop = 13.dp, below = c.closed, node = { DoneNode() }) {
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { openDone = !openDone }.padding(vertical = 4.dp)) {
+                    Row(Modifier.heightIn(min = 40.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(if (m.doneItems.isEmpty()) "בסשן האחרון" else "${m.doneItems.size} נעשו", color = c.muted, fontSize = 15.sp)
+                            (m.doneItems.firstOrNull() ?: m.done).let { last ->
+                                Text("אחרון: $last", color = c.faint, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, style = TextStyle(textDirection = dirOf(last)))
+                            }
+                        }
+                        Chevron(open = openDone)
+                    }
+                    if (openDone) Column(Modifier.padding(top = 10.dp, bottom = 6.dp)) {
+                        if (m.done.isNotBlank()) {
+                            Text("בסשן האחרון" + (if (m.doneAt > 0) " · ${ago(m.doneAt)}" else "") + (if (m.agent.isNotBlank()) " · ${m.agent}" else ""), color = c.faint, fontSize = 12.sp)
+                            Text(m.done, color = c.muted, fontSize = 14.sp, lineHeight = 21.sp, style = TextStyle(textDirection = dirOf(m.done)), modifier = Modifier.padding(top = 2.dp, bottom = 10.dp))
+                        }
+                        m.doneItems.forEach { t ->
+                            Row(Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Box(Modifier.padding(top = 8.dp)) { Dot(c.closed.copy(alpha = 0.7f), 5.dp) }
+                                Text(t, color = c.muted, fontSize = 14.sp, lineHeight = 21.sp, style = TextStyle(textDirection = dirOf(t)))
+                            }
+                        }
+                    }
+                }
+            }
+            // The next step: an indigo point and a card. Closing it or changing it is the phone's one move here.
+            PathRow(nodeTop = 16.dp, above = if (hasDone) c.closed else null, below = if (rest.isNotEmpty()) c.line else null, node = { NextNode(next != null) }) {
+                Column(Modifier.padding(vertical = 4.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.surface).padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 14.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("הבא", color = c.accentText, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                        val own = next != null && next == m.next
+                        if (own && onDone != null) SmallAction("בוצע") { onDone(m.next) }
+                        if (write != null) SmallAction(if (next != null) "שינוי" else "צעד הבא") { write(Note.NEXT) }
+                    }
+                    Text(next ?: "עוד אין צעד הבא", color = if (next != null) c.fg else c.faint, fontSize = 16.sp, lineHeight = 23.sp, fontWeight = FontWeight.Medium,
+                        style = TextStyle(textDirection = dirOf(next ?: "א")), modifier = Modifier.padding(end = 8.dp))
+                }
+            }
+            rest.forEachIndexed { i, t ->
+                PathRow(above = c.line, below = if (i < rest.lastIndex) c.line else null, node = { RingNode() }) {
+                    Text(t, color = c.fg.copy(alpha = 0.86f), fontSize = 15.sp, lineHeight = 22.sp, style = TextStyle(textDirection = dirOf(t)),
+                        modifier = Modifier.heightIn(min = 44.dp).padding(vertical = 11.dp))
+                }
             }
         }
     }
 }
 
-/** The one thing the page is for: what's next. Words, not a colour: as on the computer, amber is kept for what's open. */
+/** One stop on the path: its point on the line (at [nodeTop], else centred), the line above and below it, and what it says. */
 @Composable
-private fun NextBlock(m: Memory, write: ((String) -> Unit)?, onDone: ((String) -> Unit)?) {
-    val c = LocalDeck.current
-    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("הבא", color = c.faint, fontSize = 13.sp, modifier = Modifier.weight(1f))
-            if (m.open && onDone != null) SmallAction("בוצע") { onDone(m.next) }
-            if (write != null) SmallAction(if (m.open) "שינוי" else "צעד הבא") { write(Note.NEXT) }
+private fun PathRow(nodeTop: androidx.compose.ui.unit.Dp? = null, above: Color? = null, below: Color? = null, node: @Composable () -> Unit, content: @Composable () -> Unit) {
+    Row(Modifier.fillMaxWidth().height(androidx.compose.foundation.layout.IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        Column(Modifier.width(22.dp).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
+            val line = Modifier.width(2.dp)
+            if (nodeTop != null) Box(line.height(nodeTop).background(above ?: Color.Transparent))
+            else Box(line.weight(1f).background(above ?: Color.Transparent))
+            node()
+            Box(line.weight(1f).background(below ?: Color.Transparent))
         }
-        Text(
-            if (m.open) m.next else "עוד אין צעד הבא",
-            color = if (m.open) c.fg else c.faint, fontSize = 22.sp, lineHeight = 30.sp, fontFamily = Display, fontWeight = FontWeight.Light,
-            style = TextStyle(textDirection = dirOf(if (m.open) m.next else "א")), modifier = Modifier.padding(top = 8.dp),
-        )
+        Box(Modifier.weight(1f)) { content() }
     }
 }
 
-/**
- * Where the work stands, as on the computer: what's left, ideas set aside (came up, weren't built), what was done
- * lately. Read here; they're changed on the computer or by Claude as it works.
- */
 @Composable
-private fun PlanBlocks(m: Memory) {
+private fun DoneNode() {
     val c = LocalDeck.current
-    var allDone by remember { mutableStateOf(false) }
-    if (m.left.isNotEmpty()) Block("מה נשאר · ${m.left.size}") {
-        m.left.forEachIndexed { i, t -> if (i > 0) Hair(); Body(t) }
+    Box(Modifier.size(22.dp).clip(CircleShape).background(c.closed), contentAlignment = Alignment.Center) {
+        androidx.compose.foundation.Canvas(Modifier.size(12.dp)) {
+            val s = size.width
+            val path = androidx.compose.ui.graphics.Path().apply { moveTo(s * 0.2f, s * 0.53f); lineTo(s * 0.4f, s * 0.72f); lineTo(s * 0.8f, s * 0.3f) }
+            drawPath(path, c.bg, style = androidx.compose.ui.graphics.drawscope.Stroke(s * 0.14f, cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+        }
     }
-    if (m.ideas.isNotEmpty()) Block("רעיונות בצד · ${m.ideas.size}") {
-        Text("עלו בדרך ולא נבנו. מעבירים ל״מה נשאר״ במחשב.", color = c.faint, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp))
-        m.ideas.forEachIndexed { i, t -> if (i > 0) Hair(); Body(t, muted = true) }
+}
+
+@Composable
+private fun NextNode(on: Boolean) {
+    val c = LocalDeck.current
+    Box(Modifier.size(22.dp).clip(CircleShape).background(c.accentTint), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(12.dp).clip(CircleShape).background(if (on) c.accent else c.faint))
     }
-    if (m.doneItems.isNotEmpty()) {
-        val shown = if (allDone) m.doneItems else m.doneItems.take(3)
-        Block("נעשה לאחרונה", action = if (m.doneItems.size > 3) (if (allDone) "פחות" else "כל ה־${m.doneItems.size}") to { allDone = !allDone } else null) {
-            shown.forEachIndexed { i, t -> if (i > 0) Hair(); Body(t, muted = true) }
+}
+
+@Composable
+private fun RingNode() {
+    val c = LocalDeck.current
+    Box(Modifier.width(22.dp).height(12.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(11.dp).clip(CircleShape).background(c.bg).border(2.dp, Color(0xFF4A4A52), CircleShape))
+    }
+}
+
+@Composable
+private fun Chevron(open: Boolean) {
+    val c = LocalDeck.current
+    androidx.compose.foundation.Canvas(Modifier.size(18.dp)) {
+        val s = size.width
+        val path = androidx.compose.ui.graphics.Path().apply {
+            if (open) { moveTo(s * 0.25f, s * 0.62f); lineTo(s * 0.5f, s * 0.38f); lineTo(s * 0.75f, s * 0.62f) }
+            else { moveTo(s * 0.25f, s * 0.38f); lineTo(s * 0.5f, s * 0.62f); lineTo(s * 0.75f, s * 0.38f) }
+        }
+        drawPath(path, c.faint, style = androidx.compose.ui.graphics.drawscope.Stroke(1.6.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+    }
+}
+
+/** What changes rarely (about the project, the decisions, the last version) behind one quiet row. */
+@Composable
+private fun More(m: Memory, write: ((String) -> Unit)?) {
+    val c = LocalDeck.current
+    var open by rememberSaveable { mutableStateOf(false) }
+    val parts = listOfNotNull(
+        "על הפרויקט".takeIf { m.summary.isNotBlank() },
+        (if (m.decisions.isEmpty()) "החלטות" else "${m.decisions.size} החלטות").takeIf { m.decisions.isNotEmpty() || write != null },
+        m.releases.firstOrNull()?.let { "גרסה ⁦${it.version}⁩" },
+    )
+    if (parts.isEmpty()) return
+    Column(Modifier.fillMaxWidth().padding(top = 28.dp)) {
+        Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(1.dp).background(c.line))
+        Row(
+            Modifier.fillMaxWidth().clickable { open = !open }.heightIn(min = 52.dp).padding(horizontal = 24.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(parts.joinToString(" · "), color = c.muted, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Chevron(open)
+        }
+        if (open) {
+            if (m.summary.isNotBlank()) Block("על הפרויקט") { Body(m.summary, muted = true) }
+            Decisions(m, write)
+            m.releases.firstOrNull()?.let { r ->
+                Block("גרסה אחרונה") {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(r.version, color = c.fg, fontSize = 15.sp, fontFamily = PlexMono)
+                        if (r.date.isNotBlank()) Text(r.date, color = c.faint, fontSize = 13.sp, fontFamily = PlexMono)
+                    }
+                    if (r.note.isNotBlank()) Body(r.note, muted = true)
+                }
+            }
         }
     }
 }

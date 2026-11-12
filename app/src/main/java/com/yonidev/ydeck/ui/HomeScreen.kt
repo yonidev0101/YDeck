@@ -125,7 +125,10 @@ private fun ProjectRow(p: Project, memory: Memory?, live: com.yonidev.ydeck.link
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Logo(p, 40.dp)
+        // A thin ring around the logo: what was done out of what was planned, as the project page's mark says it.
+        val progress = memory?.progress()
+        if (progress != null) RingedLogo(p, progress.first, progress.second, 48.dp)
+        else Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) { Logo(p, 40.dp) }
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(p.name, color = c.fg, fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
