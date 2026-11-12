@@ -144,6 +144,7 @@ private fun ProjectRow(p: Project, memory: Memory?, live: com.yonidev.ydeck.link
                 }
                 memory?.next?.isNotBlank() == true -> Text("הבא: ${memory.next}", color = c.faint, fontSize = 13.sp, lineHeight = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     style = TextStyle(textDirection = dirOf(memory.next)), modifier = Modifier.padding(top = 2.dp))
+                memory?.left?.isNotEmpty() == true -> Text(if (memory.left.size == 1) "נשאר דבר אחד" else "נשארו ${memory.left.size}", color = c.faint, fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp))
                 else -> (memory?.summary?.takeIf { it.isNotBlank() } ?: p.kind).takeIf { it.isNotBlank() }?.let { t ->
                     Text(t, color = c.faint, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, style = TextStyle(textDirection = dirOf(t)), modifier = Modifier.padding(top = 2.dp))
                 }

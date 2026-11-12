@@ -198,6 +198,7 @@ private fun Overview(p: Project, local: Local, dark: Boolean, actions: AppAction
             LiveAgent(local, dark)
             OfferFill(p, local, dir)
             NextStep(p, local, dir)
+            PlanLists(dir)
             LoopsCard(p, local)
             Memory(p, local, dir)
         }
@@ -295,6 +296,78 @@ private fun NextStep(p: Project, local: Local, dir: File) {
         if (before != null) Text(before, color = c.faint, fontSize = 13.sp, lineHeight = 19.sp, fontFamily = PlexSans, maxLines = 2, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(start = 4.dp, top = 8.dp), style = TextStyle(textDirection = TextDirection.Content))
         error?.let { Text(it, color = c.danger, fontSize = 12.sp, fontFamily = PlexSans, modifier = Modifier.padding(start = 4.dp, top = 6.dp)) }
+    }
+}
+
+/**
+ * Where the work stands, in three lists (see [Plan]): what's left (ticked off here, or by Claude as it works), ideas
+ * set aside (said in passing; nothing is built until they're moved to what's left), and what was done lately.
+ */
+@Composable
+internal fun PlanLists(dir: File) {
+    val c = LocalDeck.current
+    val pulse = Pulses.state.collectAsState().value[dir.path] ?: Pulse()
+    val scope = rememberCoroutineScope()
+    var draft by remember(dir) { mutableStateOf("") }
+    var allDone by remember(dir) { mutableStateOf(false) }
+    fun change(op: () -> Unit) = scope.launch {
+        withContext(Dispatchers.IO) { op() }
+        Pulses.refresh(Settings.state.value.local.values.mapNotNull { it.folder })
+    }
+    @Composable fun line(text: String, color: Color, modifier: Modifier) =
+        Text(text, color = color, fontSize = 14.sp, lineHeight = 20.sp, fontFamily = PlexSans, modifier = modifier, style = TextStyle(textDirection = dirOf(text)))
+    Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
+        Column {
+            Section(tr("Left to do", "מה נשאר") + if (pulse.left.isNotEmpty()) " · ${pulse.left.size}" else "")
+            Group {
+                if (pulse.left.isEmpty()) Item {
+                    Text(tr("Nothing yet. Claude fills this in at the end of each piece of work, and you can add here.",
+                        "עוד כלום. Claude ממלא את זה בסוף כל קטע עבודה, ואפשר גם להוסיף כאן."),
+                        color = c.faint, fontSize = 13.sp, lineHeight = 19.sp, fontFamily = PlexSans, modifier = Modifier.weight(1f))
+                }
+                pulse.left.forEach { t ->
+                    Item {
+                        IconButton(Glyph.CHECK, tr("Done", "נעשה"), 26.dp, c.accentText, filled = false) { change { Plan.finish(dir, t) } }
+                        line(t, c.fg, Modifier.weight(1f))
+                        IconButton(Glyph.TRASH, tr("Remove", "הסרה"), 26.dp, c.faint, filled = false) { change { Plan.remove(dir, Plan.LEFT, t) } }
+                    }
+                }
+                Item {
+                    Field(null, draft, { draft = it }, tr("Something left to do", "עוד משהו שנשאר"), modifier = Modifier.weight(1f))
+                    Pill(tr("Add", "הוספה"), Tone.SOFT, enabled = draft.isNotBlank(), small = true) { val t = draft; draft = ""; change { Plan.add(dir, Plan.LEFT, t) } }
+                }
+            }
+        }
+        if (pulse.ideas.isNotEmpty()) Column {
+            Section(tr("Ideas set aside", "רעיונות בצד") + " · ${pulse.ideas.size}")
+            Text(tr("Things that came up along the way and weren't built. Move one to what's left only if you want it.",
+                "דברים שעלו בדרך ולא נבנו. מעבירים ל״מה נשאר״ רק את מה שבאמת רוצים."),
+                color = c.faint, fontSize = 12.sp, lineHeight = 17.sp, fontFamily = PlexSans, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
+            Group {
+                pulse.ideas.forEach { t ->
+                    Item {
+                        GlyphIcon(Glyph.SPARKLE, 14.dp, c.faint)
+                        line(t, c.muted, Modifier.weight(1f))
+                        TextAction(tr("To do", "לעשות"), accent = true) { change { Plan.take(dir, t) } }
+                        IconButton(Glyph.TRASH, tr("Drop", "לוותר"), 26.dp, c.faint, filled = false) { change { Plan.remove(dir, Plan.IDEAS, t) } }
+                    }
+                }
+            }
+        }
+        if (pulse.done.isNotEmpty()) Column {
+            Section(tr("Done lately", "נעשה לאחרונה")) {
+                if (pulse.done.size > 3) TextAction(if (allDone) tr("Less", "פחות") else tr("All ${pulse.done.size}", "כל ה־${pulse.done.size}")) { allDone = !allDone }
+            }
+            Column(Modifier.padding(start = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                (if (allDone) pulse.done else pulse.done.take(3)).forEach { t ->
+                    Row(verticalAlignment = Alignment.Top) {
+                        Box(Modifier.padding(top = 4.dp)) { GlyphIcon(Glyph.CHECK, 13.dp, CLEAN_DOT) }
+                        Spacer(Modifier.width(10.dp))
+                        line(t, c.muted, Modifier.weight(1f))
+                    }
+                }
+            }
+        }
     }
 }
 

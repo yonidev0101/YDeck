@@ -226,6 +226,7 @@ private fun MemoryTab(m: Memory?, live: Live?, pending: List<Note>, write: ((Str
         // A "done" on its way: the next step already shows as closed here.
         val closing = pending.any { it.kind == Note.DONE }
         NextBlock(if (closing) m.copy(next = "") else m, write, onDone)
+        PlanBlocks(m)
         if (live != null && live.loops.isNotEmpty()) Block("פתוח עכשיו") {
             live.loops.forEachIndexed { i, l ->
                 if (i > 0) Hair()
@@ -269,6 +270,29 @@ private fun NextBlock(m: Memory, write: ((String) -> Unit)?, onDone: ((String) -
             color = if (m.open) c.fg else c.faint, fontSize = 22.sp, lineHeight = 30.sp, fontFamily = Display, fontWeight = FontWeight.Light,
             style = TextStyle(textDirection = dirOf(if (m.open) m.next else "א")), modifier = Modifier.padding(top = 8.dp),
         )
+    }
+}
+
+/**
+ * Where the work stands, as on the computer: what's left, ideas set aside (came up, weren't built), what was done
+ * lately. Read here; they're changed on the computer or by Claude as it works.
+ */
+@Composable
+private fun PlanBlocks(m: Memory) {
+    val c = LocalDeck.current
+    var allDone by remember { mutableStateOf(false) }
+    if (m.left.isNotEmpty()) Block("מה נשאר · ${m.left.size}") {
+        m.left.forEachIndexed { i, t -> if (i > 0) Hair(); Body(t) }
+    }
+    if (m.ideas.isNotEmpty()) Block("רעיונות בצד · ${m.ideas.size}") {
+        Text("עלו בדרך ולא נבנו. מעבירים ל״מה נשאר״ במחשב.", color = c.faint, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp))
+        m.ideas.forEachIndexed { i, t -> if (i > 0) Hair(); Body(t, muted = true) }
+    }
+    if (m.doneItems.isNotEmpty()) {
+        val shown = if (allDone) m.doneItems else m.doneItems.take(3)
+        Block("נעשה לאחרונה", action = if (m.doneItems.size > 3) (if (allDone) "פחות" else "כל ה־${m.doneItems.size}") to { allDone = !allDone } else null) {
+            shown.forEachIndexed { i, t -> if (i > 0) Hair(); Body(t, muted = true) }
+        }
     }
 }
 

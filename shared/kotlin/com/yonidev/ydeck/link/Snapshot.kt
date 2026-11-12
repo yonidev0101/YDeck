@@ -23,6 +23,10 @@ data class Memory(
     val releases: List<MemRelease> = emptyList(),
     /** The folder's name on the computer, to recognise it. */
     val folder: String = "",
+    /** Where the work stands: what's left, ideas set aside (not built), what was done lately (newest first). */
+    val left: List<String> = emptyList(),
+    val ideas: List<String> = emptyList(),
+    val doneItems: List<String> = emptyList(),
 ) {
     /** Something still waits: a next step was left. */
     val open: Boolean get() = next.isNotBlank()
@@ -114,15 +118,18 @@ class Snapshot(
             put("done", done); put("doneAt", doneAt); put("agent", agent); put("folder", folder)
             put("decisions", JSONArray().apply { decisions.forEach { put(JSONObject().put("text", it.text).put("date", it.date)) } })
             put("releases", JSONArray().apply { releases.forEach { put(JSONObject().put("version", it.version).put("date", it.date).put("note", it.note)) } })
+            put("left", JSONArray(left)); put("ideas", JSONArray(ideas)); put("doneItems", JSONArray(doneItems))
         }
 
         fun memoryOf(o: JSONObject): Memory {
             fun objs(name: String): List<JSONObject> = o.optJSONArray(name)?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) } } ?: emptyList()
+            fun strings(name: String): List<String> = o.optJSONArray(name)?.let { a -> (0 until a.length()).map { a.optString(it).trim() }.filter { it.isNotEmpty() } } ?: emptyList()
             return Memory(
                 summary = o.optString("summary"), now = o.optString("now"), next = o.optString("next"),
                 done = o.optString("done"), doneAt = o.optLong("doneAt"), agent = o.optString("agent"), folder = o.optString("folder"),
                 decisions = objs("decisions").map { MemDecision(it.optString("text"), it.optString("date")) }.filter { it.text.isNotBlank() },
                 releases = objs("releases").map { MemRelease(it.optString("version"), it.optString("date"), it.optString("note")) }.filter { it.version.isNotBlank() },
+                left = strings("left"), ideas = strings("ideas"), doneItems = strings("doneItems"),
             )
         }
     }

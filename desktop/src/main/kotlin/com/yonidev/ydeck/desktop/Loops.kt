@@ -234,12 +234,23 @@ fun LoopsPage(deck: Deck) {
                         Text(r.p.name, color = c.fg, fontSize = 14.sp, fontFamily = PlexSans)
                         Text(next, color = c.faint, fontSize = 12.sp, fontFamily = PlexSans, maxLines = 1, overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f), style = TextStyle(textDirection = TextDirection.Content))
+                        planCount(pulses[r.local.folder])?.let { Text(it, color = c.faint, fontSize = 12.sp, fontFamily = PlexSans, maxLines = 1) }
                         Dot(CLEAN_DOT)
                     }
                 }
             }
         }
     }
+}
+
+/** "3 left · 2 ideas set aside", or null when both lists are empty. */
+fun planCount(pulse: Pulse?): String? {
+    val left = pulse?.left?.size ?: 0
+    val ideas = pulse?.ideas?.size ?: 0
+    return listOfNotNull(
+        left.takeIf { it > 0 }?.let { tr(if (it == 1) "1 thing left" else "$it left", if (it == 1) "נשאר דבר אחד" else "נשארו $it") },
+        ideas.takeIf { it > 0 }?.let { tr(if (it == 1) "1 idea set aside" else "$it ideas set aside", if (it == 1) "רעיון אחד בצד" else "$it רעיונות בצד") },
+    ).joinToString(" · ").ifEmpty { null }
 }
 
 /** A project on Now: Claude waiting comes first, then at work, then something open, then all saved. */
@@ -277,6 +288,7 @@ private fun NowProject(r: NowRow, pulse: Pulse?, dark: Boolean) {
                     }
                     if (next.isNotBlank()) Text(tr("Next: ", "הבא: ") + next, color = c.faint, fontSize = 12.sp, fontFamily = PlexSans, maxLines = 1, overflow = TextOverflow.Ellipsis,
                         style = TextStyle(textDirection = TextDirection.Content))
+                    planCount(pulse)?.let { Text(it, color = c.faint, fontSize = 12.sp, fontFamily = PlexSans, maxLines = 1) }
                 }
             }
             if (r.loops.isNotEmpty()) r.local.dir?.let { CloseWithClaude(r.p, it, small = true) }

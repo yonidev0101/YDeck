@@ -126,6 +126,11 @@ object YDeckMcp {
         return buildString {
             append(Assistant.about(p))
             val folder = local(p).folder ?: return@buildString
+            ProjectFiles.readLocal(java.io.File(folder))?.let { l ->
+                if (l.left.isNotEmpty()) { appendLine("- left to do:"); l.left.forEach { appendLine("  - $it") } }
+                if (l.ideas.isNotEmpty()) { appendLine("- ideas set aside (not built):"); l.ideas.forEach { appendLine("  - $it") } }
+                if (l.done.isNotEmpty()) { appendLine("- done lately:"); l.done.take(5).forEach { appendLine("  - $it") } }
+            }
             Git.state.value[folder]?.let { g -> appendLine("- git: ${g.branch}, ${gitWords(g)}" + if (g.lastAt > 0) "; last commit ${java.time.Instant.ofEpochMilli(g.lastAt)}: ${g.lastSubject}" else "") }
             loopsIn(p).filter { it.kind != LoopKind.AGENT }.takeIf { it.isNotEmpty() }?.let { loops ->
                 appendLine("- open now:")

@@ -30,7 +30,11 @@ data class SharedFile(
     val summary: String = "", val summaryAt: Long = 0,
     val decisions: List<Decision> = emptyList(),
 )
-data class LocalFile(val now: String, val next: String, val handoff: Handoff? = null, val modifiedAt: Long = 0) {
+data class LocalFile(
+    val now: String, val next: String, val handoff: Handoff? = null, val modifiedAt: Long = 0,
+    /** What's left to do, in order; ideas that came up and were set aside, not built; what was done lately, newest first. */
+    val left: List<String> = emptyList(), val ideas: List<String> = emptyList(), val done: List<String> = emptyList(),
+) {
     /**
      * The handoff's next step as a suggestion: only while the handoff is the newest thing in the file. Once the next
      * step was written after it (by the developer or an agent), it has been answered.
@@ -62,8 +66,28 @@ object ProjectFiles {
         val h = o.optJSONObject("handoff")
         LocalFile(o.optString("now").trim(), o.optString("next").trim(), h?.let {
             Handoff(it.optString("done").trim(), it.optString("next").trim(), runCatching { java.time.Instant.parse(it.optString("at")).toEpochMilli() }.getOrDefault(0L), it.optString("agent"))
-        }?.takeIf { it.done.isNotEmpty() || it.next.isNotEmpty() }, f.lastModified())
+        }?.takeIf { it.done.isNotEmpty() || it.next.isNotEmpty() }, f.lastModified(),
+            left = items(o, Plan.LEFT), ideas = items(o, Plan.IDEAS), done = items(o, Plan.DONE))
     }.getOrNull()
+
+    /** A list of short lines in the file: strings, or objects with a "text" (as an agent may write them). */
+    private fun items(o: JSONObject, key: String): List<String> {
+        val a = o.optJSONArray(key) ?: return emptyList()
+        return (0 until a.length()).mapNotNull { i ->
+            (a.optJSONObject(i)?.optString("text") ?: a.optString(i)).trim().takeIf { it.isNotEmpty() }
+        }.distinct()
+    }
+
+    /** One of the lists in the personal file, rewritten; whatever else the file holds stays. */
+    fun writeList(dir: File, key: String, items: List<String>) {
+        runCatching {
+            val f = File(dir, LOCAL)
+            val o = runCatching { JSONObject(f.readText()) }.getOrDefault(JSONObject())
+            o.put(key, JSONArray(items.map { it.trim() }.filter { it.isNotEmpty() }.distinct()))
+            f.writeText(o.toString(2) + "\n")
+            keepLocalOutOfGit(dir)
+        }
+    }
 
     /** The next step written from YDeck's panel; whatever else the file holds stays. */
     fun writeNext(dir: File, next: String) {
@@ -184,6 +208,8 @@ object ProjectFiles {
             local?.handoff?.let { h ->
                 appendLine("The last session (${h.agent.ifBlank { "an agent" }}, ${java.time.Instant.ofEpochMilli(h.at)}) handed off: done \"${h.done}\"; suggested next \"${h.next}\".")
             }
+            if (!local?.left.isNullOrEmpty()) appendLine("Left to do: " + local!!.left.take(12).joinToString("; ") + ".")
+            if (!local?.ideas.isNullOrEmpty()) appendLine("Ideas set aside (not to be built unless the user asks): " + local!!.ideas.take(12).joinToString("; ") + ".")
             val decisions = readShared(dir)?.decisions.orEmpty()
             if (decisions.isNotEmpty()) {
                 appendLine("Decisions already made in this project (keep to them unless the user changes them):")
@@ -192,7 +218,8 @@ object ProjectFiles {
             appendLine()
             val repo = Settings.state.value.repoFiles
             appendLine("The user asked YDeck to have these files kept up to date. Do it as part of the work, and mention it in a few words when you do:")
-            appendLine("- When you finish a meaningful piece of work, or the user is about to stop, write $LOCAL in the project root: {\"now\": \"what is in progress, one short line\", \"next\": \"the next concrete step\"}, in the language the user writes in. It is personal and kept out of git.")
+            appendLine("- When you finish a meaningful piece of work, or the user is about to stop, write $LOCAL in the project root, keeping what is already in it: {\"now\": \"what is in progress, one short line\", \"next\": \"the next concrete step\", \"left\": [\"what is still left to do, one short line each, in order\"], \"ideas\": [\"ideas that came up and were set aside\"], \"done\": [\"what was finished, newest first, at most 10\"]}, in the language the user writes in. Move what you finished from \"left\" to the start of \"done\". It is personal and kept out of git.")
+            appendLine("- Something the user only wondered about or thought aloud (\"maybe\", \"what do you say\", \"I had an idea\") goes into \"ideas\": don't build it and don't put it in \"left\" unless they say to. They see the three lists in YDeck and move ideas on themselves.")
             appendLine("- When the user asks to close the project for today (\"close for today\", \"wrap up\", \"סגור להיום\"), run the /ydeck:${ClaudePlugin.CLOSE_DAY} command: it commits, pushes, stops what runs and leaves the next step, so nothing stays open.")
             if (!repo) {
                 append("The user turned off changes to files in the repository: leave $SHARED and AGENTS.md as they are.")
@@ -200,7 +227,7 @@ object ProjectFiles {
             }
             appendLine("- When you connect the project to a new service or console (a Supabase project, a Stripe account, a new Vercel project...), add {\"label\": \"...\", \"url\": \"https://...\"} to \"links\" in $SHARED.")
             appendLine("- When you release a version, add {\"version\": \"...\", \"date\": \"YYYY-MM-DD\", \"note\": \"one line\"} at the start of \"releases\" in $SHARED.")
-            appendLine("- When the user and you settle something future sessions must keep to (a library or service chosen, an approach dropped, a convention), add {\"text\": \"the decision and why, one line\", \"date\": \"YYYY-MM-DD\"} at the start of \"decisions\" in $SHARED, in the user's language.")
+            appendLine("- When the user settles something future sessions must keep to (a library or service chosen, an approach dropped, a convention), add {\"text\": \"the decision and why, one line\", \"date\": \"YYYY-MM-DD\"} at the start of \"decisions\" in $SHARED, in the user's language. Only once they said so clearly; if they are still weighing it, ask \"shall I record that as a decision?\" first.")
             appendLine("- When what the project is or does changes, rewrite \"summary\" in $SHARED: two or three plain sentences (what it is, who it is for, the main stack), with \"summaryAt\" set to the current time in ISO 8601.")
             append("$SHARED is shared through the repository: only \"summary\", \"decisions\", \"links\", \"commands\" ({\"label\", \"line\"}) and \"releases\", never secrets, tokens or personal emails. Create a file when it is missing and keep what is already in it.")
         }
@@ -250,6 +277,49 @@ object ClaudeSummary {
         o.put("summary", text.trim())
         o.put("summaryAt", java.time.Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS).toString())
         ProjectFiles.writeShared(f, o)
+    }
+}
+
+/**
+ * Where the work stands, as three short lists in .ydeck.local.json: what's left, ideas set aside (said in passing,
+ * not to be built until the developer moves them on), and what was done lately. Claude keeps them as it works; the
+ * developer moves things between them from the project's page.
+ */
+object Plan {
+    const val LEFT = "left"
+    const val IDEAS = "ideas"
+    const val DONE = "done"
+    /** How much of what was done is kept. */
+    const val KEEP_DONE = 10
+
+    private fun read(dir: File) = ProjectFiles.readLocal(dir) ?: LocalFile("", "")
+
+    fun add(dir: File, key: String, text: String) {
+        val t = text.trim().takeIf { it.isNotEmpty() } ?: return
+        val l = read(dir)
+        val list = when (key) { LEFT -> l.left; IDEAS -> l.ideas; else -> l.done }
+        // Something left goes at the end (it's in order); an idea or something done, first.
+        ProjectFiles.writeList(dir, key, if (key == LEFT) list + t else (listOf(t) + list).take(if (key == DONE) KEEP_DONE else Int.MAX_VALUE))
+    }
+
+    fun remove(dir: File, key: String, text: String) {
+        val l = read(dir)
+        val list = when (key) { LEFT -> l.left; IDEAS -> l.ideas; else -> l.done }
+        ProjectFiles.writeList(dir, key, list - text)
+    }
+
+    /** Something left, done: to the start of what was done. */
+    fun finish(dir: File, text: String) {
+        val l = read(dir)
+        ProjectFiles.writeList(dir, LEFT, l.left - text)
+        ProjectFiles.writeList(dir, DONE, (listOf(text) + (l.done - text)).take(KEEP_DONE))
+    }
+
+    /** An idea the developer chose to do: to the end of what's left. */
+    fun take(dir: File, idea: String) {
+        val l = read(dir)
+        ProjectFiles.writeList(dir, IDEAS, l.ideas - idea)
+        ProjectFiles.writeList(dir, LEFT, l.left - idea + idea)
     }
 }
 

@@ -410,6 +410,7 @@ object PhoneLink {
                 decisions = shared?.decisions.orEmpty().take(30).map { MemDecision(it.text, it.date) },
                 releases = shared?.releases.orEmpty().take(10).map { MemRelease(it.version, it.date, it.note) },
                 folder = dir?.name.orEmpty(),
+                left = mine?.left.orEmpty().take(30), ideas = mine?.ideas.orEmpty().take(30), doneItems = mine?.done.orEmpty(),
             )
         }
         val live = deck.projects.mapNotNull { p -> settings.localOf(p.id).folder?.let { p.id to live(it) } }.toMap()
