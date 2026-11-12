@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.DisposableEffect
@@ -977,23 +978,44 @@ private fun RunOutSheet(r: com.yonidev.ydeck.link.RunCommand, n: com.yonidev.yde
     val scroll = rememberScrollState()
     LaunchedEffect(text.length) { scroll.animateScrollTo(scroll.maxValue) }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = c.surface) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp).padding(bottom = 22.dp)) {
+        // As on the computer: one card, the dot and what's going on, the line in a terminal-like block, its output under it.
+        Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp).padding(bottom = 22.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Dot(dot, 8.dp)
-                Text(words, color = c.muted, fontSize = 13.sp)
+                Text(words, color = c.fg, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                Text(if (r.window) "בחלון חדש" else "בתוך YDeck", color = c.faint, fontSize = 12.sp)
             }
-            Text(r.line, color = c.fg, fontSize = 16.sp, fontFamily = PlexMono, style = TextStyle(textDirection = TextDirection.Ltr),
-                modifier = Modifier.fillMaxWidth().padding(top = 10.dp))
-            Box(Modifier.fillMaxWidth().padding(top = 14.dp).heightIn(min = 160.dp, max = 460.dp).clip(RoundedCornerShape(14.dp)).background(c.surface2)
-                .verticalScroll(scroll).padding(horizontal = 14.dp, vertical = 12.dp)) {
-                androidx.compose.foundation.text.selection.SelectionContainer {
-                    Text(text.ifEmpty { if (now?.state == com.yonidev.ydeck.link.Ran.DONE) "(אין פלט)" else "…" },
-                        color = if (text.isEmpty()) c.faint else c.fg, fontSize = 12.sp, lineHeight = 17.sp, fontFamily = PlexMono,
-                        style = TextStyle(textDirection = TextDirection.Ltr), modifier = Modifier.fillMaxWidth())
+            val done = now?.state == com.yonidev.ydeck.link.Ran.DONE
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.bg).border(1.dp, c.line, RoundedCornerShape(12.dp))) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 11.dp)) {
+                    Text("> " + r.line, color = c.fg, fontSize = 14.sp, fontFamily = PlexMono, style = TextStyle(textDirection = TextDirection.Ltr),
+                        modifier = Modifier.fillMaxWidth())
+                }
+                Box(Modifier.fillMaxWidth().height(1.dp).background(c.line))
+                Box(Modifier.fillMaxWidth().heightIn(min = 180.dp, max = 440.dp).verticalScroll(scroll).padding(horizontal = 14.dp, vertical = 12.dp)) {
+                    androidx.compose.foundation.text.selection.SelectionContainer {
+                        Text(text.trimEnd().ifEmpty { if (done) "(אין פלט)" else "…" } + if (done) "\n— exit ${now?.code ?: 0}" else "",
+                            color = if (text.isBlank()) c.faint else c.fg, fontSize = 12.sp, lineHeight = 18.sp, fontFamily = PlexMono,
+                            style = TextStyle(textDirection = TextDirection.Ltr), modifier = Modifier.fillMaxWidth())
+                    }
                 }
             }
-            if (seen == null && n?.state == com.yonidev.ydeck.link.Ran.DONE && text.isNotEmpty())
-                Text("${com.yonidev.ydeck.link.Ran.TAIL_LINES} השורות האחרונות", color = c.faint, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (done && text.isNotBlank()) {
+                    var copied by remember { mutableStateOf(false) }
+                    Text(if (copied) "הועתק" else "העתקה", color = c.fg, fontSize = 14.sp, fontWeight = FontWeight.Medium,
+                        modifier = Modifier.clip(RoundedCornerShape(50)).background(c.surface2).clickable {
+                            context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(android.content.ClipData.newPlainText("YDeck", text))
+                            copied = true
+                        }.padding(horizontal = 16.dp, vertical = 10.dp))
+                }
+                Spacer(Modifier.weight(1f))
+                Text(when {
+                    !done -> "במחשב, בזמן אמת"
+                    seen == null && text.isNotEmpty() -> "${com.yonidev.ydeck.link.Ran.TAIL_LINES} השורות האחרונות"
+                    else -> ""
+                }, color = c.faint, fontSize = 12.sp)
+            }
         }
     }
 }

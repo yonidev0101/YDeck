@@ -51,6 +51,7 @@ object Runs {
         @Volatile var code = 0
         @Volatile var process: Process? = null
         val at = System.currentTimeMillis()
+        @Volatile var ended = 0L
         val end: Long get() = base + text.length
         internal var pos = 0L
         internal val decoder = Charsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPLACE).onUnmappableCharacter(CodingErrorAction.REPLACE)
@@ -63,7 +64,8 @@ object Runs {
     private val outputs = ConcurrentHashMap<String, Output>()
 
     /** The command shown in the panel on this screen (one that runs inside YDeck), and its output as it grows. */
-    data class Shown(val id: String, val project: String, val line: String, val text: String, val done: Boolean, val code: Int)
+    data class Shown(val id: String, val project: String, val line: String, val text: String, val done: Boolean, val code: Int,
+                     val since: Long = System.currentTimeMillis(), val ended: Long = 0)
 
     private val _shown = MutableStateFlow<Shown?>(null)
     val shown: StateFlow<Shown?> = _shown
@@ -145,7 +147,7 @@ object Runs {
                 // No window: nobody types into it, so whatever asks for input reads "no more input" and goes on.
                 out.process = ProcessBuilder(args).directory(q.dir).redirectErrorStream(true)
                     .redirectOutput(ProcessBuilder.Redirect.DISCARD).start().also { it.outputStream.close() }
-                _shown.value = Shown(out.id, out.project, out.line, "", false, 0)
+                _shown.value = Shown(out.id, out.project, out.line, "", false, 0, since = out.at)
             }
             outputs[q.r.id] = out
             while (outputs.size > 6) outputs.values.filter { it.done }.minByOrNull { it.at }?.let { outputs.remove(it.id) } ?: break
@@ -187,6 +189,7 @@ object Runs {
             val more = fresh + take(o)
             o.code = exit?.lines()?.first()?.trim()?.toIntOrNull() ?: o.process?.exitValue()?.takeIf { it != 0 } ?: 1
             o.done = true
+            o.ended = System.currentTimeMillis()
             LiveLine.send(listOf(RunOut(o.id, o.end - more.length, more, true, o.code)))
             show(o)
             val r = ran.firstOrNull { it.id == o.id }
@@ -240,7 +243,7 @@ object Runs {
 
     private fun show(o: Output) {
         val s = _shown.value ?: return
-        if (s.id == o.id) _shown.value = Shown(o.id, o.project, o.line, o.shown(), o.done, o.code)
+        if (s.id == o.id) _shown.value = Shown(o.id, o.project, o.line, o.shown(), o.done, o.code, since = o.at, ended = o.ended)
     }
 
     private fun expire() {
