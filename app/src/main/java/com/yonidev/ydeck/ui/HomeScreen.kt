@@ -22,6 +22,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Inventory2
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.KeyboardArrowUp
+import androidx.compose.ui.draw.alpha
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -65,6 +69,7 @@ fun HomeScreen(
     if (deck.projects.isEmpty()) return Welcome(onPair, onSample)
     val paired = computer?.paired == true
     var filter by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf<Filter?>(null) }
+    var archiveOpen by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     PageScaffold(
         title = "YDeck",
         actions = {
@@ -89,12 +94,13 @@ fun HomeScreen(
         // Sessions waiting for you come first, as on the computer's Now.
         val waiting = computer?.waiting.orEmpty()
         // Three numbers before any words: waiting for you, at work, steps left. Each one filters the list below.
-        val lives = deck.projects.mapNotNull { computer?.live(it.id) }
+        val active = deck.active
+        val lives = active.mapNotNull { computer?.live(it.id) }
         // Amber says one thing everywhere: something here waits for you (Claude asking, or something open: not saved, not pushed).
         fun needsYou(id: String): Boolean = computer?.live(id)?.let { l -> l.agentMode == "WAITING" || l.loops.any { it.kind != "AGENT" } } == true || waiting.any { it.project == id }
-        val waitingN = deck.projects.count { needsYou(it.id) }
+        val waitingN = active.count { needsYou(it.id) }
         val workingN = lives.count { it.agentMode == "WORKING" }
-        val leftN = deck.projects.sumOf { computer?.memory?.get(it.id)?.left?.size ?: 0 }
+        val leftN = active.sumOf { computer?.memory?.get(it.id)?.left?.size ?: 0 }
         if (paired || leftN > 0) item {
             Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Stat(waitingN, "מחכה לך", Filter.WAITING, filter, Modifier.weight(1f)) { filter = if (filter == it) null else it }
@@ -109,16 +115,25 @@ fun HomeScreen(
             }
         }
         val shown = when (filter) {
-            Filter.WAITING -> deck.projects.filter { needsYou(it.id) }
-            Filter.WORKING -> deck.projects.filter { computer?.live(it.id)?.agentMode == "WORKING" }
-            Filter.LEFT -> deck.projects.filter { computer?.memory?.get(it.id)?.left?.isNotEmpty() == true }
-            null -> deck.projects
+            Filter.WAITING -> active.filter { needsYou(it.id) }
+            Filter.WORKING -> active.filter { computer?.live(it.id)?.agentMode == "WORKING" }
+            Filter.LEFT -> active.filter { computer?.memory?.get(it.id)?.left?.isNotEmpty() == true }
+            null -> active
         }
         item { SectionHeader(filter?.label ?: "פרויקטים") }
         item { Line() }
         items(shown, key = { it.id }) { p ->
             ProjectRow(p, computer?.memory?.get(p.id), computer?.live(p.id), onClick = { onOpen(p) })
             Divider(inset = 80.dp)
+        }
+        // The archive: one quiet line under the list, opened by a tap; projects are set aside and brought back on the computer.
+        val archived = deck.archived
+        if (filter == null && archived.isNotEmpty()) {
+            item(key = "archive") { ArchiveRow(archived.size, archiveOpen) { archiveOpen = !archiveOpen } }
+            if (archiveOpen) items(archived, key = { it.id }) { p ->
+                Box(Modifier.alpha(0.6f)) { ProjectRow(p, computer?.memory?.get(p.id), computer?.live(p.id), onClick = { onOpen(p) }) }
+                Divider(inset = 80.dp)
+            }
         }
         if (!paired) item {
             Column(Modifier.padding(horizontal = 24.dp, vertical = 24.dp)) {
@@ -155,6 +170,20 @@ private fun Stat(n: Int, word: String, f: Filter, on: Filter?, modifier: Modifie
             }
             Text(word, color = if (hot) c.openText else c.muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
+    }
+}
+
+/** The archive's line: how many are in it, and an arrow that says whether it's open. */
+@Composable
+private fun ArchiveRow(count: Int, open: Boolean, onTap: () -> Unit) {
+    val c = LocalDeck.current
+    Row(Modifier.fillMaxWidth().clickable(onClick = onTap).padding(horizontal = 24.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Outlined.Inventory2, null, tint = c.faint, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(12.dp))
+        Text("ארכיון", color = c.muted, fontSize = 15.sp)
+        Spacer(Modifier.width(8.dp))
+        Text("$count", color = c.faint, fontSize = 14.sp, modifier = Modifier.weight(1f))
+        Icon(if (open) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown, null, tint = c.faint)
     }
 }
 

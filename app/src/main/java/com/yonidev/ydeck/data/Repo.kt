@@ -128,6 +128,7 @@ object DeckJson {
                 CopyItem(c.optString("label"), value)
             },
             logo = brand.optString("logo").ifBlank { null },
+            archived = p.optBoolean("archived"),
         )
     }
 
@@ -158,6 +159,7 @@ object DeckJson {
             }
         })
         put("copy", JSONArray().apply { p.copies.forEach { put(JSONObject().put("label", it.label).put("value", it.value)) } })
+        if (p.archived) put("archived", true)
     }
 
     /** "#RRGGBB" or "#AARRGGBB" → ARGB int (android.graphics.Color.parseColor without Android). */

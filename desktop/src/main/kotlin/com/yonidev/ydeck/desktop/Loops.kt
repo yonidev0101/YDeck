@@ -195,7 +195,7 @@ fun LoopsPage(deck: Deck) {
     val dark = c == Dark
     val settings by Settings.state.collectAsState()
     val pulses by Pulses.state.collectAsState()
-    val rows = deck.projects.mapNotNull { p ->
+    val rows = deck.active.mapNotNull { p ->
         val local = settings.localOf(p.id)
         if (local.folder == null) return@mapNotNull null
         NowRow(p, local, claudeIn(local.folder), loopsOf(local).filter { it.kind != LoopKind.AGENT })
@@ -363,5 +363,5 @@ private fun NowProject(r: NowRow, pulse: Pulse?, dark: Boolean) {
 @Composable
 fun openLoopCount(deck: Deck): Int {
     val settings by Settings.state.collectAsState()
-    return deck.projects.sumOf { loopsOf(settings.localOf(it.id)).size }
+    return deck.active.sumOf { loopsOf(settings.localOf(it.id)).size }
 }

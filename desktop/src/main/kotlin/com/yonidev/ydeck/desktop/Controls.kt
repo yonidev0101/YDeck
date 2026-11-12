@@ -91,6 +91,7 @@ enum class Glyph(val path: String) {
     POWER("M12 3V12M7.5 6A8 8 0 1 0 16.5 6"),
     PHONE("M7 4A2 2 0 0 1 9 2H15A2 2 0 0 1 17 4V20A2 2 0 0 1 15 22H9A2 2 0 0 1 7 20ZM11 18.5H13"),
     CLOSE("M6 6L18 18M18 6L6 18"),
+    ARCHIVE("M3 5H21V9H3ZM5 9V19H19V9M10 13H14"),
 }
 
 private val glyphs = ConcurrentHashMap<Glyph, ImageVector>()

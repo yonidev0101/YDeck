@@ -61,6 +61,7 @@ fun ProjectPage(p: Project, tab: Tab, dark: Boolean, actions: AppActions) {
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxWidth().padding(start = 44.dp, end = 44.dp, top = 28.dp)) {
             Header(p, local, actions)
+            if (p.archived) { Spacer(Modifier.height(16.dp)); ArchivedNote(p) }
             Spacer(Modifier.height(20.dp))
             Tabs(p, tab, local)
         }
@@ -133,9 +134,27 @@ private fun Header(p: Project, local: Local, actions: AppActions) {
                     MenuItem(Glyph.FOLDER, tr("Open the folder", "פתיחת התיקייה")) { menu = false; Tools.launch(Tools.explorer, dir, p.name) }
                     MenuItem(Glyph.TERMINAL, tr("Open a terminal", "פתיחת טרמינל")) { menu = false; Tools.launch(Tools.terminal, dir, p.name) }
                 }
+                if (p.archived) MenuItem(Glyph.ARCHIVE, tr("Bring back from the archive", "החזרה מהארכיון")) { menu = false; archiveProject(p, false) }
+                else MenuItem(Glyph.ARCHIVE, tr("Move to the archive", "העברה לארכיון")) { menu = false; archiveProject(p, true) }
                 MenuItem(Glyph.TRASH, tr("Delete project", "מחיקת הפרויקט"), danger = true) { menu = false; actions.delete(p) }
             }
         }
+    }
+}
+
+/** An archived project, opened: one line that says so, and the way back. */
+@Composable
+private fun ArchivedNote(p: Project) {
+    val c = LocalDeck.current
+    val shape = RoundedCornerShape(12.dp)
+    Row(Modifier.fillMaxWidth().clip(shape).background(c.surface2).padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        GlyphIcon(Glyph.ARCHIVE, 17.dp, c.muted)
+        Spacer(Modifier.width(10.dp))
+        Text(tr("In the archive: it isn't on Now, the sidebar, widgets or the phone. Opening Claude in it brings it back.",
+            "בארכיון: לא מופיע ב״עכשיו״, בסרגל, בווידג'טים ובטלפון. פתיחת Claude בו מחזירה אותו."),
+            color = c.muted, fontSize = 13.sp, fontFamily = PlexSans, modifier = Modifier.weight(1f))
+        Spacer(Modifier.width(12.dp))
+        Pill(tr("Bring back", "החזרה"), Tone.SOFT) { archiveProject(p, false) }
     }
 }
 

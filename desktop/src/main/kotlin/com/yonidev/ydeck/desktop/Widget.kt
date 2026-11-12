@@ -362,7 +362,7 @@ private fun Strip(spec: WidgetSpec, p: Project, dark: Boolean, w: Dp, actions: W
 @Composable
 private fun NowWidget(deck: Deck, dark: Boolean, actions: WidgetActions, back: () -> Unit) {
     val settings by Settings.state.collectAsState()
-    val rows = deck.projects.filter { settings.localOf(it.id).folder != null }.map { it to standOf(it, settings.localOf(it.id)) }.sortedBy { it.second.rank }
+    val rows = deck.active.filter { settings.localOf(it.id).folder != null }.map { it to standOf(it, settings.localOf(it.id)) }.sortedBy { it.second.rank }
     val (busy, calm) = rows.partition { it.second.mode == StandMode.WAITING || it.second.mode == StandMode.WORKING || it.second.mode == StandMode.OPEN }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val room = ((maxHeight.value - 20f - 34f - 26f) / 44f).toInt().coerceAtLeast(1).let { if (rows.size <= it + 1 && rows.size * 44f <= maxHeight.value - 54f) rows.size else it }

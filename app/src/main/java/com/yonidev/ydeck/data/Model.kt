@@ -97,6 +97,8 @@ data class Project(
     val copies: List<CopyItem>,
     /** Logo image, relative to filesDir (e.g. "logos/yvoice-1.png"); null draws the monogram. */
     val logo: String? = null,
+    /** Set aside on the computer: not on the home screen's list, only under Archive. */
+    val archived: Boolean = false,
 ) {
     val accountLabel: String get() = googleEmail?.substringBefore('@') ?: "חשבון לא הוגדר"
 
@@ -122,4 +124,10 @@ data class Project(
 
 data class Deck(val projects: List<Project>) {
     fun byId(id: String?): Project? = projects.firstOrNull { it.id == id }
+
+    /** The projects worked on: the home screen lists these. */
+    val active: List<Project> get() = projects.filterNot { it.archived }
+
+    /** The ones set aside, under Archive. */
+    val archived: List<Project> get() = projects.filter { it.archived }
 }

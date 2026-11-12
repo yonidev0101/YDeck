@@ -223,7 +223,7 @@ private fun Picker(deck: Deck, currentId: String?, onPick: (Project) -> Unit, on
                     if (currentId == NOW_WIDGET) GlyphIcon(Glyph.CHECK, 18.dp, c.accentText)
                 }
             }
-            items(deck.projects, key = { it.id }) { p ->
+            items(deck.active, key = { it.id }) { p ->
                 Row(Modifier.fillMaxWidth().height(60.dp).clickable { onPick(p) }.padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Logo(p, 34.dp)

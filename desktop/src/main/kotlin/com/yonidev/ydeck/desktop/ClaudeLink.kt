@@ -157,6 +157,8 @@ object ClaudeLink {
         when (e.optString("hook_event_name")) {
             "SessionStart" -> {
                 if (before == null) set(ClaudeMode.DONE, "", workStart = now)
+                // Working on it again: an archived project comes back to the lists.
+                if (before == null) Thread { runCatching { SessionAsks.projectAt(cwd)?.takeIf { it.archived }?.let { archiveProject(it, false) } } }.apply { isDaemon = true; start() }
                 Receipts.begin(id, Agent.CLAUDE, cwd, null, now)
                 return context(cwd)
             }

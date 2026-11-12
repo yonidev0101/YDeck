@@ -93,6 +93,8 @@ data class Project(
     val actions: List<DeckAction>,
     val copies: List<CopyItem>,
     val logo: String? = null,
+    /** Out of the lists (Now, the sidebar, widgets, the phone) until it's brought back, or Claude opens in it. Nothing is deleted. */
+    val archived: Boolean = false,
 ) {
     companion object {
         fun blank(): Project = Project(
@@ -114,6 +116,12 @@ data class Project(
 
 data class Deck(val projects: List<Project>) {
     fun byId(id: String?): Project? = projects.firstOrNull { it.id == id }
+
+    /** The projects worked on: every list shows these. */
+    val active: List<Project> get() = projects.filterNot { it.archived }
+
+    /** The ones set aside, shown only under Archive. */
+    val archived: List<Project> get() = projects.filter { it.archived }
 }
 
 /** projects.json ⇄ [Deck], exactly as the phone reads and writes it. */
@@ -155,6 +163,7 @@ object DeckJson {
                 CopyItem(c.optString("label"), value)
             },
             logo = brand.optString("logo").ifBlank { null },
+            archived = p.optBoolean("archived"),
         )
     }
 
@@ -185,6 +194,7 @@ object DeckJson {
             }
         })
         put("copy", JSONArray().apply { p.copies.forEach { put(JSONObject().put("label", it.label).put("value", it.value)) } })
+        if (p.archived) put("archived", true)
     }
 
     fun parseColor(s: String): Int? {

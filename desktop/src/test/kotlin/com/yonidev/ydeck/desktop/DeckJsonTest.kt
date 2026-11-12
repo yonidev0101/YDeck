@@ -47,4 +47,15 @@ class DeckJsonTest {
         assertEquals("https://accounts.google.com/AccountChooser?Email=a%40b.co&continue=https%3A%2F%2Fmail.google.com%2F%3Fx%3D1", u)
         assertEquals("nova", JSONObject(DeckJson.encodeProject(Project.sample().copy(id = "nova")).toString()).getString("id"))
     }
+
+    /** An archived project keeps everything, comes back unchanged, and is off the lists; one never archived writes no key. */
+    @Test fun archivedRoundTripsAndIsOffTheLists() {
+        val a = Project.sample().copy(id = "a", archived = true)
+        val b = Project.sample().copy(id = "b")
+        val deck = DeckJson.decode(DeckJson.encode(Deck(listOf(a, b))).toString())
+        assertEquals(listOf(a, b), deck.projects)
+        assertEquals(listOf("b"), deck.active.map { it.id })
+        assertEquals(listOf("a"), deck.archived.map { it.id })
+        assertEquals(false, DeckJson.encodeProject(b).has("archived"))
+    }
 }

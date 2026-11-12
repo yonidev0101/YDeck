@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
@@ -32,6 +33,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.rotate
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -224,19 +227,36 @@ private fun androidx.compose.foundation.layout.ColumnScope.ProjectsNav(deck: Dec
     Spacer(Modifier.height(14.dp))
     GroupLabel(tr("Projects", "פרויקטים"), Modifier.padding(start = 6.dp))
     val selected = (route as? Screen.Project)?.id ?: (route as? Screen.Details)?.id
+    var archiveOpen by remember { mutableStateOf(false) }
     // The projects and "New project" under them take the height, so Settings stays at the bottom.
     Column(Modifier.weight(1f)) {
         LazyColumn(Modifier.weight(1f, fill = false)) {
-            itemsIndexed(deck.projects, key = { _, p -> p.id }) { i, p ->
+            val active = deck.active
+            itemsIndexed(active, key = { _, p -> p.id }) { i, p ->
                 ContextMenuArea(items = {
                     buildList {
-                        if (i > 0) add(ContextMenuItem(tr("Move up", "הזזה למעלה")) { moveProject(i, i - 1) })
-                        if (i < deck.projects.lastIndex) add(ContextMenuItem(tr("Move down", "הזזה למטה")) { moveProject(i, i + 1) })
+                        // Up and down among the ones shown: the archived ones in between keep their places.
+                        if (i > 0) add(ContextMenuItem(tr("Move up", "הזזה למעלה")) { moveProject(p.id, active[i - 1].id) })
+                        if (i < active.lastIndex) add(ContextMenuItem(tr("Move down", "הזזה למטה")) { moveProject(p.id, active[i + 1].id) })
                         add(ContextMenuItem(tr("Add a widget to the desktop", "ווידג'ט על שולחן העבודה")) { actions.addWidget(p) })
                         add(ContextMenuItem(tr("Details", "פרטים")) { Nav.set(Screen.Details(p.id)) })
+                        add(ContextMenuItem(tr("Move to the archive", "העברה לארכיון")) { archiveProject(p, true) })
                         add(ContextMenuItem(tr("Delete", "מחיקה")) { actions.delete(p) })
                     }
                 }) { ProjectNavRow(p, p.id == selected) { Nav.set(Screen.Project(p.id)) } }
+            }
+            // The archive: one quiet line at the bottom, opened by a click; what's in it is greyed, and comes back from its menu.
+            val archived = deck.archived
+            if (archived.isNotEmpty()) {
+                item(key = "archive") { ArchiveRow(archived.size, archiveOpen || archived.any { it.id == selected }) { archiveOpen = !archiveOpen } }
+                if (archiveOpen || archived.any { it.id == selected }) items(archived, key = { it.id }) { p ->
+                    ContextMenuArea(items = {
+                        listOf(
+                            ContextMenuItem(tr("Bring back", "החזרה מהארכיון")) { archiveProject(p, false) },
+                            ContextMenuItem(tr("Delete", "מחיקה")) { actions.delete(p) },
+                        )
+                    }) { Box(Modifier.alpha(0.6f)) { ProjectNavRow(p, p.id == selected) { Nav.set(Screen.Project(p.id)) } } }
+                }
             }
         }
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { Nav.set(Screen.NewProject()) }.padding(horizontal = 10.dp, vertical = 8.dp),
@@ -248,6 +268,21 @@ private fun androidx.compose.foundation.layout.ColumnScope.ProjectsNav(deck: Dec
     }
     UpdateRow()
     NavRow(Glyph.GEAR, tr("Settings", "הגדרות"), false) { Nav.set(Screen.Settings()) }
+}
+
+/** The archive's line in the sidebar: how many are in it, and an arrow that says whether it's open. */
+@Composable
+private fun ArchiveRow(count: Int, open: Boolean, onClick: () -> Unit) {
+    val c = LocalDeck.current
+    Row(Modifier.fillMaxWidth().padding(top = 6.dp).clip(RoundedCornerShape(10.dp)).clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) { GlyphIcon(Glyph.ARCHIVE, 17.dp, c.faint) }
+        Spacer(Modifier.width(10.dp))
+        Text(tr("Archive", "ארכיון"), color = c.muted, fontSize = 13.sp, fontFamily = PlexSans)
+        Spacer(Modifier.width(6.dp))
+        Text("$count", color = c.faint, fontSize = 12.sp, fontFamily = PlexSans, modifier = Modifier.weight(1f))
+        Box(Modifier.rotate(if (open) 180f else 0f)) { GlyphIcon(Glyph.CHEVRON, 15.dp, c.faint) }
+    }
 }
 
 /** A project in the sidebar: its logo, its name, and a dot when Claude Code is busy in it. */
@@ -323,11 +358,18 @@ val SettingsSection.glyph: Glyph
 
 // ── changes that touch more than one store ──
 
+private fun moveProject(id: String, to: String) = moveProject(Repo.deck.value.projects.indexOfFirst { it.id == id }, Repo.deck.value.projects.indexOfFirst { it.id == to })
+
 private fun moveProject(from: Int, to: Int) {
     val list = Repo.deck.value.projects.toMutableList()
     if (from !in list.indices || to !in list.indices) return
     list.add(to, list.removeAt(from))
     Repo.save(Deck(list))
+}
+
+/** A project set aside, or brought back: off every list (or back on them), and nothing else changes. */
+fun archiveProject(p: Project, archived: Boolean) {
+    Repo.deck.value.byId(p.id)?.let { saveProject(it.copy(archived = archived)) }
 }
 
 /** A project out of YDeck: its entry, its PC settings, and the icon on its folder (the code stays). */
