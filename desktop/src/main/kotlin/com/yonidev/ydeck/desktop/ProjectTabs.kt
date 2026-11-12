@@ -95,12 +95,15 @@ fun LinksTab(p: Project, dark: Boolean) {
                     }
                 }
             }
+            // The first link is the main one, as on the phone: a large tile in the project's colour. The rest, the grid.
+            p.actions.firstOrNull()?.let { main -> MainLinkTile(p, main, onEdit = { link = 0 }) { Chrome.open(p, main) }; Spacer(Modifier.height(12.dp)) }
             BoxWithConstraints(Modifier.fillMaxWidth()) {
                 val gap = 12.dp
                 val columns = ((maxWidth + gap) / (210.dp + gap)).toInt().coerceIn(2, 4)
                 val width = (maxWidth - gap * (columns - 1)) / columns
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(gap), verticalArrangement = Arrangement.spacedBy(gap)) {
                     p.actions.forEachIndexed { i, a ->
+                        if (i == 0) return@forEachIndexed
                         ContextMenuArea(items = {
                             buildList {
                                 add(ContextMenuItem(tr("Edit", "עריכה")) { link = i })
@@ -154,6 +157,29 @@ private fun LinkTile(a: DeckAction, dark: Boolean, modifier: Modifier, onEdit: (
             Mono(Links.host(a.url) ?: Links.display(a.url), c.faint, 11)
         }
         if (hovered) IconButton(Glyph.EDIT, tr("Edit", "עריכה"), 28.dp, c.muted, filled = false, onClick = onEdit)
+    }
+}
+
+/** The project's main link (its first): a large tile in the project's colour, white on it, as on the phone. */
+@Composable
+private fun MainLinkTile(p: Project, a: DeckAction, onEdit: () -> Unit, onOpen: () -> Unit) {
+    val c = LocalDeck.current
+    val hover = remember { MutableInteractionSource() }
+    val hovered by hover.collectIsHoveredAsState()
+    val tint = if (isNearBlack(p.color)) c.accent else Color(p.color)
+    val shape = RoundedCornerShape(18.dp)
+    Row(Modifier.fillMaxWidth().widthIn(max = 640.dp).clip(shape).background(tint).hoverable(hover).clickable(onClick = onOpen)
+        .padding(horizontal = 18.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(44.dp).clip(RoundedCornerShape(13.dp)).background(Color.White.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) {
+            ServiceMark(a.service, a.faviconHost, 22.dp, true, tint = Color.White)
+        }
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(a.label, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, fontFamily = PlexSans, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Mono(Links.host(a.url) ?: Links.display(a.url), Color.White.copy(alpha = 0.75f), 12)
+        }
+        if (hovered) IconButton(Glyph.EDIT, tr("Edit", "עריכה"), 30.dp, Color.White, filled = false, onClick = onEdit)
+        else GlyphIcon(Glyph.EXTERNAL, 16.dp, Color.White.copy(alpha = 0.8f))
     }
 }
 

@@ -1,6 +1,9 @@
 package com.yonidev.ydeck.desktop
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -197,7 +200,19 @@ fun LoopsPage(deck: Deck) {
         if (local.folder == null) return@mapNotNull null
         NowRow(p, local, claudeIn(local.folder), loopsOf(local).filter { it.kind != LoopKind.AGENT })
     }
-    val (busy, calm) = rows.sortedBy { it.rank }.partition { it.rank < 3 }
+    // Three numbers before any words, as on the phone: waiting for you (Claude asking, or something open), Claude at work,
+    // steps left. Each one keeps only those projects below; again, all of them.
+    var filter by remember { mutableStateOf<NowFilter?>(null) }
+    val needsYou = rows.count { it.rank == 0 || it.loops.isNotEmpty() }
+    val working = rows.count { it.rank == 1 }
+    val left = rows.sumOf { pulses[it.local.folder]?.left?.size ?: 0 }
+    val kept = when (filter) {
+        NowFilter.NEEDS_YOU -> rows.filter { it.rank == 0 || it.loops.isNotEmpty() }
+        NowFilter.WORKING -> rows.filter { it.rank == 1 }
+        NowFilter.LEFT -> rows.filter { pulses[it.local.folder]?.left?.isNotEmpty() == true }
+        null -> rows
+    }
+    val (busy, calm) = kept.sortedBy { it.rank }.partition { it.rank < 3 }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 44.dp, vertical = 30.dp)) {
         Column(Modifier.widthIn(max = 820.dp), verticalArrangement = Arrangement.spacedBy(26.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -210,6 +225,11 @@ fun LoopsPage(deck: Deck) {
                 Spacer(Modifier.width(16.dp))
                 if (busy.any { it.loops.isNotEmpty() }) Pill(tr("Close the day", "סגירת היום"), Tone.DARK, Glyph.MOON) { Nav.set(Screen.CloseDay) }
             }
+            if (rows.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                NowStat(needsYou, tr("waiting for you", "מחכה לך"), NowFilter.NEEDS_YOU, filter, Modifier.weight(1f)) { filter = if (filter == it) null else it }
+                NowStat(working, tr("at work", "עובד"), NowFilter.WORKING, filter, Modifier.weight(1f)) { filter = if (filter == it) null else it }
+                NowStat(left, tr("left", "נשארו"), NowFilter.LEFT, filter, Modifier.weight(1f)) { filter = if (filter == it) null else it }
+            }
             // Installs from before the first run asked: the choice about usage counts, once. Nothing is sent before it.
             if (!settings.statsAsked && settings.welcomed) UsageStatsChoice(settings.usageStats, {}) {
                 Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -218,7 +238,7 @@ fun LoopsPage(deck: Deck) {
                 }
             }
             busy.forEach { r -> NowProject(r, pulses[r.local.folder], dark) }
-            if (busy.isEmpty()) Column(Modifier.fillMaxWidth().padding(vertical = 40.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            if (busy.isEmpty() && filter == null) Column(Modifier.fillMaxWidth().padding(vertical = 40.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Dot(CLEAN_DOT, 14.dp)
                 Spacer(Modifier.height(16.dp))
                 Text(tr("Nothing open", "אין שום דבר פתוח"), color = c.fg, fontSize = 18.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans)
@@ -230,7 +250,7 @@ fun LoopsPage(deck: Deck) {
                 calm.forEach { r ->
                     val next = r.local.note.ifBlank { pulses[r.local.folder]?.suggestion.orEmpty() }
                     Item({ Nav.set(Screen.Project(r.p.id)) }) {
-                        Logo(r.p, 22.dp)
+                        pulses[r.local.folder]?.progress()?.let { (d, t) -> RingedLogo(r.p, d, t, 32.dp) } ?: Logo(r.p, 22.dp)
                         Text(r.p.name, color = c.fg, fontSize = 14.sp, fontFamily = PlexSans)
                         Text(next, color = c.faint, fontSize = 12.sp, fontFamily = PlexSans, maxLines = 1, overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f), style = TextStyle(textDirection = TextDirection.Content))
@@ -239,6 +259,32 @@ fun LoopsPage(deck: Deck) {
                     }
                 }
             }
+        }
+    }
+}
+
+private enum class NowFilter { NEEDS_YOU, WORKING, LEFT }
+
+/** One of Now's three numbers: the count large, a dot in its state's colour and the word. A click keeps only those. */
+@Composable
+private fun NowStat(n: Int, word: String, f: NowFilter, on: NowFilter?, modifier: Modifier, onClick: (NowFilter) -> Unit) {
+    val c = LocalDeck.current
+    val hot = f == NowFilter.NEEDS_YOU && n > 0
+    val shape = RoundedCornerShape(16.dp)
+    Column(
+        modifier.clip(shape).background(if (hot) CHANGED_DOT.copy(alpha = if (c == Dark) 0.12f else 0.10f) else c.surface2)
+            .then(if (on == f) Modifier.border(1.5.dp, c.fg, shape) else Modifier)
+            .clickable { onClick(f) }.padding(horizontal = 16.dp, vertical = 14.dp),
+    ) {
+        Text("$n", color = if (hot) c.amberText else c.fg, fontSize = 28.sp, lineHeight = 32.sp, fontFamily = PlexMono, fontWeight = FontWeight.Medium)
+        Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            when (f) {
+                NowFilter.NEEDS_YOU -> Dot(CHANGED_DOT, 7.dp)
+                NowFilter.WORKING -> Dot(claudeColor(ClaudeMode.WORKING, c == Dark), 7.dp)
+                NowFilter.LEFT -> Box(Modifier.size(7.dp).clip(RoundedCornerShape(4.dp)).border(1.5.dp, c.faint, RoundedCornerShape(4.dp)))
+            }
+            Spacer(Modifier.width(7.dp))
+            Text(word, color = if (hot) c.amberText else c.muted, fontSize = 13.sp, fontFamily = PlexSans, maxLines = 1)
         }
     }
 }
@@ -274,7 +320,7 @@ private fun NowProject(r: NowRow, pulse: Pulse?, dark: Boolean) {
         Row(Modifier.padding(bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             Row(Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).clickable { Nav.set(Screen.Project(r.p.id)) }.padding(start = 4.dp, end = 8.dp, top = 2.dp, bottom = 2.dp),
                 verticalAlignment = Alignment.CenterVertically) {
-                Logo(r.p, 28.dp)
+                pulse?.progress()?.let { (d, t) -> RingedLogo(r.p, d, t, 42.dp) } ?: Logo(r.p, 28.dp)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f, fill = false)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {

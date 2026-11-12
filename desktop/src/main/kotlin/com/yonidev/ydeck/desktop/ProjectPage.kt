@@ -1,16 +1,19 @@
 package com.yonidev.ydeck.desktop
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -76,11 +79,31 @@ fun ProjectPage(p: Project, tab: Tab, dark: Boolean, actions: AppActions) {
 @Composable
 private fun Header(p: Project, local: Local, actions: AppActions) {
     val dir = local.dir
+    val c = LocalDeck.current
+    // The mark is the progress: the ring fills with what was done out of what was planned, the logo inside it.
+    val progress = dir?.let { Pulses.state.collectAsState().value[it.path] }?.progress()
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.clip(RoundedCornerShape(16.dp)).clickable { Nav.set(Screen.Details(p.id)) }) { Logo(p, 56.dp) }
+        Box(Modifier.clip(RoundedCornerShape(16.dp)).clickable { Nav.set(Screen.Details(p.id)) }) {
+            if (progress != null) ProgressMark(progress.first, progress.second, 88.dp) { Logo(p, 38.dp) } else Logo(p, 56.dp)
+        }
         Spacer(Modifier.width(18.dp))
         Column(Modifier.weight(1f)) {
-            PageTitle(p.name, 34)
+            Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                PageTitle(p.name, 34)
+                if (progress != null) {
+                    Text(
+                        androidx.compose.ui.text.buildAnnotatedString {
+                            append("${progress.first}")
+                            pushStyle(androidx.compose.ui.text.SpanStyle(color = c.faint)); append("/${progress.second}"); pop()
+                        },
+                        color = c.fg, fontSize = 20.sp, fontFamily = PlexMono, fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = 4.dp),
+                        style = TextStyle(textDirection = TextDirection.Ltr),
+                    )
+                    val left = progress.second - progress.first
+                    Text(if (left == 0) tr("all done", "הכול נעשה") else tr("done · $left left", "נעשו · נשארו $left"), color = c.muted, fontSize = 13.sp,
+                        fontFamily = PlexSans, modifier = Modifier.padding(bottom = 7.dp))
+                }
+            }
             Spacer(Modifier.height(2.dp))
             StatusLine(p, local)
         }
@@ -197,8 +220,8 @@ private fun Overview(p: Project, local: Local, dark: Boolean, actions: AppAction
         Column(Modifier.widthIn(max = 860.dp), verticalArrangement = Arrangement.spacedBy(32.dp)) {
             LiveAgent(local, dark)
             OfferFill(p, local, dir)
-            NextStep(p, local, dir)
-            PlanLists(dir)
+            NowLine(dir)
+            PlanLists(p, local, dir)
             LoopsCard(p, local)
             Memory(p, local, dir)
         }
@@ -259,115 +282,189 @@ private fun LiveAgent(local: Local, dark: Boolean) {
     }
 }
 
-/** The next step (both ways with .ydeck.local.json), Claude's suggestion for it, and where the last session ended. */
+/** What's in progress: one sentence, large and thin, ending in the brand's amber point (from .ydeck.local.json). */
 @Composable
-private fun NextStep(p: Project, local: Local, dir: File) {
+private fun NowLine(dir: File) {
     val c = LocalDeck.current
-    val pulse = Pulses.state.collectAsState().value[dir.path] ?: Pulse()
-    var note by remember(p.id) { mutableStateOf(local.note) }
-    LaunchedEffect(local.note) { if (local.note != note) note = local.note }
-    val busy = dir.path in Handoffs.busy.collectAsState().value
-    val scope = rememberCoroutineScope()
-    var error by remember(p.id) { mutableStateOf<String?>(null) }
-    val handoff = pulse.handoff
-    fun use(next: String) { note = next; Settings.setNote(p.id, next); ProjectFiles.writeNext(dir, next) }
+    val now = Pulses.state.collectAsState().value[dir.path]?.now?.trim()?.trimEnd('.', ' ')?.takeIf { it.isNotEmpty() } ?: return
     Column {
-        Section(tr("Next step", "הצעד הבא")) {
-            if (Tools.claude != null) TextAction(if (busy) tr("Claude is summing up…", "Claude מסכם…") else tr("Sum up with Claude", "סיכום עם Claude"), accent = true, enabled = !busy) {
-                error = null
-                scope.launch {
-                    error = withContext(Dispatchers.IO) { Handoffs.write(dir) }
-                    Pulses.refresh(Settings.state.value.local.values.mapNotNull { it.folder })
-                }
-            }
-        }
-        Field(null, note, { use(it) }, placeholder = tr("The next step, so you come back without thinking", "הצעד הבא, כדי לחזור בלי לחשוב"))
-        // Claude's suggestion, one click from being the next step.
-        val suggestion = pulse.suggestion
-        if (suggestion.isNotBlank() && suggestion != note) Row(Modifier.padding(start = 4.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            GlyphIcon(Glyph.SPARKLE, 13.dp, c.accentText)
-            Spacer(Modifier.width(8.dp))
-            Text(tr("Claude suggests: ", "Claude מציע: ") + suggestion, color = c.muted, fontSize = 13.sp, fontFamily = PlexSans, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false), style = TextStyle(textDirection = TextDirection.Content))
-            TextAction(tr("Use this", "להשתמש בזה"), accent = true) { use(suggestion) }
-        }
-        val before = handoff?.done?.takeIf { it.isNotBlank() }?.let { tr("Last time: ", "בפעם הקודמת: ") + it + " · " + ago(handoff.at) }
-            ?: pulse.now.takeIf { it.isNotBlank() }?.let { tr("In progress: ", "בעבודה: ") + it }
-        if (before != null) Text(before, color = c.faint, fontSize = 13.sp, lineHeight = 19.sp, fontFamily = PlexSans, maxLines = 2, overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(start = 4.dp, top = 8.dp), style = TextStyle(textDirection = TextDirection.Content))
-        error?.let { Text(it, color = c.danger, fontSize = 12.sp, fontFamily = PlexSans, modifier = Modifier.padding(start = 4.dp, top = 6.dp)) }
+        Text(tr("Now", "עכשיו"), color = c.faint, fontSize = 12.sp, fontWeight = FontWeight.Medium, fontFamily = PlexSans, modifier = Modifier.padding(start = 4.dp, bottom = 6.dp))
+        Text(
+            androidx.compose.ui.text.buildAnnotatedString { append(now); pushStyle(androidx.compose.ui.text.SpanStyle(color = CHANGED_DOT)); append("."); pop() },
+            color = c.fg, fontSize = 28.sp, lineHeight = 38.sp, fontFamily = Display, fontWeight = FontWeight.Light,
+            modifier = Modifier.padding(start = 4.dp), style = TextStyle(textDirection = dirOf(now)),
+        )
     }
 }
 
 /**
- * Where the work stands, in three lists (see [Plan]): what's left (ticked off here, or by Claude as it works), ideas
- * set aside (said in passing; nothing is built until they're moved to what's left), and what was done lately.
+ * Where the work stands, as one path (see [Plan]), as on the phone: what was done (folded into one green point), the
+ * next step in a card (both ways with .ydeck.local.json, with Claude's suggestion and where the last session ended),
+ * and what's left after it as empty rings, ticked off or removed here. Then the ideas set aside, as chips: nothing is
+ * built until one is moved to what's left.
  */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-internal fun PlanLists(dir: File) {
+internal fun PlanLists(p: Project, local: Local, dir: File) {
     val c = LocalDeck.current
     val pulse = Pulses.state.collectAsState().value[dir.path] ?: Pulse()
     val scope = rememberCoroutineScope()
     var draft by remember(dir) { mutableStateOf("") }
-    var allDone by remember(dir) { mutableStateOf(false) }
-    fun change(op: () -> Unit) = scope.launch {
-        withContext(Dispatchers.IO) { op() }
-        Pulses.refresh(Settings.state.value.local.values.mapNotNull { it.folder })
-    }
-    @Composable fun line(text: String, color: Color, modifier: Modifier) =
-        Text(text, color = color, fontSize = 14.sp, lineHeight = 20.sp, fontFamily = PlexSans, modifier = modifier, style = TextStyle(textDirection = dirOf(text)))
-    Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
+    var openDone by remember(dir) { mutableStateOf(false) }
+    var note by remember(p.id) { mutableStateOf(local.note) }
+    LaunchedEffect(local.note) { if (local.note != note) note = local.note }
+    val busy = dir.path in Handoffs.busy.collectAsState().value
+    var error by remember(p.id) { mutableStateOf<String?>(null) }
+    suspend fun refresh() = Pulses.refresh(Settings.state.value.local.values.mapNotNull { it.folder })
+    fun change(op: () -> Unit) = scope.launch { withContext(Dispatchers.IO) { op() }; refresh() }
+    fun use(next: String) { note = next; Settings.setNote(p.id, next); ProjectFiles.writeNext(dir, next) }
+    val rest = pulse.left.filter { it.trim() != note.trim() }
+    val hasDone = pulse.done.isNotEmpty() || pulse.handoff?.done?.isNotBlank() == true
+    val leftCount = rest.size + (if (note.isNotBlank()) 1 else 0)
+    Column(verticalArrangement = Arrangement.spacedBy(30.dp)) {
         Column {
-            Section(tr("Left to do", "מה נשאר") + if (pulse.left.isNotEmpty()) " · ${pulse.left.size}" else "")
-            Group {
-                if (pulse.left.isEmpty()) Item {
-                    Text(tr("Nothing yet. Claude fills this in at the end of each piece of work, and you can add here.",
-                        "עוד כלום. Claude ממלא את זה בסוף כל קטע עבודה, ואפשר גם להוסיף כאן."),
-                        color = c.faint, fontSize = 13.sp, lineHeight = 19.sp, fontFamily = PlexSans, modifier = Modifier.weight(1f))
-                }
-                pulse.left.forEach { t ->
-                    Item {
-                        IconButton(Glyph.CHECK, tr("Done", "נעשה"), 26.dp, c.accentText, filled = false) { change { Plan.finish(dir, t) } }
-                        line(t, c.fg, Modifier.weight(1f))
-                        IconButton(Glyph.TRASH, tr("Remove", "הסרה"), 26.dp, c.faint, filled = false) { change { Plan.remove(dir, Plan.LEFT, t) } }
+            Section(tr("The path", "המסלול")) {
+                if (leftCount > 0) Text(tr("$leftCount left", if (leftCount == 1) "שלב אחד נשאר" else "$leftCount שלבים נשארו"), color = c.faint, fontSize = 12.sp, fontFamily = PlexSans)
+            }
+            Column(Modifier.padding(start = 4.dp)) {
+                // What was done: one green point, opened on a click.
+                if (hasDone) PathRow(nodeTop = 12.dp, below = CLEAN_DOT, node = { DoneNode() }) {
+                    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { openDone = !openDone }.padding(vertical = 4.dp, horizontal = 4.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(if (pulse.done.isEmpty()) tr("Last session", "בסשן האחרון") else tr("${pulse.done.size} done", "${pulse.done.size} נעשו"),
+                                    color = c.muted, fontSize = 14.sp, fontFamily = PlexSans)
+                                (pulse.done.firstOrNull() ?: pulse.handoff?.done.orEmpty()).takeIf { it.isNotBlank() }?.let { last ->
+                                    Text(tr("Latest: ", "אחרון: ") + last, color = c.faint, fontSize = 12.sp, fontFamily = PlexSans, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                        style = TextStyle(textDirection = dirOf(last)))
+                                }
+                            }
+                            Box(Modifier.rotate(if (openDone) 180f else 0f)) { GlyphIcon(Glyph.CHEVRON, 16.dp, c.faint) }
+                        }
+                        if (openDone) Column(Modifier.padding(top = 10.dp, bottom = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            pulse.handoff?.takeIf { it.done.isNotBlank() }?.let { h ->
+                                Text(tr("Last session", "בסשן האחרון") + " · " + ago(h.at), color = c.faint, fontSize = 12.sp, fontFamily = PlexSans)
+                                Text(h.done, color = c.muted, fontSize = 13.sp, lineHeight = 20.sp, fontFamily = PlexSans, style = TextStyle(textDirection = dirOf(h.done)),
+                                    modifier = Modifier.padding(bottom = 6.dp))
+                            }
+                            pulse.done.forEach { t ->
+                                Row(verticalAlignment = Alignment.Top) {
+                                    Box(Modifier.padding(top = 7.dp)) { Box(Modifier.size(5.dp).clip(RoundedCornerShape(3.dp)).background(CLEAN_DOT.copy(alpha = 0.7f))) }
+                                    Spacer(Modifier.width(10.dp))
+                                    Text(t, color = c.muted, fontSize = 13.sp, lineHeight = 20.sp, fontFamily = PlexSans, style = TextStyle(textDirection = dirOf(t)))
+                                }
+                            }
+                        }
                     }
                 }
-                Item {
-                    Field(null, draft, { draft = it }, tr("Something left to do", "עוד משהו שנשאר"), modifier = Modifier.weight(1f))
-                    Pill(tr("Add", "הוספה"), Tone.SOFT, enabled = draft.isNotBlank(), small = true) { val t = draft; draft = ""; change { Plan.add(dir, Plan.LEFT, t) } }
+                // The next step: an indigo point and a card, written here or by Claude.
+                PathRow(nodeTop = 18.dp, above = if (hasDone) CLEAN_DOT else null, below = if (rest.isNotEmpty()) c.line else null, node = { NextNode() }) {
+                    Column(Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(RoundedCornerShape(16.dp)).background(c.surface2).padding(horizontal = 16.dp, vertical = 12.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(tr("Next", "הבא"), color = c.accentText, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, fontFamily = PlexSans, modifier = Modifier.weight(1f))
+                            if (note.isNotBlank()) TextAction(tr("Done", "נעשה"), accent = true) {
+                                val t = note.trim(); use("")
+                                change { Plan.finish(dir, t) }
+                            }
+                            if (Tools.claude != null) TextAction(if (busy) tr("Claude is summing up…", "Claude מסכם…") else tr("Sum up with Claude", "סיכום עם Claude"), accent = true, enabled = !busy) {
+                                error = null
+                                scope.launch { error = withContext(Dispatchers.IO) { Handoffs.write(dir) }; refresh() }
+                            }
+                        }
+                        Field(null, note, { use(it) }, placeholder = tr("The next step, so you come back without thinking", "הצעד הבא, כדי לחזור בלי לחשוב"),
+                            modifier = Modifier.padding(top = 6.dp))
+                        // Claude's suggestion, or the first thing left, one click from being the next step.
+                        val suggestion = pulse.suggestion.ifBlank { if (note.isBlank()) pulse.left.firstOrNull().orEmpty() else "" }
+                        if (suggestion.isNotBlank() && suggestion != note) Row(Modifier.padding(start = 4.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            GlyphIcon(Glyph.SPARKLE, 13.dp, c.accentText)
+                            Spacer(Modifier.width(8.dp))
+                            Text((if (pulse.suggestion.isNotBlank()) tr("Claude suggests: ", "Claude מציע: ") else tr("First left: ", "הראשון שנשאר: ")) + suggestion,
+                                color = c.muted, fontSize = 13.sp, fontFamily = PlexSans, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false), style = TextStyle(textDirection = TextDirection.Content))
+                            TextAction(tr("Use this", "להשתמש בזה"), accent = true) { use(suggestion) }
+                        }
+                        pulse.handoff?.done?.takeIf { it.isNotBlank() }?.let { before ->
+                            Text(tr("Last time: ", "בפעם הקודמת: ") + before + " · " + ago(pulse.handoff.at), color = c.faint, fontSize = 12.sp, lineHeight = 18.sp, fontFamily = PlexSans,
+                                maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 4.dp, top = 8.dp), style = TextStyle(textDirection = TextDirection.Content))
+                        }
+                        error?.let { Text(it, color = c.danger, fontSize = 12.sp, fontFamily = PlexSans, modifier = Modifier.padding(start = 4.dp, top = 6.dp)) }
+                    }
+                }
+                // What's left after it, in order: empty rings, ticked off or removed here.
+                rest.forEach { t ->
+                    PathRow(above = c.line, below = c.line, node = { RingNode() }) {
+                        Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(t, color = c.fg.copy(alpha = 0.88f), fontSize = 14.sp, lineHeight = 21.sp, fontFamily = PlexSans, modifier = Modifier.weight(1f),
+                                style = TextStyle(textDirection = dirOf(t)))
+                            IconButton(Glyph.CHECK, tr("Done", "נעשה"), 26.dp, c.accentText, filled = false) { change { Plan.finish(dir, t) } }
+                            IconButton(Glyph.TRASH, tr("Remove", "הסרה"), 26.dp, c.faint, filled = false) { change { Plan.remove(dir, Plan.LEFT, t) } }
+                        }
+                    }
+                }
+                // One more, at the end of the path.
+                PathRow(above = if (rest.isNotEmpty()) c.line else null, node = { RingNode(add = true) }) {
+                    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Field(null, draft, { draft = it }, tr("Something left to do", "עוד משהו שנשאר"), modifier = Modifier.weight(1f))
+                        Pill(tr("Add", "הוספה"), Tone.SOFT, enabled = draft.isNotBlank(), small = true) { val t = draft; draft = ""; change { Plan.add(dir, Plan.LEFT, t) } }
+                    }
                 }
             }
         }
         if (pulse.ideas.isNotEmpty()) Column {
             Section(tr("Ideas set aside", "רעיונות בצד") + " · ${pulse.ideas.size}")
-            Text(tr("Things that came up along the way and weren't built. Move one to what's left only if you want it.",
-                "דברים שעלו בדרך ולא נבנו. מעבירים ל״מה נשאר״ רק את מה שבאמת רוצים."),
-                color = c.faint, fontSize = 12.sp, lineHeight = 17.sp, fontFamily = PlexSans, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
-            Group {
+            Text(tr("Came up along the way and weren't built. Move one to the path only if you want it.",
+                "עלו בדרך ולא נבנו. מעבירים למסלול רק את מה שבאמת רוצים."),
+                color = c.faint, fontSize = 12.sp, lineHeight = 17.sp, fontFamily = PlexSans, modifier = Modifier.padding(start = 4.dp, bottom = 10.dp))
+            androidx.compose.foundation.layout.FlowRow(Modifier.padding(start = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 pulse.ideas.forEach { t ->
-                    Item {
-                        GlyphIcon(Glyph.SPARKLE, 14.dp, c.faint)
-                        line(t, c.muted, Modifier.weight(1f))
+                    Row(Modifier.clip(RoundedCornerShape(50)).background(c.surface2).padding(start = 14.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(t, color = c.muted, fontSize = 13.sp, fontFamily = PlexSans, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.widthIn(max = 320.dp), style = TextStyle(textDirection = dirOf(t)))
                         TextAction(tr("To do", "לעשות"), accent = true) { change { Plan.take(dir, t) } }
-                        IconButton(Glyph.TRASH, tr("Drop", "לוותר"), 26.dp, c.faint, filled = false) { change { Plan.remove(dir, Plan.IDEAS, t) } }
+                        IconButton(Glyph.CLOSE, tr("Drop", "לוותר"), 24.dp, c.faint, filled = false) { change { Plan.remove(dir, Plan.IDEAS, t) } }
                     }
                 }
             }
         }
-        if (pulse.done.isNotEmpty()) Column {
-            Section(tr("Done lately", "נעשה לאחרונה")) {
-                if (pulse.done.size > 3) TextAction(if (allDone) tr("Less", "פחות") else tr("All ${pulse.done.size}", "כל ה־${pulse.done.size}")) { allDone = !allDone }
-            }
-            Column(Modifier.padding(start = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                (if (allDone) pulse.done else pulse.done.take(3)).forEach { t ->
-                    Row(verticalAlignment = Alignment.Top) {
-                        Box(Modifier.padding(top = 4.dp)) { GlyphIcon(Glyph.CHECK, 13.dp, CLEAN_DOT) }
-                        Spacer(Modifier.width(10.dp))
-                        line(t, c.muted, Modifier.weight(1f))
-                    }
-                }
-            }
+    }
+}
+
+/** One stop on the path: its point on the line (at [nodeTop], else centred), the line above and below it, and what it says. */
+@Composable
+private fun PathRow(nodeTop: androidx.compose.ui.unit.Dp? = null, above: Color? = null, below: Color? = null, node: @Composable () -> Unit, content: @Composable () -> Unit) {
+    Row(Modifier.fillMaxWidth().height(androidx.compose.foundation.layout.IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        Column(Modifier.width(22.dp).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
+            val line = Modifier.width(2.dp)
+            if (nodeTop != null) Box(line.height(nodeTop).background(above ?: Color.Transparent))
+            else Box(line.weight(1f).background(above ?: Color.Transparent))
+            node()
+            Box(line.weight(1f).background(below ?: Color.Transparent))
         }
+        Box(Modifier.weight(1f)) { content() }
+    }
+}
+
+@Composable
+internal fun DoneNode() {
+    Box(Modifier.size(22.dp).clip(RoundedCornerShape(11.dp)).background(CLEAN_DOT), contentAlignment = Alignment.Center) {
+        GlyphIcon(Glyph.CHECK, 13.dp, Color(0xFF0B0B0D))
+    }
+}
+
+@Composable
+internal fun NextNode(on: Boolean = true) {
+    val c = LocalDeck.current
+    Box(Modifier.size(22.dp).clip(RoundedCornerShape(11.dp)).background(c.accentTint), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(12.dp).clip(RoundedCornerShape(6.dp)).background(if (on) c.accent else c.faint))
+    }
+}
+
+@Composable
+internal fun RingNode(add: Boolean = false) {
+    val c = LocalDeck.current
+    Box(Modifier.width(22.dp).height(12.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(11.dp).clip(RoundedCornerShape(6.dp)).background(c.bg).border(2.dp, if (add) c.line else Color(0xFF8A8A90).copy(alpha = 0.6f), RoundedCornerShape(6.dp)))
     }
 }
 

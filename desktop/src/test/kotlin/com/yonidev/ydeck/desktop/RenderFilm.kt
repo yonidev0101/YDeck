@@ -111,6 +111,12 @@ class RenderFilm {
             hook("UserPromptSubmit", "nova-session$suffix", n, now - 6 * 60_000, "prompt" to "Move the sign-in screen to the new design system")
             hook("Stop", "pulse-session$suffix", p, now - 25 * 60_000, "last_assistant_message" to "Added the streak counter to the home screen")
             ProjectFiles.writeHandoff(o, Handoff("Added the deposit flow and its webhook, with a test", "Test the webhook against Stripe's test clock", now - 5 * 60_000, "Claude"))
+            // Where Orbit's work stands: the path on its page, the ring around its logo.
+            val he = lang == Lang.HE
+            ProjectFiles.writeList(o, Plan.LEFT, if (he) listOf("לבדוק את ה־webhook מול שעון הבדיקה של Stripe", "החזר כספי לפיקדון שבוטל", "מייל אישור ללקוח") else listOf("Test the webhook against Stripe's test clock", "Refund a cancelled deposit", "A confirmation email"))
+            ProjectFiles.writeList(o, Plan.DONE, if (he) listOf("זרימת הפיקדון וה־webhook, עם טסט", "דף התשלום", "חיבור ל־Stripe", "מסך ההזמנות", "התחברות") else listOf("The deposit flow and its webhook, with a test", "The payment page", "Stripe connected", "The bookings screen", "Sign-in"))
+            ProjectFiles.writeList(o, Plan.IDEAS, if (he) listOf("תשלום ב־Bit", "קופון לחבר שמביא חבר") else listOf("Pay with Bit", "A referral coupon"))
+            Settings.preview(Settings.state.value.copy(local = Settings.state.value.local + (orbit.id to Settings.state.value.localOf(orbit.id).copy(note = if (he) "לבדוק את ה־webhook מול שעון הבדיקה של Stripe" else "Test the webhook against Stripe's test clock"))))
 
             val dirs = listOf(o.path, n.path, p.path)
             runBlocking { Git.refresh(dirs); Pulses.refresh(dirs) }
@@ -123,6 +129,7 @@ class RenderFilm {
             app("orbit", Screen.Project(orbit.id, Tab.OVERVIEW))
             app("nova", Screen.Project(nova.id, Tab.OVERVIEW))
             app("orbit-git", Screen.Project(orbit.id, Tab.GIT))
+            app("orbit-links", Screen.Project(orbit.id, Tab.LINKS))
             GitFocus.receipt.value = "orbit-session$suffix"
             app("orbit-session", Screen.Project(orbit.id, Tab.GIT))
             GitFocus.receipt.value = null

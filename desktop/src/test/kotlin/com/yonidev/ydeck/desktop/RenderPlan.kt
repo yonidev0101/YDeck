@@ -36,7 +36,7 @@ class RenderPlan {
             for (dark in listOf(false, true)) {
                 shot(File(out, "plan-${if (dark) "dark" else "light"}.png"), 760, 900) {
                     DeckTheme(dark) {
-                        Box(Modifier.fillMaxSize().background(LocalDeck.current.bg).padding(32.dp)) { PlanLists(dir) }
+                        Box(Modifier.fillMaxSize().background(LocalDeck.current.bg).padding(32.dp)) { PlanLists(Project.sample(), Local(note = "לבדוק שליחה אמיתית ללקוחה של שבילר"), dir) }
                     }
                 }
             }

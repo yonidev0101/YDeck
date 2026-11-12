@@ -81,14 +81,17 @@ fun GitTab(p: Project, local: Local) {
     LaunchedEffect(focus) { focus?.let { session = it; view = GitView.SESSIONS; GitFocus.receipt.value = null } }
     val receipts = Receipts.state.collectAsState().value[dir.path].orEmpty().filter { it.files.isNotEmpty() }
     Column(Modifier.fillMaxSize().padding(start = 44.dp, end = 44.dp, top = 22.dp)) {
+        SavedHero(git)
+        Spacer(Modifier.height(16.dp))
         SyncBar(p, dir, git)
         PhaseNote(git, Modifier.padding(top = 14.dp))
+        FileBar(git, Modifier.padding(top = 16.dp))
         Spacer(Modifier.height(18.dp))
         Segmented(
             listOfNotNull(
                 GitView.CHANGES to tr("Changes", "שינויים") + (if (git.files.isEmpty()) "" else "  ${git.files.size}"),
+                (GitView.SESSIONS to tr("What happened", "מה קרה")).takeIf { receipts.isNotEmpty() },
                 GitView.HISTORY to tr("History", "היסטוריה"),
-                (GitView.SESSIONS to tr("Sessions", "סשנים") + "  ${receipts.size}").takeIf { receipts.isNotEmpty() },
             ),
             view,
         ) { view = it }
@@ -96,7 +99,7 @@ fun GitTab(p: Project, local: Local) {
         when (view) {
             GitView.CHANGES -> ChangesView(p, local, dir, git, receipts, excluded) { excluded = it }
             GitView.HISTORY -> Panel(Modifier.fillMaxSize()) { History(p, dir, git) }
-            GitView.SESSIONS -> SessionsView(git, receipts, session, { session = it }) { r ->
+            GitView.SESSIONS -> SessionsView(dir, git, receipts, session, { session = it }) { r ->
                 // Commit only what the session changed: everything else comes out of the commit.
                 excluded = git.files.map { it.path }.toSet() - r.files.map { it.path }.toSet()
                 view = GitView.CHANGES
@@ -168,13 +171,105 @@ private fun ChangesView(p: Project, local: Local, dir: File, git: GitInfo, recei
     }
 }
 
-/** The agents' sessions that changed files; the chosen one's receipt beside. */
+/**
+ * The ring, as on the phone: closed and green when all is saved and pushed; open, with how many, while something isn't.
+ * Then where it stands in one sentence.
+ */
 @Composable
-private fun SessionsView(git: GitInfo, receipts: List<Receipt>, session: String?, onPick: (String) -> Unit, onCommitThese: (Receipt) -> Unit) {
+private fun SavedHero(git: GitInfo) {
+    val c = LocalDeck.current
+    val unsaved = git.changes
+    val saved = unsaved == 0 && git.ahead == 0
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        ProgressMark(if (saved) 1 else 0, 1, 72.dp) {
+            if (unsaved > 0) Text("$unsaved", color = c.fg, fontSize = 19.sp, fontFamily = PlexMono, fontWeight = FontWeight.Medium)
+            else if (git.ahead > 0) Text("↑${git.ahead}", color = c.fg, fontSize = 16.sp, fontFamily = PlexMono, fontWeight = FontWeight.Medium)
+        }
+        Spacer(Modifier.width(16.dp))
+        val title = when {
+            unsaved > 0 -> count(unsaved, "file not saved", "files not saved", "קובץ אחד לא שמור", "קבצים לא שמורים")
+            git.ahead > 0 -> count(git.ahead, "commit to push", "commits to push", "קומיט אחד לדחוף", "קומיטים לדחוף")
+            else -> tr("All saved", "הכול שמור")
+        }
+        Text(
+            androidx.compose.ui.text.buildAnnotatedString { append(title); pushStyle(androidx.compose.ui.text.SpanStyle(color = if (saved) CLEAN_DOT else CHANGED_DOT)); append("."); pop() },
+            color = c.fg, fontSize = 26.sp, lineHeight = 34.sp, fontFamily = Display, fontWeight = FontWeight.Light,
+        )
+    }
+}
+
+/** What changed, as one bar: new in green, changed in amber, removed in red, moved in indigo; and how many of each. */
+@Composable
+private fun FileBar(git: GitInfo, modifier: Modifier = Modifier) {
+    val c = LocalDeck.current
+    if (git.files.isEmpty()) return
+    val kinds = git.files.groupingBy { when (it.kind) { 'A' -> 'A'; 'D' -> 'D'; 'R' -> 'R'; 'U' -> 'U'; else -> 'M' } }.eachCount()
+    val order = listOf('A' to tr("new", "חדשים"), 'M' to tr("changed", "שונו"), 'D' to tr("removed", "נמחקו"), 'R' to tr("moved", "הועברו"), 'U' to tr("in conflict", "בהתנגשות"))
+    fun color(k: Char) = when (k) { 'A' -> CLEAN_DOT; 'D' -> c.danger; 'R' -> c.accentText; 'U' -> c.danger; else -> CHANGED_DOT }
+    Column(modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+            order.forEach { (k, _) -> kinds[k]?.let { n -> Box(Modifier.weight(n.toFloat()).fillMaxHeight().background(color(k))) } }
+        }
+        Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            order.forEach { (k, word) ->
+                kinds[k]?.let { n ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(8.dp).clip(RoundedCornerShape(2.dp)).background(color(k)))
+                        Spacer(Modifier.width(6.dp))
+                        Text("$n $word", color = c.muted, fontSize = 12.sp, fontFamily = PlexSans)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * What happened, as one line in time: each agent session a point (indigo while it runs, green once what it did was
+ * committed, an empty ring when it wasn't), the commits made while it ran under it. The chosen session's receipt beside.
+ */
+@Composable
+private fun SessionsView(dir: File, git: GitInfo, receipts: List<Receipt>, session: String?, onPick: (String) -> Unit, onCommitThese: (Receipt) -> Unit) {
+    val c = LocalDeck.current
     val receipt = receipts.firstOrNull { it.id == session } ?: receipts.firstOrNull() ?: return
+    val commits by produceState(emptyList<GitCommit>(), git.lastAt) { value = withContext(Dispatchers.IO) { GitOps.log(dir, 20) } }
+    val shown = receipts.take(20).sortedByDescending { it.startAt }
+    // A commit belongs to the latest session that had started by then and hadn't ended long before.
+    val made = remember(shown, commits) {
+        commits.groupBy { cm -> shown.firstOrNull { it.startAt in 1..cm.at && (it.endAt <= 0 || cm.at <= it.endAt + 30 * 60_000L) }?.id }
+    }
+    val running = claudeIn(dir.path)?.takeIf { it.mode == ClaudeMode.WORKING || it.mode == ClaudeMode.WAITING } != null
     Row(Modifier.fillMaxSize()) {
-        Column(Modifier.width(360.dp).fillMaxHeight().verticalScroll(rememberScrollState())) {
-            receipts.take(20).forEach { r -> ReceiptRow(r, git, selected = r.id == receipt.id) { onPick(r.id) } }
+        Column(Modifier.width(380.dp).fillMaxHeight().verticalScroll(rememberScrollState())) {
+            shown.forEachIndexed { i, r ->
+                val own = made[r.id].orEmpty()
+                val open = running && i == 0 && r.endAt >= System.currentTimeMillis() - 10 * 60_000L
+                Row(Modifier.fillMaxWidth().height(androidx.compose.foundation.layout.IntrinsicSize.Min)) {
+                    Column(Modifier.width(22.dp).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Box(Modifier.width(2.dp).height(12.dp).background(if (i == 0) Color.Transparent else c.line))
+                        when {
+                            open -> NextNode()
+                            own.isNotEmpty() || (r.rewound == null && r.files.none { f -> git.files.any { it.path == f.path } }) -> DoneNode()
+                            else -> RingNode()
+                        }
+                        Box(Modifier.width(2.dp).weight(1f).background(if (i == shown.lastIndex) Color.Transparent else c.line))
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f).padding(bottom = 12.dp)) {
+                        ReceiptRow(r, git, selected = r.id == receipt.id) { onPick(r.id) }
+                        own.take(6).forEach { cm ->
+                            Row(Modifier.padding(start = 12.dp, top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Box(Modifier.size(6.dp).clip(RoundedCornerShape(3.dp)).background(CLEAN_DOT))
+                                Spacer(Modifier.width(10.dp))
+                                Text(cm.subject, color = c.fg.copy(alpha = 0.86f), fontSize = 12.5.sp, fontFamily = PlexSans, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f), style = TextStyle(textDirection = dirOf(cm.subject)))
+                                Spacer(Modifier.width(8.dp))
+                                Mono(cm.hash.take(7), c.faint, 11)
+                            }
+                        }
+                    }
+                }
+            }
         }
         Spacer(Modifier.width(28.dp))
         Panel(Modifier.weight(1f)) { SessionView(receipt, git, onCommitThese = { onCommitThese(receipt) }) }
