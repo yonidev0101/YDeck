@@ -191,13 +191,13 @@ private fun PartLine(p: com.yonidev.ydeck.data.Project?, words: String) {
 }
 
 /**
- * What was done lately, from each project's journal: its last day before today with something in it (what was marked
+ * What was done lately, from each project's journal: its last day with something in it, today too (what was marked
  * done, else how many commits), newest first, four at most.
  */
 private fun moved(computer: Computer.State, deck: Deck): List<Pair<com.yonidev.ydeck.data.Project, String>> {
     val today = LocalDate.now().toString()
     return deck.active.mapNotNull { p ->
-        val day = computer.memory[p.id]?.journal.orEmpty().firstOrNull { it.date < today && (it.done.isNotEmpty() || it.commits.isNotEmpty()) } ?: return@mapNotNull null
+        val day = computer.memory[p.id]?.journal.orEmpty().firstOrNull { it.date <= today && (it.done.isNotEmpty() || it.commits.isNotEmpty()) } ?: return@mapNotNull null
         val words = if (day.done.isNotEmpty()) day.done.take(2).joinToString(" · ") else "${day.commits.size} commits"
         Triple(p, words, day.date)
     }.sortedByDescending { it.third }.take(4).map { it.first to it.second }
