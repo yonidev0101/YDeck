@@ -68,6 +68,9 @@ object SessionAsks {
     /** One hook call on /claude/ask, held until it's answered or let go. Returns what the hook prints ("" for nothing). */
     fun hold(e: JSONObject): String {
         if (!Settings.state.value.sessionReplies) return ""
+        // YDeck's own Claude (Ask YDeck, the good morning) asks the developer through YDeck already: never held, or
+        // its answer would wait for a reply nobody sees, and show as a session waiting for you.
+        if (Assistant.isOwn(e.optString("session_id"), e.optString("cwd"))) return ""
         return when (e.optString("hook_event_name")) {
             "PreToolUse" -> if (e.optString("tool_name") == "AskUserQuestion") choice(e) else ""
             "Stop" -> text(e)

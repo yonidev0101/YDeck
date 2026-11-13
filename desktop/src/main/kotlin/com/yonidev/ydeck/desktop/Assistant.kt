@@ -172,6 +172,13 @@ object Assistant {
         return read(text, home, resume, onSession, onStep, onProcess)
     }
 
+    /** The sessions YDeck's own Claude ran (answers, good mornings), so their hooks are not taken for the developer's. */
+    private val own: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+
+    /** [session] is one of YDeck's own, or runs in YDeck's own folder (where only YDeck starts Claude). */
+    fun isOwn(session: String, cwd: String): Boolean =
+        session in own || runCatching { java.io.File(cwd).canonicalPath.equals(AppDirs.data.canonicalPath, ignoreCase = true) }.getOrDefault(false)
+
     /** Where a conversation about [focus] runs: the project's folder, or YDeck's own for every project. */
     fun homeOf(focus: Project?): java.io.File = focus?.let { Settings.state.value.localOf(it.id).dir } ?: AppDirs.data
 
@@ -207,7 +214,7 @@ object Assistant {
             runCatching {
                 p.inputStream.bufferedReader(Charsets.UTF_8).forEachLine { line ->
                     val o = runCatching { JSONObject(line) }.getOrNull() ?: return@forEachLine
-                    o.optString("session_id").takeIf { it.isNotBlank() }?.let(onSession)
+                    o.optString("session_id").takeIf { it.isNotBlank() }?.let { own += it; onSession(it) }
                     when (o.optString("type")) {
                         "assistant" -> ClaudeFill.stepOf(o, home)?.let(onStep)
                         "result" -> if (o.optBoolean("is_error") || !o.optString("subtype").startsWith("success")) failed = o.optString("result") else answer = o.optString("result")
