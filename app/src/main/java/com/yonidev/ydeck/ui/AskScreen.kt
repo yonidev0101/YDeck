@@ -145,6 +145,8 @@ fun AskScreen(
     onBack: () -> Unit,
     onAsk: (question: String, projectId: String?) -> Unit,
     onNewChat: () -> Unit,
+    /** Asks for a good morning now: YDeck goes over the projects and starts the day with you. */
+    onMorning: ((String) -> Unit)? = null,
 ) {
     val c = LocalDeck.current
     var focus by remember(from?.id) { mutableStateOf(from) }
@@ -172,7 +174,10 @@ fun AskScreen(
                 when {
                     !paired -> Text("כדי לשאול, מחברים את הטלפון ל־YDeck במחשב. התשובות מגיעות משם.", color = c.faint, fontSize = 14.sp, lineHeight = 21.sp)
                     !canAsk -> OffNotice(computer!!)
-                    else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { examples(focus).forEach { q -> Suggestion(q) { onAsk(q, focus?.id) } } }
+                    else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (onMorning != null && focus == null) Suggestion(MORNING_ASK) { onMorning(MORNING_ASK) }
+                        examples(focus).forEach { q -> Suggestion(q) { onAsk(q, focus?.id) } }
+                    }
                 }
             } else LazyColumn(state = list, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 20.dp, vertical = 20.dp),
                 verticalArrangement = Arrangement.spacedBy(22.dp)) {
@@ -207,8 +212,10 @@ private fun TurnView(t: Computer.Turn) {
     val a = t.answer
     val late = !t.done && System.currentTimeMillis() - t.ask.at > Computer.WAIT_MS
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        // The question in a soft bubble at the start; the answer plain, the width of the page.
-        Text(q, color = c.fg, fontSize = 15.sp, lineHeight = 22.sp, style = TextStyle(textDirection = dirOf(q)),
+        // The question in a soft bubble at the start; the answer plain, the width of the page. The good morning the
+        // computer sent by itself has no question: it starts the conversation.
+        if (t.ask.morning && q.isBlank()) Text("בוקר טוב · " + java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(t.ask.at)), color = c.faint, fontSize = 12.5.sp)
+        else Text(q, color = c.fg, fontSize = 15.sp, lineHeight = 22.sp, style = TextStyle(textDirection = dirOf(q)),
             modifier = Modifier.widthIn(max = 300.dp).clip(RoundedCornerShape(18.dp)).background(c.surface2).padding(horizontal = 14.dp, vertical = 10.dp))
         when {
             late -> Text("המחשב לא ענה. ודאו ש־YDeck פתוח במחשב, ושאלו שוב.", color = c.danger, fontSize = 13.5.sp)
@@ -319,6 +326,9 @@ fun AskBar(chat: Computer.Chat?, onClick: () -> Unit) {
         Text(if (chat?.turns?.isNotEmpty() == true) "לחזור לשיחה" else "$ASK_TITLE…", color = c.muted, fontSize = 15.sp, modifier = Modifier.weight(1f))
     }
 }
+
+/** Starts the day with YDeck (a good morning, now). */
+private const val MORNING_ASK = "בוקר טוב, מה עושים היום?"
 
 /** Questions to start from, about the project when there is one. */
 private fun examples(focus: Project?): List<String> = if (focus != null) listOf(

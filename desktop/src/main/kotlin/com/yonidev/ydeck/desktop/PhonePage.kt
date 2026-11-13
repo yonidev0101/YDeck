@@ -81,6 +81,31 @@ fun PhoneSettings() {
                             "כבוי עד שמדליקים כאן. שאלות שנכתבות בטלפון נענות כאן על ידי ה־Claude Code שלך, כמו ב״לשאול את YDeck״: הוא קורא את תיקיות הפרויקטים, אף פעם לא משנה אותן, ולא קורא קבצים שמחזיקים מפתחות.")) {
                         Toggle(settings.phoneAsk) { on -> Settings.update { it.copy(phoneAsk = on) }; PhoneLink.nudge() }
                     }
+                    // A good morning on the phone: Claude here goes over the projects and writes first, like a partner.
+                    if (Tools.claude != null) Setting(tr("Good morning on the phone", "בוקר טוב בטלפון"),
+                        hint = tr("Off until you turn it on here. Each morning, at the hour below, your Claude Code (reading only) goes over the projects and writes to you: what to finish today, what is stuck, an idea to think about, with questions. It comes as a notification, and you answer it on the phone. Needs \"The phone can ask YDeck\" on.",
+                            "כבוי עד שמדליקים כאן. כל בוקר, בשעה שלמטה, ה־Claude Code שלך (בקריאה בלבד) עובר על הפרויקטים וכותב לך: מה לסיים היום, מה תקוע, רעיון לחשוב עליו, עם שאלות. זה מגיע כהתראה, ועונים לו מהטלפון. צריך ש״הטלפון יכול לשאול את YDeck״ יהיה דלוק.")) {
+                        Toggle(settings.phoneMorning, enabled = settings.phoneAsk) { on -> Settings.update { it.copy(phoneMorning = on) }; PhoneLink.nudge() }
+                    }
+                    if (Tools.claude != null && settings.phoneMorning && settings.phoneAsk) {
+                        Item {
+                            Text(tr("When", "מתי"), color = c.fg, fontSize = 14.sp, fontFamily = PlexSans, modifier = Modifier.weight(1f))
+                            listOf(7 * 60, 7 * 60 + 30, 8 * 60, 8 * 60 + 30, 9 * 60).forEach { m ->
+                                Pill("%d:%02d".format(m / 60, m % 60), if (settings.morningAt == m) Tone.PRIMARY else Tone.SOFT, small = true) {
+                                    Settings.update { it.copy(morningAt = m) }; PhoneLink.nudge()
+                                }
+                            }
+                        }
+                        Setting(tr("On Friday and Saturday too", "גם בשישי ובשבת"), hint = tr("Otherwise Sunday to Thursday.", "אחרת ראשון עד חמישי.")) {
+                            Toggle(settings.morningWeekend) { on -> Settings.update { it.copy(morningWeekend = on) } }
+                        }
+                        var making by remember { mutableStateOf(false) }
+                        LaunchedEffect(making) { while (making) { kotlinx.coroutines.delay(1000); if (!PhoneLink.morningMaking) making = false } }
+                        Setting(tr("Send one now", "לשלוח אחד עכשיו"),
+                            hint = if (making) tr("Claude is writing it… it reaches the phone the next time it checks (open YDeck there to see it now).", "Claude כותב… הוא יגיע לטלפון בפעם הבאה שהוא בודק (פותחים שם את YDeck כדי לראות עכשיו).")
+                            else tr("To see what it says. It becomes today's good morning.", "כדי לראות מה הוא כותב. הוא יהיה הבוקר טוב של היום."),
+                            onClick = if (making) null else ({ PhoneLink.morningNow(); making = true }))
+                    }
                     if (Tools.claude != null) Setting(tr("The phone can reply to waiting sessions", "הטלפון יכול לענות לסשנים שמחכים"),
                         hint = tr("Off until you turn it on here. A session's question, held in YDeck while you're away, shows on the phone with the drafted reply; what you send goes to Claude as your words. Never a permission: those stay in the terminal.",
                             "כבוי עד שמדליקים כאן. שאלה של סשן, שמחכה ב־YDeck כשאתה לא ליד המחשב, מופיעה בטלפון עם התשובה המנוסחת; מה ששולחים מגיע ל־Claude כמילים שלך. אף פעם לא הרשאה: אלה נשארות בטרמינל.")) {

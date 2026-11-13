@@ -86,6 +86,15 @@ object PhoneLink {
     /** The last commits of each folder, read again only when its last commit changes. */
     private val logs = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, List<GitCommit>>>()
     private val wake = Object()
+    /** The latest good morning, sent in every state until the next one (see [GoodMorning]). */
+    @Volatile private var morning: com.yonidev.ydeck.link.Morning? = null
+    /** The day (YYYY-MM-DD) the last good morning was written, so it's written once a day. */
+    @Volatile private var morningDay = ""
+    /** One that failed waits until then to try again. */
+    @Volatile private var morningRetry = 0L
+    @Volatile private var morningBusy = false
+    /** The last good morning's conversation, a line each ("YDeck: …", "Me: …"): the next morning keeps to it. */
+    private val talk = java.util.concurrent.CopyOnWriteArrayList<String>()
 
     val computer: String get() = System.getenv("COMPUTERNAME")?.let { it.lowercase().replaceFirstChar(Char::uppercase) } ?: "Windows"
 
@@ -108,12 +117,16 @@ object PhoneLink {
             o.optJSONArray("answers")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map(Answer::of)
                 .forEach { answers += if (it.done) it else it.copy(done = true, step = "", error = tr("YDeck closed before the answer came. Ask again.", "YDeck נסגר לפני שהתשובה הגיעה. אפשר לשאול שוב.")) } }
             o.optJSONObject("chats")?.let { c -> c.keys().forEach { k -> c.optJSONObject(k)?.let { v -> chats[k] = v.optString("session") to v.optString("home") } } }
+            morning = o.optJSONObject("morning")?.let(com.yonidev.ydeck.link.Morning::of)
+            morningDay = o.optString("morningDay")
+            o.optJSONArray("talk")?.let { a -> (0 until a.length()).forEach { talk += a.getString(it) } }
         }
         Thread({
             var last = 0L
             while (true) {
                 runCatching { takeOffer() }
                 runCatching { takeNotes() }
+                runCatching { morningTick() }
                 // The state at once after a note (the phone sees it stored) or a nudge, else every minute.
                 if (System.currentTimeMillis() - last >= 55_000 || pendingSend || _state.value.waiting) {
                     pendingSend = false; last = System.currentTimeMillis(); runCatching { tick() }
@@ -146,7 +159,57 @@ object PhoneLink {
         file.writeText(JSONObject().put("secret", Pairing.b64(p.secret)).put("pairedAt", pairedAt).put("applied", org.json.JSONArray(applied.takeLast(50)))
             .put("launched", org.json.JSONArray().apply { launched.takeLast(10).forEach { put(JSONObject().put("id", it.id).put("ok", it.ok).put("why", it.why)) } })
             .put("answers", org.json.JSONArray().apply { answers.takeLast(ANSWERS).forEach { put(it.toJson()) } })
-            .put("chats", JSONObject().apply { chats.forEach { (k, v) -> put(k, JSONObject().put("session", v.first).put("home", v.second)) } }).toString())
+            .put("chats", JSONObject().apply { chats.forEach { (k, v) -> put(k, JSONObject().put("session", v.first).put("home", v.second)) } })
+            .put("morning", morning?.toJson()).put("morningDay", morningDay).put("talk", org.json.JSONArray(talk.takeLast(TALK))).toString())
+    }
+
+    /** How many lines of the morning's conversation are kept for the next one. */
+    private const val TALK = 12
+
+    /**
+     * Writes the day's good morning once, from a quarter of an hour before the hour set (so it's on the phone in time)
+     * to six hours after (a computer that slept through it still says good morning). Only while it's on in Settings →
+     * Phone, with asking from the phone on too, and Claude Code here.
+     */
+    private fun morningTick() {
+        val s = Settings.state.value
+        if (!s.phoneMorning || !s.phoneAsk || Tools.claude == null || pairing == null || morningBusy) return
+        val now = java.time.LocalDateTime.now()
+        val today = now.toLocalDate().toString()
+        if (morningDay == today || System.currentTimeMillis() < morningRetry) return
+        if (!s.morningWeekend && (now.dayOfWeek == java.time.DayOfWeek.FRIDAY || now.dayOfWeek == java.time.DayOfWeek.SATURDAY)) return
+        val minute = now.hour * 60 + now.minute
+        if (minute < s.morningAt - 15 || minute > s.morningAt + 6 * 60) return
+        makeMorning(today)
+    }
+
+    /** A good morning now, to see what it says (Settings → Phone); today's is then this one. */
+    fun morningNow() {
+        if (pairing == null || Tools.claude == null || morningBusy) return
+        makeMorning(java.time.LocalDate.now().toString())
+    }
+
+    val morningMaking: Boolean get() = morningBusy
+
+    private fun makeMorning(day: String) {
+        morningBusy = true
+        asking.execute {
+            try {
+                val chat = "morning-" + java.util.UUID.randomUUID().toString().take(13)
+                val home = AppDirs.data
+                val text = Assistant.read(GoodMorning.prompt(talk.toList()), home, null, onSession = { chats[chat] = it to home.path }, onStep = {}, onProcess = {})
+                morning = com.yonidev.ydeck.link.Morning(java.util.UUID.randomUUID().toString(), chat, text.take(Answer.MAX), System.currentTimeMillis())
+                morningDay = day
+                talk.clear(); talk += "YDeck: " + text.take(1500)
+                while (chats.size > 5) chats.keys.firstOrNull { it != chat }?.let { chats.remove(it) } ?: break
+            } catch (e: Throwable) {
+                morningRetry = System.currentTimeMillis() + 30 * 60_000L
+            } finally {
+                morningBusy = false
+                pairing?.let { save(it, _state.value.pairedAt) }
+                nudge()
+            }
+        }
     }
 
     /**
@@ -241,8 +304,10 @@ object PhoneLink {
             val focus = Repo.deck.value.byId(a.project)
             val before = chats[a.chat]?.takeIf { java.io.File(it.second).isDirectory }
             val home = before?.let { java.io.File(it.second) } ?: Assistant.homeOf(focus)
+            val morningChat = a.morning || a.chat == morning?.chat
             val r = runCatching {
-                Assistant.answer(a.question, focus, before?.first, home, phone = true,
+                if (a.morning) Assistant.read(GoodMorning.prompt(talk.toList()), AppDirs.data, null, onSession = { chats[a.chat] = it to AppDirs.data.path }, onStep = {}, onProcess = {})
+                else Assistant.answer(a.question, focus, before?.first, home, phone = true,
                     onSession = { chats[a.chat] = it to home.path },
                     onStep = { step ->
                         reads++
@@ -252,6 +317,13 @@ object PhoneLink {
                     onProcess = {})
             }
             val seconds = ((System.currentTimeMillis() - start) / 1000).toInt()
+            // The morning's talk, for the next morning: what was said, and what they answered.
+            if (morningChat) r.getOrNull()?.let { said ->
+                if (a.morning) talk.clear()
+                if (a.question.isNotBlank() && !a.morning) talk += "Me: " + a.question.take(600)
+                talk += "YDeck: " + said.take(if (a.morning) 1500 else 600)
+                while (talk.size > TALK) talk.removeAt(0)
+            }
             put(r.fold({ Answer(a.id, a.chat, done = true, answer = it.take(Answer.MAX), reads = reads, seconds = seconds) },
                 { Answer(a.id, a.chat, done = true, error = it.message ?: tr("Claude didn't answer", "Claude לא ענה"), reads = reads, seconds = seconds) }))
             // A conversation that never answered starts afresh next time.
@@ -364,7 +436,7 @@ object PhoneLink {
     private fun adopt(key: NewKey, samePhone: Boolean) {
         val old = pairing
         val p = Pairing(key.secret)
-        if (!samePhone) { applied.clear(); launched.clear(); answers.clear(); chats.clear(); replied.clear(); Runs.ran.clear() }
+        if (!samePhone) { applied.clear(); launched.clear(); answers.clear(); chats.clear(); replied.clear(); Runs.ran.clear(); morning = null; talk.clear() }
         val at = if (samePhone) _state.value.pairedAt else System.currentTimeMillis()
         save(p, at)
         pairing = p
@@ -444,7 +516,8 @@ object PhoneLink {
             launch = settings.phoneLaunch && Tools.claude != null, claude = Tools.claude != null, launched = launched.toList(), beat = HEARTBEAT_MS,
             ask = settings.phoneAsk && Tools.claude != null, answers = answers.toList(),
             waiting = SessionAsks.waiting.value, reply = settings.phoneReply, replied = replied.toList(),
-            run = settings.phoneRun, ran = Runs.ran.toList(), runOk = if (settings.phoneRun) settings.runOk.filterKeys { k -> deck.projects.any { it.id == k } } else emptyMap())
+            run = settings.phoneRun, ran = Runs.ran.toList(), runOk = if (settings.phoneRun) settings.runOk.filterKeys { k -> deck.projects.any { it.id == k } } else emptyMap(),
+            morning = morning, morningAt = if (settings.phoneMorning && settings.phoneAsk && Tools.claude != null) settings.morningAt else -1)
     }
 
     /** What the project's window shows here: git, the agent, the latest receipts, open loops, the dev server. */

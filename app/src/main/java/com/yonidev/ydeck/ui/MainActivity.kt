@@ -84,7 +84,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         deck = Repo.deck(this)
-        page = savedInstanceState?.getString(STATE_PAGE)?.let(::pageOf) ?: intent.getStringExtra(EXTRA_PROJECT)?.let { Page.Project(it) } ?: Page.Home
+        page = savedInstanceState?.getString(STATE_PAGE)?.let(::pageOf) ?: intent.getStringExtra(EXTRA_PROJECT)?.let { Page.Project(it) }
+            ?: Page.Ask().takeIf { intent.getBooleanExtra(EXTRA_ASK, false) } ?: Page.Home
         // Only on a real launch: not on rotation, not from the widget, not with animations off.
         intro = savedInstanceState == null && page == Page.Home &&
             Settings.Global.getFloat(contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
@@ -110,6 +111,9 @@ class MainActivity : ComponentActivity() {
         setContent {
             DeckTheme {
                 val computer by Computer.state.collectAsState()
+                // The good morning comes as a notification: asked for once, when the computer turns it on.
+                val morningOn = computer?.morningAt?.let { it >= 0 } == true
+                androidx.compose.runtime.LaunchedEffect(morningOn) { if (morningOn) askNotifications() }
                 val current = page
                 BackHandler(enabled = current != Page.Home) { page = (current as? Page.Ask)?.project?.let { Page.Project(it) } ?: Page.Home }
                 AnimatedContent(current, transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(180)) }, label = "page") { p ->
@@ -130,6 +134,7 @@ class MainActivity : ComponentActivity() {
                             onBack = { page = p.project?.let { Page.Project(it) } ?: Page.Home },
                             onAsk = { q, projectId -> ask(q, projectId) },
                             onNewChat = { Computer.newChat(this@MainActivity) },
+                            onMorning = { q -> ask(q, null, morning = true) },
                         )
                         is Page.Project -> Overlay.deck(deck, computer?.pending.orEmpty()).byId(p.id)?.let { project ->
                             val mine = computer?.pending.orEmpty().filter { it.project == project.id }
@@ -202,6 +207,16 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         intent.getStringExtra(EXTRA_PROJECT)?.let { deck = Repo.deck(this); page = Page.Project(it) }
+        if (intent.getBooleanExtra(EXTRA_ASK, false)) { intent.removeExtra(EXTRA_ASK); page = Page.Ask() }
+    }
+
+    /** Android 13 and up ask before an app shows notifications: once, the first time the good morning is on. */
+    private fun askNotifications() {
+        if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED) return
+        val prefs = getSharedPreferences("ydeck", MODE_PRIVATE)
+        if (prefs.getBoolean("askedNotifications", false)) return
+        prefs.edit().putBoolean("askedNotifications", true).apply()
+        requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 7)
     }
 
     private fun pageOf(s: String): Page = when {
@@ -361,9 +376,10 @@ class MainActivity : ComponentActivity() {
     }
 
     /** A question for Ask YDeck: sent now, or said that it couldn't be; the answer comes with the next states. */
-    private fun ask(question: String, projectId: String?) {
+    private fun ask(question: String, projectId: String?, morning: Boolean = false) {
         lifecycleScope.launch {
-            if (!Computer.ask(this@MainActivity, question, projectId)) toast("אין חיבור לאינטרנט. השאלה לא נשלחה.")
+            if (morning && Computer.state.value?.chat?.turns?.isNotEmpty() == true) Computer.newChat(this@MainActivity)
+            if (!Computer.ask(this@MainActivity, question, projectId, morning)) toast("אין חיבור לאינטרנט. השאלה לא נשלחה.")
         }
     }
 
@@ -436,6 +452,12 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_PROJECT = "project"
+        const val EXTRA_ASK = "ask"
+
+        /** Opens the app at the conversation with YDeck (from the good morning's notification). */
+        fun askIntent(context: Context) = Intent(context, MainActivity::class.java)
+            .putExtra(EXTRA_ASK, true)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         private const val STATE_PAGE = "page"
 
         /** Opens the app at a project's page (from the widget's sheet and the icon's shortcuts). */

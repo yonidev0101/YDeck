@@ -80,6 +80,8 @@ object Computer {
         val runs: List<Pair<com.yonidev.ydeck.link.RunCommand, com.yonidev.ydeck.link.Ran?>> = emptyList(),
         /** Lines allowed always, by project: offered for one tap. */
         val runOk: Map<String, List<String>> = emptyMap(),
+        /** When the good morning comes (minutes from midnight), as set on the computer; -1 when it's off there. */
+        val morningAt: Int = -1,
     ) {
         /**
          * A project's live state, as far as it can be trusted now: when the computer has stopped sending (asleep, off,
@@ -156,6 +158,7 @@ object Computer {
             canReply = mem?.optBoolean("reply") ?: false,
             canRun = mem?.optBoolean("run") ?: false,
             runOk = mem?.optJSONObject("runOk")?.let { r -> r.keys().asSequence().associateWith { k -> r.optJSONArray(k)?.let { a -> (0 until a.length()).map { a.optString(it) } }.orEmpty() } }.orEmpty(),
+            morningAt = mem?.optInt("morningAt", -1) ?: -1,
         )
     }
 
@@ -181,11 +184,11 @@ object Computer {
      * Asks Ask YDeck on the computer: [projectId] is the project the question was asked from ("this project"). Sent now
      * or not at all; the answer comes in a later state (see [sync]).
      */
-    suspend fun ask(context: Context, question: String, projectId: String?): Boolean = withContext(Dispatchers.IO) {
+    suspend fun ask(context: Context, question: String, projectId: String?, morning: Boolean = false): Boolean = withContext(Dispatchers.IO) {
         val app = context.applicationContext
         val p = pairing ?: return@withContext false
         val chat = state(app).chat
-        val a = Ask(java.util.UUID.randomUUID().toString(), chat.id, question.trim().take(Ask.MAX), projectId.orEmpty(), System.currentTimeMillis())
+        val a = Ask(java.util.UUID.randomUUID().toString(), chat.id, question.trim().take(Ask.MAX), projectId.orEmpty(), System.currentTimeMillis(), morning)
         if (!Relay(p).postNote(p.seal("ask", a.encode()))) return@withContext false
         writeChat(app, chat.copy(turns = chat.turns + Turn(a)))
         true
@@ -398,7 +401,14 @@ object Computer {
             put("reply", snapshot.reply)
             put("run", snapshot.run)
             put("runOk", JSONObject().apply { snapshot.runOk.forEach { (k, v) -> put(k, org.json.JSONArray(v)) } })
+            put("morningAt", snapshot.morningAt)
         }.toString())
+        // A new good morning: a new conversation that starts with it, and a notification.
+        snapshot.morning?.takeIf { MorningNotice.isNew(app, it.id, it.at) }?.let { m ->
+            writeChat(app, Chat(m.chat, listOf(Turn(Ask(m.id, m.chat, "", "", m.at, morning = true), Answer(m.id, m.chat, done = true, answer = m.text)))))
+            MorningNotice.show(app, m.id, m.text)
+        }
+        MorningNotice.schedule(app, snapshot.morningAt)
         // The answers that came: each onto its question.
         val chat = state(app).chat
         if (chat.turns.any { t -> !t.done && snapshot.answers.any { it.id == t.ask.id && it != t.answer } })
@@ -414,7 +424,7 @@ object Computer {
         _state.value = State(paired = true, name = snapshot.computer, stateAt = snapshot.at, checkedAt = now, memory = snapshot.memory, live = snapshot.live,
             pending = outbox.map { it.first }, canLaunch = snapshot.launch, claudeHere = snapshot.claude, launches = launches, beat = snapshot.beat,
             canAsk = snapshot.ask, chat = state(app).chat, waiting = snapshot.waiting, canReply = snapshot.reply, replies = replies,
-            canRun = snapshot.run, runs = runs, runOk = snapshot.runOk)
+            canRun = snapshot.run, runs = runs, runOk = snapshot.runOk, morningAt = snapshot.morningAt)
         DeckWidget().updateAll(app)
         Result.UPDATED
     }

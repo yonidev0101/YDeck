@@ -146,6 +146,12 @@ object Settings {
         val phoneRun: Boolean = false,
         /** Command lines approved always, by project id: that exact line, in that project. Kept on this PC only. */
         val runOk: Map<String, List<String>> = emptyMap(),
+        /** A good morning on the phone (see [PhoneLink]): Claude Code here goes over the projects and writes to the
+         *  developer, at [morningAt] (minutes from midnight), Sunday to Thursday, and the weekend too with [morningWeekend].
+         *  Off until turned on here; it needs [phoneAsk], since the reply goes on as a conversation. */
+        val phoneMorning: Boolean = false,
+        val morningAt: Int = 8 * 60,
+        val morningWeekend: Boolean = false,
         /** "system", "en" or "he" (see [I18n]). */
         val language: String = "system",
         /** "system", "light" or "dark". */
@@ -196,6 +202,9 @@ object Settings {
                 put("sessionReplies", s.sessionReplies)
                 put("phoneReply", s.phoneReply)
                 put("phoneRun", s.phoneRun)
+                put("phoneMorning", s.phoneMorning)
+                put("morningAt", s.morningAt)
+                put("morningWeekend", s.morningWeekend)
                 put("runOk", JSONObject().apply { s.runOk.forEach { (k, v) -> put(k, org.json.JSONArray(v)) } })
                 put("language", s.language)
                 put("appearance", s.appearance)
@@ -249,6 +258,9 @@ object Settings {
             sessionReplies = o.optBoolean("sessionReplies", true),
             phoneReply = o.optBoolean("phoneReply", false),
             phoneRun = o.optBoolean("phoneRun", false),
+            phoneMorning = o.optBoolean("phoneMorning", false),
+            morningAt = o.optInt("morningAt", 8 * 60).coerceIn(0, 24 * 60 - 1),
+            morningWeekend = o.optBoolean("morningWeekend", false),
             runOk = o.optJSONObject("runOk")?.let { r -> r.keys().asSequence().associateWith { k -> r.optJSONArray(k)?.let { a -> (0 until a.length()).map { a.optString(it) } }.orEmpty() } }.orEmpty(),
             language = o.optString("language", "system"),
             // 1.11: dark became the default; a "system" saved before then was the old default, not a choice.

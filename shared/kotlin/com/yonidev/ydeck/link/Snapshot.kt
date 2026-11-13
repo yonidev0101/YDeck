@@ -69,9 +69,13 @@ class Snapshot(
     val ran: List<Ran> = emptyList(),
     /** The command lines approved always, by project: the phone offers them for one tap. */
     val runOk: Map<String, List<String>> = emptyMap(),
+    /** The latest good morning ([Morning]): YDeck's word to start the day, written here by Claude Code. */
+    val morning: Morning? = null,
+    /** When the phone shows the good morning, in minutes from midnight; -1 when it's off. */
+    val morningAt: Int = -1,
 ) {
     /** The same state made at another time: what changed, without the time it was made. */
-    fun at(time: Long) = Snapshot(time, computer, deck, memory, live, applied, launch, claude, launched, beat, ask, answers, waiting, reply, replied, run, ran, runOk)
+    fun at(time: Long) = Snapshot(time, computer, deck, memory, live, applied, launch, claude, launched, beat, ask, answers, waiting, reply, replied, run, ran, runOk, morning, morningAt)
 
     fun encode(): ByteArray = JSONObject().apply {
         put("app", "YDeck")
@@ -95,6 +99,8 @@ class Snapshot(
         put("run", run)
         put("ran", JSONArray().apply { ran.forEach { put(it.toJson()) } })
         put("runOk", JSONObject().apply { runOk.forEach { (k, v) -> put(k, JSONArray(v)) } })
+        morning?.let { put("morning", it.toJson()) }
+        put("morningAt", morningAt)
     }.toString().toByteArray()
 
     companion object {
@@ -123,6 +129,8 @@ class Snapshot(
                 run = o.optBoolean("run"),
                 ran = o.optJSONArray("ran")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) } }.orEmpty().map(Ran::of),
                 runOk = o.optJSONObject("runOk")?.let { r -> r.keys().asSequence().associateWith { k -> r.optJSONArray(k)?.let { a -> (0 until a.length()).map { a.optString(it) } }.orEmpty() } }.orEmpty(),
+                morning = o.optJSONObject("morning")?.let(Morning::of),
+                morningAt = o.optInt("morningAt", -1),
             )
         }
 
@@ -535,9 +543,13 @@ data class Reply(val id: String, val waiting: String, val text: String = "", val
  * [chat] names the phone's conversation, so the next question goes on in the same one; [project] is the page it was
  * asked from ("this project"). Text, never a command. Sealed as "ask", so it can't pass for a note or a launch.
  */
-data class Ask(val id: String, val chat: String, val question: String, val project: String = "", val at: Long) {
+data class Ask(val id: String, val chat: String, val question: String, val project: String = "", val at: Long,
+               /** Asks for the good morning ([Morning]) now, in this conversation, instead of an answer; [question] is
+                *  what the phone showed for it, maybe nothing (the morning the computer sent by itself). */
+               val morning: Boolean = false) {
     fun encode(): ByteArray = JSONObject().put("app", "YDeck").put("kind", "ask").put("v", 1)
-        .put("id", id).put("chat", chat).put("question", question).put("project", project).put("at", at).toString().toByteArray()
+        .put("id", id).put("chat", chat).put("question", question).put("project", project).put("at", at)
+        .apply { if (morning) put("morning", true) }.toString().toByteArray()
 
     companion object {
         /** The longest question the computer accepts. */
@@ -549,8 +561,9 @@ data class Ask(val id: String, val chat: String, val question: String, val proje
             val o = JSONObject(String(bytes))
             if (o.optString("app") != "YDeck" || o.optString("kind") != "ask") return null
             val q = o.optString("question").filter { it == '\n' || !it.isISOControl() }.trim().take(MAX)
-            if (q.isEmpty()) return null
-            Ask(o.optString("id").take(64), o.optString("chat").take(64), q, o.optString("project").take(100), o.optLong("at"))
+            val morning = o.optBoolean("morning")
+            if (q.isEmpty() && !morning) return null
+            Ask(o.optString("id").take(64), o.optString("chat").take(64), q, o.optString("project").take(100), o.optLong("at"), morning)
         }.getOrNull()
     }
 }
@@ -579,5 +592,21 @@ data class Answer(
 
         fun of(o: JSONObject) = Answer(o.optString("id"), o.optString("chat"), o.optBoolean("done"), o.optString("answer"),
             o.optString("error"), o.optString("step"), o.optInt("reads"), o.optInt("seconds"))
+    }
+}
+
+// ── good morning: YDeck starts the day with the developer ──
+
+/**
+ * A good morning: at the hour set on the computer, its Claude Code (reading only) goes over the projects and writes to
+ * the developer like a partner would: what to finish today, what is stuck, an idea worth thinking about, with
+ * questions. The phone shows it as a notification, and the reply goes on in [chat] as any question to Ask YDeck.
+ */
+data class Morning(val id: String, val chat: String, val text: String, val at: Long) {
+    fun toJson(): JSONObject = JSONObject().put("id", id).put("chat", chat).put("text", text).put("at", at)
+
+    companion object {
+        fun of(o: JSONObject): Morning? = Morning(o.optString("id").take(64), o.optString("chat").take(64), o.optString("text").take(Answer.MAX), o.optLong("at"))
+            .takeIf { it.id.isNotEmpty() && it.chat.isNotEmpty() && it.text.isNotBlank() }
     }
 }
