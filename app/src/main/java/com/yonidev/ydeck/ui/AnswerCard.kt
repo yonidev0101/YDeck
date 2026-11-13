@@ -159,13 +159,3 @@ private fun titleOf(kind: String) = when (kind) {
     else -> "עוד"
 }
 
-/** The words a card is read aloud with: the answer, then each list and its lines, briefly. */
-fun spoken(card: Card, name: (String) -> String): String = buildString {
-    append(card.say)
-    card.groups.forEach { g ->
-        append("\n").append(g.title.ifBlank { titleOf(g.kind) }).append(": ")
-        append(g.items.joinToString("; ") { (if (it.project.isNotEmpty()) name(it.project) + ", " else "") + it.text })
-        append(".")
-    }
-}
-

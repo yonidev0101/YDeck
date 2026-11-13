@@ -43,10 +43,6 @@ import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Apps
-import androidx.compose.material.icons.outlined.Mic
-import androidx.compose.material.icons.outlined.StopCircle
-import androidx.compose.material.icons.outlined.VolumeUp
-import androidx.compose.runtime.collectAsState
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -168,25 +164,6 @@ fun AskScreen(
     LaunchedEffect(chat.turns.size, last?.answer) { if (chat.turns.isNotEmpty()) list.animateScrollToItem(chat.turns.lastIndex) }
     val paired = computer?.paired == true
     val canAsk = paired && computer!!.canAsk
-    // Talking: a spoken question is answered aloud. [speakAt] is the turn whose answer is read when it comes.
-    val context = androidx.compose.ui.platform.LocalContext.current
-    var speakAt by remember { mutableStateOf(-1) }
-    val name = { id: String -> projects.firstOrNull { it.id == id }?.name ?: id }
-    fun sayTurn(t: Computer.Turn) {
-        val a = t.answer ?: return
-        Voice.say(context, a.id, a.card?.let { spoken(it, name) } ?: a.answer.ifBlank { a.error }) {
-            android.widget.Toast.makeText(context, "אין בטלפון קול בעברית. מוסיפים בהגדרות ← הקראת טקסט.", android.widget.Toast.LENGTH_LONG).show()
-        }
-    }
-    LaunchedEffect(chat.turns.size, last?.answer?.done) {
-        if (speakAt >= 0 && chat.turns.size - 1 == speakAt && last?.done == true) { speakAt = -1; sayTurn(last) }
-    }
-    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { Voice.stop() } }
-    val listen = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { r ->
-        val heard = Voice.heard(r.data)
-        if (heard.isNotEmpty()) { speakAt = chat.turns.size; onAsk(heard, focus?.id) }
-    }
-    val speaking by Voice.speaking.collectAsState()
     Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding().navigationBarsPadding().imePadding()) {
         Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 8.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "חזרה", tint = c.fg) }
@@ -211,20 +188,13 @@ fun AskScreen(
             } else LazyColumn(state = list, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 20.dp, vertical = 20.dp),
                 verticalArrangement = Arrangement.spacedBy(22.dp)) {
                 itemsIndexed(chat.turns, key = { _, t -> t.ask.id }) { _, t ->
-                    TurnView(t, projects, computer, done, onAct, speaking = speaking != null && speaking == t.answer?.id,
-                        onSpeak = { if (speaking == t.answer?.id) Voice.stop() else sayTurn(t) })
+                    TurnView(t, projects, computer, done, onAct)
                 }
             }
         }
         Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 10.dp, top = 6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (chat.turns.isNotEmpty() && paired && !canAsk) OffNotice(computer!!)
-            Composer(focus, projects, { focus = it }, text, { text = it }, field, enabled = canAsk && !chat.busy, busy = chat.busy,
-                onTalk = {
-                    Voice.stop()
-                    runCatching { listen.launch(Voice.listenIntent()) }.onFailure {
-                        android.widget.Toast.makeText(context, "אין בטלפון זיהוי דיבור.", android.widget.Toast.LENGTH_LONG).show()
-                    }
-                }) { if (text.isNotBlank()) { onAsk(text.trim(), focus?.id); text = "" } }
+            Composer(focus, projects, { focus = it }, text, { text = it }, field, enabled = canAsk && !chat.busy, busy = chat.busy) { if (text.isNotBlank()) { onAsk(text.trim(), focus?.id); text = "" } }
             Text("עונה ה־Claude Code שבמחשב שלך. הוא קורא את תיקיות הפרויקטים, אף פעם לא משנה אותן.",
                 color = c.faint, fontSize = 11.5.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
         }
@@ -245,7 +215,7 @@ private fun OffNotice(computer: Computer.State) {
 
 @Composable
 private fun TurnView(t: Computer.Turn, projects: List<Project>, computer: Computer.State?, done: Map<String, Pair<CardAct, Long>>,
-                     onAct: (String, com.yonidev.ydeck.link.CardItem, CardAct) -> Unit, speaking: Boolean, onSpeak: () -> Unit) {
+                     onAct: (String, com.yonidev.ydeck.link.CardItem, CardAct) -> Unit) {
     val c = LocalDeck.current
     val q = t.ask.question
     val a = t.answer
@@ -261,15 +231,7 @@ private fun TurnView(t: Computer.Turn, projects: List<Project>, computer: Comput
             a == null -> Working("נשלח למחשב…")
             !a.done -> Working(a.step.ifBlank { "חושב…" })
             a.answer.isNotEmpty() -> {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (a.reads > 0) "קרא ${a.reads} קבצים · ${a.seconds} שניות" else "", color = c.faint, fontSize = 12.5.sp, modifier = Modifier.weight(1f))
-                    // Read aloud, or stop.
-                    Row(Modifier.clip(RoundedCornerShape(99.dp)).clickable(onClick = onSpeak).padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Icon(if (speaking) Icons.Outlined.StopCircle else Icons.Outlined.VolumeUp, null, tint = if (speaking) c.accentText else c.faint, modifier = Modifier.size(16.dp))
-                        Text(if (speaking) "לעצור" else "להשמיע", color = if (speaking) c.accentText else c.faint, fontSize = 12.sp)
-                    }
-                }
+                if (a.reads > 0) Text("קרא ${a.reads} קבצים · ${a.seconds} שניות", color = c.faint, fontSize = 12.5.sp)
                 // In order when the computer sent a card; an older computer's words as they came.
                 a.card?.let { AnswerCard(a.id, it, projects, computer, done, onAct) } ?: MarkdownView(a.answer, Modifier.fillMaxWidth())
             }
@@ -304,8 +266,7 @@ private fun Suggestion(text: String, onClick: () -> Unit) {
 
 /** The question field: rounded, with what the question is about (one project, or every project, picked from the chip) and a round send button. */
 @Composable
-private fun Composer(focus: Project?, projects: List<Project>, onFocus: (Project?) -> Unit, text: String, onText: (String) -> Unit, field: FocusRequester, enabled: Boolean, busy: Boolean,
-                     onTalk: () -> Unit, onSend: () -> Unit) {
+private fun Composer(focus: Project?, projects: List<Project>, onFocus: (Project?) -> Unit, text: String, onText: (String) -> Unit, field: FocusRequester, enabled: Boolean, busy: Boolean, onSend: () -> Unit) {
     val c = LocalDeck.current
     val shape = RoundedCornerShape(20.dp)
     Column(Modifier.fillMaxWidth().clip(shape).background(c.surface).border(1.dp, c.line, shape).padding(start = 16.dp, end = 10.dp, top = 14.dp, bottom = 10.dp),
@@ -319,10 +280,8 @@ private fun Composer(focus: Project?, projects: List<Project>, onFocus: (Project
         Row(verticalAlignment = Alignment.CenterVertically) {
             ScopeChip(focus, projects, onFocus)
             Spacer(Modifier.weight(1f))
-            // An empty field talks: the microphone in the send button's place, as in a messaging app.
-            if (text.isBlank()) Box(Modifier.size(36.dp).clip(CircleShape).background(if (enabled) c.accent else c.line).clickable(enabled = enabled, onClick = onTalk),
-                contentAlignment = Alignment.Center) { Icon(Icons.Outlined.Mic, "לדבר", tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(20.dp)) }
-            else Box(Modifier.size(36.dp).clip(CircleShape).background(if (enabled) c.fg else c.line).clickable(enabled = enabled, onClick = onSend),
+            val ready = enabled && text.isNotBlank()
+            Box(Modifier.size(36.dp).clip(CircleShape).background(if (ready) c.fg else c.line).clickable(enabled = ready, onClick = onSend),
                 contentAlignment = Alignment.Center) { Icon(Icons.Outlined.ArrowUpward, "שליחה", tint = c.bg, modifier = Modifier.size(19.dp)) }
         }
     }

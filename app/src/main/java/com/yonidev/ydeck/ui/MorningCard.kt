@@ -92,18 +92,30 @@ fun MorningCard(
             if (dot != null) Box(Modifier.size(9.dp).clip(CircleShape).background(dot))
             else Box(Modifier.size(9.dp).clip(CircleShape).border(2.dp, c.faint, CircleShape))
             Spacer(Modifier.width(10.dp))
-            Text("בוקר טוב", color = c.fg, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-            if (m != null) Text(hhmm(m.at), color = c.faint, fontSize = 12.sp)
+            Column(Modifier.weight(1f)) {
+                Text("הבריף של היום", color = c.fg, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                if (m != null) Text("נכתב ב־" + hhmm(m.at), color = c.faint, fontSize = 12.sp)
+            }
+            if (m != null && !computer.morningBusy) Pill("בריף חדש", strong = false, outlined = true, onClick = onTry)
         }
         when {
             computer.morningBusy -> {
-                Text("YDeck עובר על ${computer.morningPicks.size.coerceAtLeast(1)} פרויקטים…", color = c.muted, fontSize = 14.sp)
+                val n = computer.morningPicks.size
+                Text("YDeck כותב בריף חדש. עובר על " + (if (n <= 1) "הפרויקטים" else "$n פרויקטים") + "…", color = c.muted, fontSize = 14.sp)
                 Text("בדרך כלל פחות מדקה", color = c.faint, fontSize = 12.sp)
             }
             m != null -> Today(computer, m, deck, done, onGo, onLater, onTalk, onTake)
             computer.morningError.isNotEmpty() -> {
                 Text("לא הצליח הפעם: ${computer.morningError}", color = c.muted, fontSize = 14.sp, lineHeight = 21.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { Pill("לנסות שוב", strong = false, onClick = onTry) }
+            }
+            computer.morningAt < 0 -> {
+                Text("YDeck עובר על הפרויקטים שעבדת עליהם לאחרונה, ואומר לך מה נעשה, מה כדאי לעשות היום ומה מחכה לך.",
+                    color = c.muted, fontSize = 14.sp, lineHeight = 21.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Pill("ליצור בריף עכשיו", strong = true, onClick = onTry)
+                    Pill("על אילו פרויקטים", strong = false, outlined = true) { picking = true }
+                }
             }
             else -> {
                 val at = computer.morningAt.coerceAtLeast(0)
@@ -112,7 +124,7 @@ fun MorningCard(
                 Text("${if (later) "היום" else "מחר"} ב־${at / 60}:%02d YDeck יעבור על ${if (n == 1) "פרויקט אחד" else "$n הפרויקטים"} שעבדת עליהם לאחרונה, ויכתוב לך כאן מה כדאי לעשות היום. זה יגיע גם כהתראה.".format(at % 60),
                     color = c.muted, fontSize = 14.sp, lineHeight = 21.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Pill("לנסות עכשיו", strong = true, onClick = onTry)
+                    Pill("ליצור בריף עכשיו", strong = true, onClick = onTry)
                     Pill("על אילו פרויקטים", strong = false, outlined = true) { picking = true }
                 }
             }
@@ -128,9 +140,74 @@ fun MorningCard(
 private fun Today(computer: Computer.State, m: Morning, deck: Deck, done: Map<String, Handled>, onGo: (MorningTopic) -> Unit, onLater: (MorningTopic) -> Unit,
                   onTalk: (MorningTopic) -> Unit, onTake: (MorningTopic, TopicDone) -> Unit) {
     val c = LocalDeck.current
-    if (m.hello.isNotBlank()) Text(m.hello, color = c.muted, fontSize = 14.sp, lineHeight = 21.sp, style = TextStyle(textDirection = dirOf(m.hello)))
+    if (m.hello.isNotBlank()) Text(m.hello, color = c.fg, fontSize = 15.sp, lineHeight = 23.sp, style = TextStyle(textDirection = dirOf(m.hello)))
     // An older computer sent only words: those, as they are.
     if (m.topics.isEmpty()) { MarkdownView(m.text, Modifier.fillMaxWidth()); return }
+    val moved = moved(computer, deck)
+    if (moved.isNotEmpty()) Part(PartKind.DONE, "מה נעשה", moved.size) {
+        moved.forEach { (p, words) -> PartLine(p, words) }
+    }
+    Part(PartKind.TODAY, "מה להיום", m.topics.size) { Topics(computer, m, deck, done, onGo, onLater, onTalk, onTake) }
+    val waiting = computer.waiting.take(3)
+    if (waiting.isNotEmpty()) Part(PartKind.WAITING, "מחכה לך", computer.waiting.size) {
+        waiting.forEach { w -> PartLine(deck.byId(w.project), w.text.ifBlank { "Claude מחכה לתשובה שלך" }) }
+    }
+}
+
+/** The kinds of the brief's parts, each with its dot: green done, a ring for today, amber waiting for you. */
+private enum class PartKind { DONE, TODAY, WAITING }
+
+/** One part of the brief: its dot, its name and how many, then its lines, in a box of its own. */
+@Composable
+private fun Part(kind: PartKind, title: String, count: Int, body: @Composable () -> Unit) {
+    val c = LocalDeck.current
+    val shape = RoundedCornerShape(16.dp)
+    Column(Modifier.fillMaxWidth().clip(shape).background(c.surface2).padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            val dot = Modifier.size(8.dp).clip(CircleShape)
+            when (kind) {
+                PartKind.DONE -> Box(dot.background(c.closed))
+                PartKind.TODAY -> Box(dot.border(1.8.dp, c.fg, CircleShape))
+                PartKind.WAITING -> Box(dot.background(c.open))
+            }
+            Text(title, color = c.muted, fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+            Text(count.toString(), color = c.faint, fontSize = 12.sp)
+        }
+        body()
+    }
+}
+
+/** A line of the brief: the project's logo and name, then the words. */
+@Composable
+private fun PartLine(p: com.yonidev.ydeck.data.Project?, words: String) {
+    val c = LocalDeck.current
+    Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (p != null) Box(Modifier.padding(top = 1.dp)) { Logo(p, 20.dp) }
+        Column(Modifier.weight(1f)) {
+            if (p != null) Text(p.name, color = c.faint, fontSize = 11.5.sp)
+            Text(words, color = c.fg, fontSize = 14.sp, lineHeight = 20.sp, maxLines = 3, style = TextStyle(textDirection = dirOf(words)))
+        }
+    }
+}
+
+/**
+ * What was done lately, from each project's journal: its last day before today with something in it (what was marked
+ * done, else how many commits), newest first, four at most.
+ */
+private fun moved(computer: Computer.State, deck: Deck): List<Pair<com.yonidev.ydeck.data.Project, String>> {
+    val today = LocalDate.now().toString()
+    return deck.active.mapNotNull { p ->
+        val day = computer.memory[p.id]?.journal.orEmpty().firstOrNull { it.date < today && (it.done.isNotEmpty() || it.commits.isNotEmpty()) } ?: return@mapNotNull null
+        val words = if (day.done.isNotEmpty()) day.done.take(2).joinToString(" · ") else "${day.commits.size} commits"
+        Triple(p, words, day.date)
+    }.sortedByDescending { it.third }.take(4).map { it.first to it.second }
+}
+
+/** Today's topics, each with its project, what YDeck noticed, and its buttons; what was acted on, quietly. */
+@Composable
+private fun Topics(computer: Computer.State, m: Morning, deck: Deck, done: Map<String, Handled>, onGo: (MorningTopic) -> Unit, onLater: (MorningTopic) -> Unit,
+                   onTalk: (MorningTopic) -> Unit, onTake: (MorningTopic, TopicDone) -> Unit) {
+    val c = LocalDeck.current
     m.topics.forEachIndexed { i, t ->
         if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(c.line))
         val p = deck.byId(t.project)

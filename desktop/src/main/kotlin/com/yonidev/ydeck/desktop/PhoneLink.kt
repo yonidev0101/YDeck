@@ -592,7 +592,7 @@ object PhoneLink {
             waiting = SessionAsks.waiting.value, reply = settings.phoneReply, replied = replied.toList(),
             run = settings.phoneRun, ran = Runs.ran.toList(), runOk = if (settings.phoneRun) settings.runOk.filterKeys { k -> deck.projects.any { it.id == k } } else emptyMap(),
             morning = morning, morningAt = if (settings.phoneMorning && settings.phoneAsk && Tools.claude != null) settings.morningAt else -1,
-            morningBusy = morningBusy, morningError = morningError, morningPicks = if (settings.phoneMorning) GoodMorning.projects().map { it.id } else emptyList())
+            morningBusy = morningBusy, morningError = morningError, morningPicks = if (settings.phoneAsk) GoodMorning.projects().map { it.id } else emptyList())
     }
 
     /** What the project's window shows here: git, the agent, the latest receipts, open loops, the dev server. */
