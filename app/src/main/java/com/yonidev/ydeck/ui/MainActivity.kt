@@ -79,7 +79,7 @@ class MainActivity : ComponentActivity() {
     private var pendingPair by mutableStateOf<String?>(null)
 
     /** What was done here with each topic of the good morning (see [MorningCard]). */
-    private var handled by mutableStateOf<Map<String, TopicDone>>(emptyMap())
+    private var handled by mutableStateOf<Map<String, Handled>>(emptyMap())
 
     /** What the conversation's field starts with (talking about a topic of the good morning). */
     private var askText by mutableStateOf("")
@@ -98,7 +98,7 @@ class MainActivity : ComponentActivity() {
             Settings.Global.getFloat(contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
         Computer.state(this)
         Computer.schedule(this)
-        handled = MorningNotice.handled(this).mapNotNull { (k, v) -> runCatching { k to TopicDone.valueOf(v) }.getOrNull() }.toMap()
+        handled = MorningNotice.handled(this).mapNotNull { (k, v) -> runCatching { k to Handled(TopicDone.valueOf(v.substringBefore(':')), v.substringAfter(':', "0").toLong()) }.getOrNull() }.toMap()
         // While the app is on screen, what the computer sends shows within seconds (Claude starting, stopping, done).
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.RESUMED) {
@@ -142,6 +142,12 @@ class MainActivity : ComponentActivity() {
                                     onGo = { t -> goTopic(comp, t) },
                                     onLater = { t -> comp.morning?.let { m -> mark(m, t, TopicDone.LATER) }; write(t.project, com.yonidev.ydeck.link.Note.MORNING_LATER, t.say) },
                                     onTalk = { t -> comp.morning?.let { m -> talkTopic(m, t) } },
+                                    onTake = { t, how -> comp.morning?.let { m -> mark(m, t, how) }
+                                        when (how) {
+                                            TopicDone.IDEA -> write(t.project, com.yonidev.ydeck.link.Note.IDEA_ADD, t.step)
+                                            TopicDone.LEFT -> write(t.project, com.yonidev.ydeck.link.Note.LEFT_ADD, t.step)
+                                            else -> write(t.project, com.yonidev.ydeck.link.Note.MORNING_SKIP, t.say)
+                                        } },
                                     onPick = { id, on -> write(id, com.yonidev.ydeck.link.Note.MORNING_PICK, if (on) "1" else "0") },
                                 )
                             } },
@@ -230,8 +236,9 @@ class MainActivity : ComponentActivity() {
     /** A topic of the good morning, done with here: shown quietly under it from now on. */
     private fun mark(m: com.yonidev.ydeck.link.Morning, t: com.yonidev.ydeck.link.MorningTopic, how: TopicDone) {
         val key = topicKey(m, m.topics.indexOf(t))
-        handled = handled + (key to how)
-        MorningNotice.handle(this, key, how.name)
+        val now = System.currentTimeMillis()
+        handled = handled + (key to Handled(how, now))
+        MorningNotice.handle(this, key, how.name + ":" + now)
     }
 
     /** A good morning now: asked of the computer, then watched until it comes (or says why not). */
@@ -257,6 +264,7 @@ class MainActivity : ComponentActivity() {
         val m = computer.morning ?: return
         confirmOwner("פתיחת Claude במחשב") {
             mark(m, t, TopicDone.GO)
+            write(t.project, com.yonidev.ydeck.link.Note.MORNING_GO, t.say)
             send(t.project, com.yonidev.ydeck.link.Launch.NEW, "", t.step.ifBlank { t.say }, false)
         }
     }

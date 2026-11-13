@@ -79,13 +79,13 @@ import com.yonidev.ydeck.data.Project
 
 /** App-icon style tile: the picked logo image, or the monogram on the brand gradient. */
 @Composable
-fun Logo(p: Project, size: Dp) {
+fun Logo(p: Project, size: Dp, /** Round, inside a ring (see RingedLogo). */ round: Boolean = false) {
     // A near-black project colour would vanish on the night ground: it takes the raised surface instead.
     val c = Color(p.color).let { if (android.graphics.Color.luminance(p.color) < 0.03f) LocalDeck.current.surface2 else it }
     val context = LocalContext.current
     val image = remember(p.logo) { Logos.load(context, p.logo)?.asImageBitmap() }
     Box(
-        Modifier.size(size).clip(RoundedCornerShape(size * 0.29f)).background(c),
+        Modifier.size(size).clip(if (round) androidx.compose.foundation.shape.CircleShape else RoundedCornerShape(size * 0.29f)).background(c),
         contentAlignment = Alignment.Center,
     ) {
         if (image != null) {

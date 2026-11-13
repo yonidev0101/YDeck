@@ -101,6 +101,7 @@ fun PhoneSettings() {
                         }
                         // Which projects: picked, left out, or (the rest) worked on in the last two weeks.
                         var picking by remember { mutableStateOf(false) }
+                        var reviewDone by remember { mutableStateOf<String?>(null) }
                         val picked = remember(settings, Repo.deck.collectAsState().value) { GoodMorning.projects().map { it.id }.toSet() }
                         Setting(tr("Which projects", "על אילו פרויקטים"), value = tr("${picked.size} projects", "${picked.size} פרויקטים"),
                             hint = tr("By itself: the ones you worked on in the last two weeks. Pick or leave out any.", "לבד: אלה שעבדת עליהם בשבועיים האחרונים. אפשר להוסיף או להוציא."),
@@ -115,6 +116,12 @@ fun PhoneSettings() {
                                 }
                             }
                         }
+                        // The day's review: one project's code read, and suggestions for the next good morning.
+                        var reviewing by remember { mutableStateOf<String?>(null) }
+                        Setting(tr("Review a project now", "לסקור פרויקט עכשיו"),
+                            hint = reviewing ?: tr("Each morning, an hour before, Claude reads one project's code in turn and suggests an idea or something to close; the good morning brings it. This runs it now (a few minutes).", "כל בוקר, שעה לפני, Claude קורא את הקוד של פרויקט אחד בתורו ומציע רעיון או משהו לסגור, והבוקר טוב מביא את זה. כאן מריצים עכשיו (כמה דקות)."),
+                            onClick = if (reviewing != null) null else ({ reviewing = tr("Claude is reading…", "Claude קורא…"); PhoneLink.reviewNow { name -> reviewing = null; reviewDone = name?.let { tr("Reviewed: $it. Send a good morning to see it.", "נסקר: $it. אפשר לשלוח בוקר טוב כדי לראות.") } ?: tr("The review didn't work.", "הסקירה לא הצליחה.") } }))
+                        reviewDone?.let { Item { Text(it, color = c.muted, fontSize = 12.sp, fontFamily = PlexSans) } }
                         val news by PhoneLink.morningNews.collectAsState()
                         Setting(tr("Send one now", "לשלוח אחד עכשיו"),
                             hint = when {

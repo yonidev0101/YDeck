@@ -41,9 +41,29 @@ class MorningTest {
             ]}"""
         val (hello, topics) = GoodMorning.read(answer, listOf(nova))!!
         assertEquals("בוקר טוב!", hello)
-        assertEquals(listOf("nova", "nova"), topics.map { it.project })
+        // One topic per project: the second about Nova is left out.
+        assertEquals(listOf("nova"), topics.map { it.project })
         assertEquals("Finish the CSV export.", topics[0].step)
         assertNull(GoodMorning.read("no json here", listOf(nova)))
+    }
+
+    @Test fun theJournalTakesWhatMovedSinceTheLastLook() {
+        val first = Journal.step(null, Journal.Lists(listOf("a", "b"), listOf("i1"), listOf("d0")), emptyList(), "2026-11-13", listOf("c1"), emptyList())
+        // The first look only remembers the lists (and takes the day's commits).
+        assertEquals(emptyList<String>(), first[0].done)
+        assertEquals(listOf("c1"), first[0].commits)
+        val then = Journal.step(Journal.Lists(listOf("a", "b"), listOf("i1"), listOf("d0")),
+            Journal.Lists(listOf("b", "c"), listOf("i1", "i2"), listOf("a", "d0")), first, "2026-11-13", emptyList(), listOf("s1"))
+        assertEquals(1, then.size)
+        assertEquals(listOf("a"), then[0].done)
+        assertEquals(listOf("c"), then[0].added)
+        assertEquals(listOf("i2"), then[0].ideas)
+        assertEquals(listOf("c1"), then[0].commits)
+        assertEquals(listOf("s1"), then[0].sessions)
+        val next = Journal.step(Journal.Lists(listOf("b", "c"), listOf("i1", "i2"), listOf("a", "d0")),
+            Journal.Lists(listOf("c"), listOf("i1", "i2"), listOf("b", "a", "d0")), then, "2026-11-14", emptyList(), emptyList())
+        assertEquals(listOf("2026-11-14", "2026-11-13"), next.map { it.date })
+        assertEquals(listOf("b"), next[0].done)
     }
 
     @Test fun anEmptyMorningIsDropped() {

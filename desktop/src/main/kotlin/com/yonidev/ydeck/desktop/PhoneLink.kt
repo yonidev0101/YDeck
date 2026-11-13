@@ -112,6 +112,8 @@ object PhoneLink {
     val opened = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 4)
 
     fun start() {
+        // What moved in each project, day by day (the good morning and the phone's project page read it).
+        Journal.start()
         runCatching {
             val o = JSONObject(file.readText())
             pairing = Pairing(Base64.getUrlDecoder().decode(o.getString("secret")))
@@ -132,6 +134,7 @@ object PhoneLink {
             while (true) {
                 runCatching { takeOffer() }
                 runCatching { takeNotes() }
+                runCatching { reviewTick() }
                 runCatching { morningTick() }
                 // The state at once after a note (the phone sees it stored) or a nudge, else every minute.
                 if (System.currentTimeMillis() - last >= 55_000 || pendingSend || _state.value.waiting) {
@@ -189,6 +192,38 @@ object PhoneLink {
         makeMorning(today)
     }
 
+    /** The day the last review ran (YYYY-MM-DD), so it runs once a day. */
+    @Volatile private var reviewDay = ""
+    @Volatile private var reviewBusy = false
+
+    /**
+     * The day's review ([Review]): an hour and a quarter before the good morning, one project in turn is read and
+     * suggested on, so the morning can bring it. Only while the good morning is on. Off the phone's thread.
+     */
+    private fun reviewTick() {
+        val s = Settings.state.value
+        if (!s.phoneMorning || !s.phoneAsk || Tools.claude == null || pairing == null || reviewBusy) return
+        val now = java.time.LocalDateTime.now()
+        val today = now.toLocalDate().toString()
+        if (reviewDay == today || morningDay == today) return
+        val minute = now.hour * 60 + now.minute
+        if (minute < s.morningAt - 75 || minute > s.morningAt + 6 * 60) return
+        val p = Review.next(GoodMorning.projects()) ?: return
+        reviewDay = today
+        reviewBusy = true
+        asking.execute {
+            try { Review.run(p) } catch (_: Throwable) {} finally { reviewBusy = false }
+        }
+    }
+
+    /** The day's review now, of the next project in turn (Settings → Phone); [done] with the project's name, or null. */
+    fun reviewNow(done: (String?) -> Unit) {
+        if (Tools.claude == null || reviewBusy) return done(null)
+        val p = Review.next(GoodMorning.projects()) ?: return done(null)
+        reviewBusy = true
+        asking.execute { val ok = runCatching { Review.run(p) }.isSuccess; reviewBusy = false; done(if (ok) p.name else null) }
+    }
+
     /** A good morning now (Settings → Phone, or "try now" on the phone); today's is then this one. */
     fun morningNow() {
         if (pairing == null || Tools.claude == null || morningBusy) return
@@ -232,7 +267,7 @@ object PhoneLink {
     /** The phone's word on a topic of the good morning: put off to tomorrow, or set aside. The next morning keeps to it. */
     private fun morningSaid(note: Note) {
         val name = Repo.deck.value.byId(note.project)?.name ?: note.project
-        talk += ((if (note.kind == Note.MORNING_LATER) "Me: remind me tomorrow about " else "Me: not now about ") + name + ": " + note.text).take(600)
+        talk += ((when (note.kind) { Note.MORNING_LATER -> "Me: remind me tomorrow about "; Note.MORNING_GO -> "Me: let's go (Claude opened to do it) on "; else -> "Me: not now about " }) + name + ": " + note.text).take(600)
         while (talk.size > TALK) talk.removeAt(0)
     }
 
@@ -385,7 +420,7 @@ object PhoneLink {
      */
     private fun store(note: Note): Boolean {
         if (note.kind == Note.NEW_PROJECT) { newProject(note); return true }
-        if (note.kind == Note.MORNING_LATER || note.kind == Note.MORNING_SKIP) { morningSaid(note); return true }
+        if (note.kind == Note.MORNING_LATER || note.kind == Note.MORNING_SKIP || note.kind == Note.MORNING_GO) { morningSaid(note); return true }
         if (note.kind == Note.MORNING_PICK) { morningPick(note); return true }
         val project = Repo.deck.value.byId(note.project) ?: return true
         val dir = Settings.state.value.localOf(project.id).dir
@@ -543,6 +578,7 @@ object PhoneLink {
                 releases = shared?.releases.orEmpty().take(10).map { MemRelease(it.version, it.date, it.note) },
                 folder = dir?.name.orEmpty(),
                 left = mine?.left.orEmpty().take(30), ideas = mine?.ideas.orEmpty().take(30), doneItems = mine?.done.orEmpty(),
+                journal = if (dir != null) Journal.days(p.id, 7) else emptyList(),
             )
         }
         val live = deck.projects.mapNotNull { p -> settings.localOf(p.id).folder?.let { p.id to live(it) } }.toMap()

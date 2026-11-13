@@ -50,10 +50,15 @@ object GoodMorning {
         appendLine("3. Only then Git (\"stuck\"): changes not saved or commits not pushed, and only when it really matters (many days, or work that could be lost). At most one topic about Git, and never when the project has a next step or things left worth talking about instead.")
         appendLine("Mix them: no two topics of the same kind when you can help it, and each topic in a different project. Leave the rest out.")
         appendLine()
+        appendLine("You go on from one morning to the next, as a partner who remembers:")
+        appendLine("- \"hello\" opens with what moved since last time, in one short sentence, when something did (\"yesterday you closed X in Y\"); else a plain good morning.")
+        appendLine("- Follow up on what they said last time: a topic they said \"let's go\" on, say in a few words whether it got done (the project's \"moved\" lines tell); one they put off to tomorrow comes back today.")
+        appendLine("- When a project's review below suggests something, one of the topics may be that suggestion: kind \"suggest\", \"add\" set to \"idea\" (a new idea) or \"left\" (something to close), \"step\" the exact short line to add to their list, \"say\" why, from the review.")
+        appendLine()
         appendLine("How to write: ${if (hebrew) "in Hebrew, the way an Israeli friend talks: warm, direct, short (\"בוא נסיים היום את…\", \"מה אתה אומר על…?\", \"מה קורה עם…?\")" else "in English, warm, direct and short"}. Speak to them (\"let's\", \"what do you think\"). Only what the projects below say: never invent a fact, a deadline or a file.")
         appendLine()
         appendLine("Answer with JSON only, no other text, in this shape:")
-        appendLine("""{"hello": "one short opening line", "topics": [{"project": "<the project's id, as given below>", "kind": "finish | stuck | idea | decide", "say": "one or two sentences: what you noticed and what you suggest", "ask": "one short question for them", "step": "if they say let's go: what to ask Claude Code to do in that project's folder, one or two plain sentences, in English"}]}""")
+        appendLine("""{"hello": "one short opening line", "topics": [{"project": "<the project's id, as given below>", "kind": "finish | stuck | idea | decide | suggest", "say": "one or two sentences: what you noticed and what you suggest", "ask": "one short question for them", "step": "if they say let's go: what to ask Claude Code to do in that project's folder, one or two plain sentences, in English", "add": "only for suggest: idea or left"}]}""")
         appendLine("At most three topics. \"say\" and \"ask\" are what they read on the phone, so keep them short.")
         appendLine("If they write back after this, answer them in plain, short conversational text (never JSON).")
         appendLine()
@@ -62,6 +67,11 @@ object GoodMorning {
             appendLine()
             appendLine("Last time (keep to it: what they put off or asked to be reminded of comes back; what they set aside or declined doesn't):")
             talk.forEach { appendLine("- " + it.replace('\n', ' ').take(600)) }
+        }
+        Review.lines(projects).takeIf { it.isNotEmpty() }?.let { r ->
+            appendLine()
+            appendLine("The day's review (Claude read these projects' code and suggests):")
+            r.forEach { appendLine("- " + it) }
         }
         appendLine()
         appendLine("The projects (${projects.size}):")
@@ -96,6 +106,7 @@ object GoodMorning {
             if (bits.isNotEmpty()) appendLine("- Git: " + bits.joinToString(", "))
         }
         ClaudeLink.statusIn(dir.path, ClaudeLink.sessions.value)?.let { s -> appendLine("- Claude Code there now: ${s.mode.name.lowercase()}") }
+        Journal.lines(p.id, LocalDate.now().minusDays(2)).takeIf { it.isNotEmpty() }?.let { appendLine("- moved lately: " + it.joinToString(" | ")) }
     }
 
     private fun days(ms: Long): String = when (val d = ms / 86_400_000L) {
@@ -114,6 +125,7 @@ object GoodMorning {
         val byName = projects.associateBy { it.name.lowercase() }
         val topics = o.optJSONArray("topics")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it)?.let(MorningTopic::of) } }.orEmpty()
             .mapNotNull { t -> (byId[t.project] ?: byName[t.project.lowercase()])?.let { t.copy(project = it.id) } }
+            .distinctBy { it.project }
             .take(3)
         val hello = o.optString("hello").trim()
         if (topics.isEmpty() && hello.isEmpty()) null else hello to topics

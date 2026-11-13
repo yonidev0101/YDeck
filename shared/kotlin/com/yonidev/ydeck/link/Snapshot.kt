@@ -27,6 +27,8 @@ data class Memory(
     val left: List<String> = emptyList(),
     val ideas: List<String> = emptyList(),
     val doneItems: List<String> = emptyList(),
+    /** What moved, day by day (newest first, the last week): see [JournalDay]. */
+    val journal: List<JournalDay> = emptyList(),
 ) {
     /** Something still waits: a next step was left. */
     val open: Boolean get() = next.isNotBlank()
@@ -151,6 +153,7 @@ class Snapshot(
             put("decisions", JSONArray().apply { decisions.forEach { put(JSONObject().put("text", it.text).put("date", it.date)) } })
             put("releases", JSONArray().apply { releases.forEach { put(JSONObject().put("version", it.version).put("date", it.date).put("note", it.note)) } })
             put("left", JSONArray(left)); put("ideas", JSONArray(ideas)); put("doneItems", JSONArray(doneItems))
+            put("journal", JSONArray().apply { journal.forEach { put(it.toJson()) } })
         }
 
         fun memoryOf(o: JSONObject): Memory {
@@ -162,6 +165,7 @@ class Snapshot(
                 decisions = objs("decisions").map { MemDecision(it.optString("text"), it.optString("date")) }.filter { it.text.isNotBlank() },
                 releases = objs("releases").map { MemRelease(it.optString("version"), it.optString("date"), it.optString("note")) }.filter { it.version.isNotBlank() },
                 left = strings("left"), ideas = strings("ideas"), doneItems = strings("doneItems"),
+                journal = objs("journal").map(JournalDay::of).filter { it.date.isNotBlank() },
             )
         }
     }
@@ -300,9 +304,11 @@ data class Note(val id: String, val project: String, val kind: String, val text:
         const val MORNING_LATER = "morning.later"
         const val MORNING_SKIP = "morning.skip"
         const val MORNING_PICK = "morning.pick"
+        /** "Let's go" on a topic of the good morning ([text]: what it said): the next morning follows it up. */
+        const val MORNING_GO = "morning.go"
 
         private val KINDS = setOf(NEXT, DECISION, DONE, ARCHIVE, LEFT_ADD, LEFT_DONE, LEFT_DROP, LEFT_MOVE, LEFT_EDIT, IDEA_ADD, IDEA_TAKE,
-            IDEA_DROP, DONE_DROP, NAME, COLOR, KIND, LINK_ADD, LINK_EDIT, LINK_DROP, COPY_ADD, COPY_DROP, NEW_PROJECT, MORNING_LATER, MORNING_SKIP, MORNING_PICK)
+            IDEA_DROP, DONE_DROP, NAME, COLOR, KIND, LINK_ADD, LINK_EDIT, LINK_DROP, COPY_ADD, COPY_DROP, NEW_PROJECT, MORNING_LATER, MORNING_SKIP, MORNING_PICK, MORNING_GO)
         /** Kinds whose text may be empty. */
         private val MAY_BE_EMPTY = setOf(DONE, KIND)
 
@@ -643,17 +649,47 @@ data class Morning(
  * One thing the good morning brings up: in [project] (its id), of a [kind] (finish, stuck, idea, decide), what it
  * says and the question it asks, and [step]: what Claude is asked to do there when the developer says "let's go".
  */
-data class MorningTopic(val project: String, val kind: String, val say: String, val ask: String = "", val step: String = "") {
-    fun toJson(): JSONObject = JSONObject().put("project", project).put("kind", kind).put("say", say).put("ask", ask).put("step", step)
+data class MorningTopic(val project: String, val kind: String, val say: String, val ask: String = "", val step: String = "",
+                        /** A suggestion from the day's review ([SUGGEST]): where [step] would go, "idea" or "left". */
+                        val add: String = "") {
+    fun toJson(): JSONObject = JSONObject().put("project", project).put("kind", kind).put("say", say).put("ask", ask).put("step", step).put("add", add)
 
     companion object {
         const val FINISH = "finish"
         const val STUCK = "stuck"
         const val IDEA = "idea"
         const val DECIDE = "decide"
+        /** Something the day's review of the project's code suggests: a new idea, or something to close. */
+        const val SUGGEST = "suggest"
 
         fun of(o: JSONObject): MorningTopic? = MorningTopic(o.optString("project").take(100), o.optString("kind").take(20),
-            o.optString("say").take(400), o.optString("ask").take(300), o.optString("step").take(600))
+            o.optString("say").take(400), o.optString("ask").take(300), o.optString("step").take(600), o.optString("add").take(10))
             .takeIf { it.project.isNotBlank() && it.say.isNotBlank() }
+    }
+}
+
+/**
+ * One day of a project, as YDeck saw it move: what was done (ticked off what was left), what was added to it, ideas
+ * that came up, the commits made and what each Claude session did. YDeck keeps it so the days connect: the good
+ * morning knows what moved since, and the phone shows it on the project's page.
+ */
+data class JournalDay(
+    val date: String,
+    val done: List<String> = emptyList(),
+    val added: List<String> = emptyList(),
+    val ideas: List<String> = emptyList(),
+    val commits: List<String> = emptyList(),
+    val sessions: List<String> = emptyList(),
+) {
+    val empty: Boolean get() = done.isEmpty() && added.isEmpty() && ideas.isEmpty() && commits.isEmpty() && sessions.isEmpty()
+
+    fun toJson(): JSONObject = JSONObject().put("date", date).put("done", JSONArray(done)).put("added", JSONArray(added))
+        .put("ideas", JSONArray(ideas)).put("commits", JSONArray(commits)).put("sessions", JSONArray(sessions))
+
+    companion object {
+        fun of(o: JSONObject): JournalDay {
+            fun strings(name: String) = o.optJSONArray(name)?.let { a -> (0 until a.length()).map { a.optString(it) }.filter { it.isNotBlank() } }.orEmpty()
+            return JournalDay(o.optString("date"), strings("done"), strings("added"), strings("ideas"), strings("commits"), strings("sessions"))
+        }
     }
 }

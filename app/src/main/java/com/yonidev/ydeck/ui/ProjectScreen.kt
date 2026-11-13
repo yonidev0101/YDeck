@@ -311,6 +311,7 @@ private fun MemoryTab(m: Memory?, live: Live?, pending: List<Note>, write: ((Str
             )
         }
         PathOf(if (closing) m.copy(next = "") else m, write, onDone, edit, ask)
+        Moved(m.journal)
         if (live != null && live.loops.isNotEmpty()) Section("פתוח עכשיו") {
             live.loops.forEachIndexed { i, l ->
                 Row(Modifier.padding(top = if (i > 0) 12.dp else 0.dp), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -1241,4 +1242,52 @@ private fun Hair() = Box(Modifier.fillMaxWidth().padding(vertical = 10.dp).heigh
 private fun Body(text: String, muted: Boolean = false) {
     val c = LocalDeck.current
     Text(text, color = if (muted) c.muted else c.fg, fontSize = 15.sp, lineHeight = 23.sp, style = TextStyle(textDirection = dirOf(text)))
+}
+
+/**
+ * What moved, day by day (the computer keeps it, see JournalDay): today, yesterday, then dates. Each day in a line or
+ * two: what was ticked off, what was added, new ideas, then quietly the commits and Claude's sessions.
+ */
+@Composable
+private fun Moved(days: List<com.yonidev.ydeck.link.JournalDay>) {
+    val c = LocalDeck.current
+    if (days.isEmpty()) return
+    Section("מה התקדם", trailing = "השבוע") {
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            days.take(5).forEach { d ->
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(dayName(d.date), color = c.faint, fontSize = 12.5.sp, modifier = Modifier.width(52.dp).padding(top = 2.dp))
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        d.done.take(4).forEach { MovedLine("✓", it, c.closed) }
+                        d.added.take(3).forEach { MovedLine("+", it, c.muted) }
+                        d.ideas.take(2).forEach { MovedLine("◦", it, c.accentText) }
+                        val quiet = buildList {
+                            if (d.commits.isNotEmpty()) add(if (d.commits.size == 1) "commit אחד" else "${d.commits.size} commits")
+                            if (d.sessions.isNotEmpty()) add(if (d.sessions.size == 1) "סשן Claude אחד" else "${d.sessions.size} סשנים של Claude")
+                        }
+                        if (quiet.isNotEmpty()) Text(quiet.joinToString(" · "), color = c.faint, fontSize = 12.5.sp)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MovedLine(mark: String, text: String, color: androidx.compose.ui.graphics.Color) {
+    val c = LocalDeck.current
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(mark, color = color, fontSize = 13.sp)
+        Text(text, color = c.fg.copy(alpha = 0.86f), fontSize = 14.sp, lineHeight = 20.sp, style = TextStyle(textDirection = dirOf(text)))
+    }
+}
+
+private fun dayName(date: String): String {
+    val d = runCatching { java.time.LocalDate.parse(date) }.getOrNull() ?: return date
+    val today = java.time.LocalDate.now()
+    return when (d) {
+        today -> "היום"
+        today.minusDays(1) -> "אתמול"
+        else -> "${d.dayOfMonth}.${d.monthValue}"
+    }
 }

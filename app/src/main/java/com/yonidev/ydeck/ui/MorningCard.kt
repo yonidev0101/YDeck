@@ -51,19 +51,26 @@ import java.time.ZoneId
  * The topics are acted on with one tap: let's go (Claude opens in that project), tomorrow, or talk about it.
  */
 
-/** What became of a topic on this phone: opened in Claude, put off to tomorrow, or talked about. */
-enum class TopicDone(val words: String) { GO("נפתח Claude במחשב"), LATER("יזכיר מחר"), TALK("פתחנו שיחה") }
+/** What became of a topic on this phone: opened in Claude, put off, talked about; a suggestion taken or let go. */
+enum class TopicDone(val words: String) {
+    GO("נשלח למחשב"), LATER("יזכיר מחר"), TALK("פתחנו שיחה"), IDEA("נוסף לרעיונות"), LEFT("נוסף ל״נשאר״"), NO("ירד מהפרק")
+}
+
+/** What was done with a topic, and when (a "let's go" is followed from then on). */
+data class Handled(val how: TopicDone, val at: Long)
 
 @Composable
 fun MorningCard(
     computer: Computer.State,
     deck: Deck,
     /** What was done with each topic, by [topicKey]. */
-    done: Map<String, TopicDone>,
+    done: Map<String, Handled>,
     onTry: () -> Unit,
     onGo: (MorningTopic) -> Unit,
     onLater: (MorningTopic) -> Unit,
     onTalk: (MorningTopic) -> Unit,
+    /** A suggestion from the day's review: into the ideas or what's left, or let go. */
+    onTake: (MorningTopic, TopicDone) -> Unit,
     onPick: (projectId: String, on: Boolean) -> Unit,
 ) {
     val c = LocalDeck.current
@@ -93,7 +100,7 @@ fun MorningCard(
                 Text("YDeck עובר על ${computer.morningPicks.size.coerceAtLeast(1)} פרויקטים…", color = c.muted, fontSize = 14.sp)
                 Text("בדרך כלל פחות מדקה", color = c.faint, fontSize = 12.sp)
             }
-            m != null -> Today(m, deck, done, onGo, onLater, onTalk)
+            m != null -> Today(computer, m, deck, done, onGo, onLater, onTalk, onTake)
             computer.morningError.isNotEmpty() -> {
                 Text("לא הצליח הפעם: ${computer.morningError}", color = c.muted, fontSize = 14.sp, lineHeight = 21.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { Chip("לנסות שוב", strong = false, onClick = onTry) }
@@ -118,7 +125,8 @@ fun MorningCard(
 
 /** This morning's: the opening line, then each topic not acted on yet, with its buttons; what was acted on, quietly. */
 @Composable
-private fun Today(m: Morning, deck: Deck, done: Map<String, TopicDone>, onGo: (MorningTopic) -> Unit, onLater: (MorningTopic) -> Unit, onTalk: (MorningTopic) -> Unit) {
+private fun Today(computer: Computer.State, m: Morning, deck: Deck, done: Map<String, Handled>, onGo: (MorningTopic) -> Unit, onLater: (MorningTopic) -> Unit,
+                  onTalk: (MorningTopic) -> Unit, onTake: (MorningTopic, TopicDone) -> Unit) {
     val c = LocalDeck.current
     if (m.hello.isNotBlank()) Text(m.hello, color = c.muted, fontSize = 14.sp, lineHeight = 21.sp, style = TextStyle(textDirection = dirOf(m.hello)))
     // An older computer sent only words: those, as they are.
@@ -132,18 +140,62 @@ private fun Today(m: Morning, deck: Deck, done: Map<String, TopicDone>, onGo: (M
                 Text(p?.name ?: t.project, color = c.fg, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                 KindChip(t.kind)
             }
+            val suggest = t.kind == MorningTopic.SUGGEST && t.step.isNotBlank()
             val words = t.say + if (t.ask.isNotBlank()) " " + t.ask else ""
             Text(words, color = c.fg, fontSize = 14.sp, lineHeight = 21.sp, style = TextStyle(textDirection = dirOf(words)))
+            // A suggestion shows the line it would add, as it would be written.
+            if (suggest) Text("״" + t.step + "״", color = c.muted, fontSize = 13.5.sp, lineHeight = 20.sp, style = TextStyle(textDirection = dirOf(t.step)),
+                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(c.surface2).padding(horizontal = 12.dp, vertical = 8.dp))
             val was = done[topicKey(m, i)]
-            if (was != null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Icon(Icons.Outlined.Check, null, tint = c.closed, modifier = Modifier.size(16.dp))
-                Text(was.words, color = c.faint, fontSize = 12.5.sp)
-            } else Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (p != null) Chip("יאללה", strong = true) { onGo(t) }
-                Chip("מחר", strong = false) { onLater(t) }
-                Chip("לדבר על זה", strong = false, outlined = true) { onTalk(t) }
+            when {
+                was?.how == TopicDone.GO -> GoStatus(computer, t.project, was.at)
+                was != null -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Icon(Icons.Outlined.Check, null, tint = c.closed, modifier = Modifier.size(16.dp))
+                    Text(was.how.words, color = c.faint, fontSize = 12.5.sp)
+                }
+                suggest -> Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (t.add == "left") { Chip("ל״נשאר״", strong = true) { onTake(t, TopicDone.LEFT) }; Chip("לרעיונות", strong = false) { onTake(t, TopicDone.IDEA) } }
+                    else { Chip("לרעיונות", strong = true) { onTake(t, TopicDone.IDEA) }; Chip("ל״נשאר״", strong = false) { onTake(t, TopicDone.LEFT) } }
+                    Chip("לא", strong = false, outlined = true) { onTake(t, TopicDone.NO) }
+                }
+                else -> Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (p != null) Chip("יאללה", strong = true) { onGo(t) }
+                    Chip("מחר", strong = false) { onLater(t) }
+                    Chip("לדבר על זה", strong = false, outlined = true) { onTalk(t) }
+                }
             }
         }
+    }
+}
+
+/**
+ * After "let's go": what became of it, followed live. Sent, then whether the computer opened Claude (or why not), then
+ * Claude at work, waiting for you, or done with what it did.
+ */
+@Composable
+private fun GoStatus(computer: Computer.State, project: String, at: Long) {
+    val c = LocalDeck.current
+    val launch = computer.launches.lastOrNull { it.first.project == project && it.first.at >= at - 60_000 }
+    val live = computer.live(project)
+    val finished = live?.receipts?.firstOrNull { it.startAt >= at - 60_000 && it.endAt > 0 }
+    val (words, color, done) = when {
+        launch == null || launch.second == null -> Triple("נשלח למחשב…", c.faint, false)
+        launch.second?.ok == false -> Triple("לא נפתח: " + when (launch.second?.why) {
+            "off" -> "פתיחת Claude מהטלפון כבויה במחשב"
+            "stale" -> "הבקשה הגיעה מאוחר מדי"
+            "folder" -> "לפרויקט אין תיקייה במחשב"
+            "claude" -> "Claude Code לא נמצא במחשב"
+            else -> "משהו לא עבד במחשב"
+        }, c.danger, false)
+        live?.agentMode == "WAITING" -> Triple("Claude מחכה לך במחשב", c.open, false)
+        live?.agentMode == "WORKING" -> Triple("Claude עובד על זה…", c.accentText, false)
+        finished != null -> Triple("Claude סיים: " + finished.title, c.closed, true)
+        else -> Triple("Claude נפתח במחשב", c.muted, false)
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (done) Icon(Icons.Outlined.Check, null, tint = c.closed, modifier = Modifier.size(16.dp))
+        else Box(Modifier.size(7.dp).clip(CircleShape).background(color))
+        Text(words, color = if (done) c.muted else color, fontSize = 12.5.sp, maxLines = 2, style = TextStyle(textDirection = dirOf(words)))
     }
 }
 
@@ -156,6 +208,7 @@ private fun KindChip(kind: String) {
         MorningTopic.STUCK -> "תקוע" to c.open
         MorningTopic.IDEA -> "רעיון" to c.accentText
         MorningTopic.DECIDE -> "להחליט" to c.accentText
+        MorningTopic.SUGGEST -> "הצעה מהסקירה" to c.accentText
         else -> return
     }
     Text(word, color = color, fontSize = 11.sp, modifier = Modifier.clip(RoundedCornerShape(99.dp)).background(color.copy(alpha = 0.12f)).padding(horizontal = 8.dp, vertical = 2.dp))

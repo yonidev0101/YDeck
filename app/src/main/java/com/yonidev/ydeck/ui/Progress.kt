@@ -86,6 +86,7 @@ fun RingedLogo(p: com.yonidev.ydeck.data.Project, done: Int, total: Int, size: D
             val dotR = 3.4.dp.toPx()
             ring(share, this.size.minDimension / 2 - dotR, stroke, dotR, c.line, c.fg, if (finished) c.closed else c.open)
         }
-        Logo(p, size * 0.66f)
+        // Round inside the round ring: a square in a circle looks off.
+        Logo(p, size * 0.66f, round = true)
     }
 }
