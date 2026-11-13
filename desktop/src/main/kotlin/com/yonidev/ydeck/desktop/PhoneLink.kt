@@ -384,14 +384,18 @@ object PhoneLink {
                     onProcess = {})
             }
             val seconds = ((System.currentTimeMillis() - start) / 1000).toInt()
+            // In order, as a card, when Claude wrote one; its Markdown goes too (an older phone shows that).
+            val deck = Repo.deck.value
+            val card = r.getOrNull()?.let { Cards.read(it, deck.projects, Cards::lists) }
+            val words = card?.markdown { id -> deck.byId(id)?.name ?: id } ?: r.getOrNull()
             // The morning's talk, for the next morning: what was said, and what they answered.
-            if (morningChat) r.getOrNull()?.let { said ->
+            if (morningChat) words?.let { said ->
                 if (a.morning) talk.clear()
                 if (a.question.isNotBlank() && !a.morning) talk += "Me: " + a.question.take(600)
                 talk += "YDeck: " + said.take(if (a.morning) 1500 else 600)
                 while (talk.size > TALK) talk.removeAt(0)
             }
-            put(r.fold({ Answer(a.id, a.chat, done = true, answer = it.take(Answer.MAX), reads = reads, seconds = seconds) },
+            put(r.fold({ Answer(a.id, a.chat, done = true, answer = (words ?: it).take(Answer.MAX), reads = reads, seconds = seconds, card = card) },
                 { Answer(a.id, a.chat, done = true, error = it.message ?: tr("Claude didn't answer", "Claude לא ענה"), reads = reads, seconds = seconds) }))
             // A conversation that never answered starts afresh next time.
             if (r.isFailure && chats[a.chat] != null && answers.none { it.chat == a.chat && it.answer.isNotEmpty() }) chats.remove(a.chat)

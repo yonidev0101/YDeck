@@ -604,16 +604,87 @@ data class Answer(
     val step: String = "",
     val reads: Int = 0,
     val seconds: Int = 0,
+    /** The same answer in order (one line, then lists by kind), for the phone to show as a card; [answer] is its Markdown. */
+    val card: Card? = null,
 ) {
     fun toJson(): JSONObject = JSONObject().put("id", id).put("chat", chat).put("done", done).put("answer", answer)
         .put("error", error).put("step", step).put("reads", reads).put("seconds", seconds)
+        .apply { card?.let { put("card", it.toJson()) } }
 
     companion object {
         /** The longest answer sent. */
         const val MAX = 12_000
 
         fun of(o: JSONObject) = Answer(o.optString("id"), o.optString("chat"), o.optBoolean("done"), o.optString("answer"),
-            o.optString("error"), o.optString("step"), o.optInt("reads"), o.optInt("seconds"))
+            o.optString("error"), o.optString("step"), o.optInt("reads"), o.optInt("seconds"), o.optJSONObject("card")?.let(Card::of))
+    }
+}
+
+/**
+ * An answer in order rather than a block of text: [say], the answer in a line or two; then [groups], short lists by
+ * kind (what's left, what's done, what waits for you, ideas, decisions, other facts), each line about one project;
+ * then [more], what doesn't fit as lines (Markdown, often empty). The phone shows it as a card with a button on each
+ * line, and can read it aloud.
+ */
+data class Card(val say: String, val groups: List<CardGroup> = emptyList(), val more: String = "") {
+    fun toJson(): JSONObject = JSONObject().put("say", say).put("more", more)
+        .put("groups", JSONArray().apply { groups.forEach { put(it.toJson()) } })
+
+    /** The same as Markdown: for an older phone, the computer's own panel, and the conversation's memory. */
+    fun markdown(name: (String) -> String): String = buildString {
+        appendLine(say)
+        groups.forEach { g ->
+            appendLine().appendLine("**" + g.title + "**")
+            g.items.forEach { appendLine("- " + (if (it.project.isNotBlank()) name(it.project) + ": " else "") + it.text) }
+        }
+        if (more.isNotBlank()) appendLine().appendLine(more)
+    }.trim()
+
+    companion object {
+        fun of(o: JSONObject): Card? {
+            val groups = o.optJSONArray("groups")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it)?.let(CardGroup::of) } }.orEmpty()
+            val say = o.optString("say").trim()
+            return if (say.isEmpty() && groups.isEmpty()) null else Card(say, groups, o.optString("more").trim())
+        }
+    }
+}
+
+/** One list in a [Card]: its [kind] (below) sets its mark and the buttons on its lines; [title] is Claude's words. */
+data class CardGroup(val kind: String, val title: String, val items: List<CardItem>) {
+    fun toJson(): JSONObject = JSONObject().put("kind", kind).put("title", title)
+        .put("items", JSONArray().apply { items.forEach { put(it.toJson()) } })
+
+    companion object {
+        const val LEFT = "left"
+        const val DONE = "done"
+        const val WAITING = "waiting"
+        const val IDEA = "idea"
+        const val DECIDED = "decided"
+        const val INFO = "info"
+        val KINDS = listOf(LEFT, WAITING, DONE, IDEA, DECIDED, INFO)
+
+        fun of(o: JSONObject): CardGroup? {
+            val items = o.optJSONArray("items")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it)?.let(CardItem::of) } }.orEmpty()
+            if (items.isEmpty()) return null
+            val kind = o.optString("kind").lowercase().takeIf { it in KINDS } ?: INFO
+            return CardGroup(kind, o.optString("title").trim(), items)
+        }
+    }
+}
+
+/**
+ * One line of a [CardGroup], about [project] (its id, or empty). [from] is set by the computer, never by Claude: the
+ * project's list the line is in word for word ("left" or "ideas"), so the phone may offer to mark it done or take it.
+ */
+data class CardItem(val project: String, val text: String, val from: String = "") {
+    fun toJson(): JSONObject = JSONObject().put("project", project).put("text", text).apply { if (from.isNotEmpty()) put("from", from) }
+
+    companion object {
+        const val FROM_LEFT = "left"
+        const val FROM_IDEAS = "ideas"
+
+        fun of(o: JSONObject): CardItem? = o.optString("text").trim().takeIf { it.isNotEmpty() }
+            ?.let { CardItem(o.optString("project").trim(), it, o.optString("from")) }
     }
 }
 

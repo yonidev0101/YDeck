@@ -103,7 +103,7 @@ fun MorningCard(
             m != null -> Today(computer, m, deck, done, onGo, onLater, onTalk, onTake)
             computer.morningError.isNotEmpty() -> {
                 Text("לא הצליח הפעם: ${computer.morningError}", color = c.muted, fontSize = 14.sp, lineHeight = 21.sp)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { Chip("לנסות שוב", strong = false, onClick = onTry) }
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { Pill("לנסות שוב", strong = false, onClick = onTry) }
             }
             else -> {
                 val at = computer.morningAt.coerceAtLeast(0)
@@ -112,8 +112,8 @@ fun MorningCard(
                 Text("${if (later) "היום" else "מחר"} ב־${at / 60}:%02d YDeck יעבור על ${if (n == 1) "פרויקט אחד" else "$n הפרויקטים"} שעבדת עליהם לאחרונה, ויכתוב לך כאן מה כדאי לעשות היום. זה יגיע גם כהתראה.".format(at % 60),
                     color = c.muted, fontSize = 14.sp, lineHeight = 21.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Chip("לנסות עכשיו", strong = true, onClick = onTry)
-                    Chip("על אילו פרויקטים", strong = false, outlined = true) { picking = true }
+                    Pill("לנסות עכשיו", strong = true, onClick = onTry)
+                    Pill("על אילו פרויקטים", strong = false, outlined = true) { picking = true }
                 }
             }
         }
@@ -154,14 +154,14 @@ private fun Today(computer: Computer.State, m: Morning, deck: Deck, done: Map<St
                     Text(was.how.words, color = c.faint, fontSize = 12.5.sp)
                 }
                 suggest -> Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (t.add == "left") { Chip("ל״נשאר״", strong = true) { onTake(t, TopicDone.LEFT) }; Chip("לרעיונות", strong = false) { onTake(t, TopicDone.IDEA) } }
-                    else { Chip("לרעיונות", strong = true) { onTake(t, TopicDone.IDEA) }; Chip("ל״נשאר״", strong = false) { onTake(t, TopicDone.LEFT) } }
-                    Chip("לא", strong = false, outlined = true) { onTake(t, TopicDone.NO) }
+                    if (t.add == "left") { Pill("ל״נשאר״", strong = true) { onTake(t, TopicDone.LEFT) }; Pill("לרעיונות", strong = false) { onTake(t, TopicDone.IDEA) } }
+                    else { Pill("לרעיונות", strong = true) { onTake(t, TopicDone.IDEA) }; Pill("ל״נשאר״", strong = false) { onTake(t, TopicDone.LEFT) } }
+                    Pill("לא", strong = false, outlined = true) { onTake(t, TopicDone.NO) }
                 }
                 else -> Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (p != null) Chip("יאללה", strong = true) { onGo(t) }
-                    Chip("מחר", strong = false) { onLater(t) }
-                    Chip("לדבר על זה", strong = false, outlined = true) { onTalk(t) }
+                    if (p != null) Pill("יאללה", strong = true) { onGo(t) }
+                    Pill("מחר", strong = false) { onLater(t) }
+                    Pill("לדבר על זה", strong = false, outlined = true) { onTalk(t) }
                 }
             }
         }
@@ -173,7 +173,7 @@ private fun Today(computer: Computer.State, m: Morning, deck: Deck, done: Map<St
  * Claude at work, waiting for you, or done with what it did.
  */
 @Composable
-private fun GoStatus(computer: Computer.State, project: String, at: Long) {
+internal fun GoStatus(computer: Computer.State, project: String, at: Long) {
     val c = LocalDeck.current
     val launch = computer.launches.lastOrNull { it.first.project == project && it.first.at >= at - 60_000 }
     val live = computer.live(project)
@@ -215,7 +215,7 @@ private fun KindChip(kind: String) {
 }
 
 @Composable
-private fun Chip(text: String, strong: Boolean, outlined: Boolean = false, onClick: () -> Unit) {
+internal fun Pill(text: String, strong: Boolean, outlined: Boolean = false, onClick: () -> Unit) {
     val c = LocalDeck.current
     val shape = RoundedCornerShape(99.dp)
     Text(text, color = if (strong) Color.White else if (outlined) c.muted else c.fg, fontSize = 13.sp, fontWeight = if (strong) FontWeight.Medium else FontWeight.Normal,

@@ -83,6 +83,8 @@ class MainActivity : ComponentActivity() {
 
     /** What the conversation's field starts with (talking about a topic of the good morning). */
     private var askText by mutableStateOf("")
+    /** What was done with the lines of YDeck's answers (see AnswerCard), by line, while the app is open. */
+    private var lines by mutableStateOf<Map<String, Pair<CardAct, Long>>>(emptyMap())
 
     /** Connecting to a computer just paired: its name while the first state is on its way. */
     private var connecting by mutableStateOf<String?>(null)
@@ -158,6 +160,8 @@ class MainActivity : ComponentActivity() {
                             onAsk = { q, projectId -> ask(q, projectId) },
                             onNewChat = { Computer.newChat(this@MainActivity) },
                             initial = askText,
+                            done = lines,
+                            onAct = { key, item, act -> act(computer, key, item, act) },
                         )
                         is Page.Project -> Overlay.deck(deck, computer?.pending.orEmpty()).byId(p.id)?.let { project ->
                             val mine = computer?.pending.orEmpty().filter { it.project == project.id }
@@ -266,6 +270,29 @@ class MainActivity : ComponentActivity() {
             mark(m, t, TopicDone.GO)
             write(t.project, com.yonidev.ydeck.link.Note.MORNING_GO, t.say)
             send(t.project, com.yonidev.ydeck.link.Launch.NEW, "", t.step.ifBlank { t.say }, false)
+        }
+    }
+
+    /**
+     * A line of an answer, acted on: Claude opens on the computer to do it, it's marked done, or it goes into what's
+     * left or the ideas; or the project opens. Shown quietly in the line's place from then on.
+     */
+    private fun act(computer: Computer.State?, key: String, item: com.yonidev.ydeck.link.CardItem, act: CardAct) {
+        val now = System.currentTimeMillis()
+        fun done() { lines = lines + (key to (act to now)) }
+        when (act) {
+            CardAct.OPEN -> page = Page.Project(item.project)
+            CardAct.GO -> {
+                if (computer?.canLaunch != true) {
+                    toast("כדי לפתוח את Claude מהטלפון, מדליקים פעם אחת במחשב: הגדרות ← טלפון ← ״הטלפון יכול לפתוח את Claude Code״.")
+                    return
+                }
+                confirmOwner("פתיחת Claude במחשב") { done(); send(item.project, com.yonidev.ydeck.link.Launch.NEW, "", item.text, false) }
+            }
+            CardAct.DONE -> { done(); write(item.project, com.yonidev.ydeck.link.Note.LEFT_DONE, item.text) }
+            CardAct.TAKE -> { done(); write(item.project, com.yonidev.ydeck.link.Note.IDEA_TAKE, item.text) }
+            CardAct.LEFT -> { done(); write(item.project, com.yonidev.ydeck.link.Note.LEFT_ADD, item.text) }
+            CardAct.IDEA -> { done(); write(item.project, com.yonidev.ydeck.link.Note.IDEA_ADD, item.text) }
         }
     }
 

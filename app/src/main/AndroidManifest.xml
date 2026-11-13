@@ -9,6 +9,9 @@
         <package android:name="com.chrome.canary" />
         <!-- The Claude app, where a session opened with Remote Control goes on. -->
         <package android:name="com.anthropic.claude" />
+        <!-- Talking with YDeck: the phone's own speech recognizer and its text to speech (see ui/Voice.kt). -->
+        <intent><action android:name="android.speech.action.RECOGNIZE_SPEECH" /></intent>
+        <intent><action android:name="android.intent.action.TTS_SERVICE" /></intent>
     </queries>
 
     <uses-permission android:name="android.permission.INTERNET" />

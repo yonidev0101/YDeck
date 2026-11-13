@@ -168,7 +168,7 @@ object Assistant {
      */
     fun answer(question: String, focus: Project?, resume: String?, home: java.io.File, phone: Boolean, onSession: (String) -> Unit, onStep: (String) -> Unit, onProcess: (Process?) -> Unit): String {
         val deck = Repo.deck.value
-        val text = if (resume == null) prompt(deck, focus, question, phone) else followUp(focus, question)
+        val text = if (resume == null) prompt(deck, focus, question, phone) else followUp(focus, question, phone)
         return read(text, home, resume, onSession, onStep, onProcess)
     }
 
@@ -234,6 +234,7 @@ object Assistant {
         appendLine("You are YDeck, the user's project dashboard, answering their questions about their projects (\"Ask YDeck\"), from what YDeck knows (below) and, when needed, by reading the projects' folders. Do not change any file, and never read .env files or anything that holds a key.")
         appendLine("Answer in the language the user writes in, short and plain: the answer first, then only the details that help. Name the project each fact comes from. When YDeck doesn't know and the folders don't say, say so; don't guess.")
         if (phone) appendLine("The user asks from YDeck on their phone, away from the computer: keep it brief, and no wide tables or long code.")
+        if (phone) appendLine(CARD_FORMAT)
         appendLine("Today is ${LocalDate.now()}.")
         appendLine()
         appendLine("The projects (${deck.projects.size}):")
@@ -244,8 +245,18 @@ object Assistant {
         append(question)
     }
 
-    private fun followUp(focus: Project?, question: String): String =
-        (focus?.let { "(This question is about the project \"${it.name}\".)\n" } ?: "(This question is about all the projects.)\n") + question
+    private fun followUp(focus: Project?, question: String, phone: Boolean = false): String =
+        (focus?.let { "(This question is about the project \"${it.name}\".)\n" } ?: "(This question is about all the projects.)\n") +
+            (if (phone) CARD_FORMAT + "\n\n" else "") + question
+
+    /** How an answer to the phone is written: as a card ([Card]) the phone shows in order, with a button on each line. */
+    private val CARD_FORMAT = """Write your answer as JSON only, nothing before or after it:
+{"say": "the answer itself, in one or two short sentences",
+ "groups": [{"kind": "left", "title": "a short heading", "items": [{"project": "the project's name", "text": "one short line"}]}],
+ "more": "only what doesn't fit as lines (a path, a command, a short explanation), as short Markdown; else empty"}
+Kinds: "left" still to do or the next step; "waiting" waits for the user now (Claude waiting, unsaved changes, a decision to make); "done" finished; "idea" ideas; "decided" decisions; "info" any other fact (a link, where something is in the code).
+A line taken from a project's left or ideas list is copied word for word. One line, one project; leave "project" empty only when it's about none. At most 4 groups of at most 6 lines, none empty, the most useful first. A short or simple question may need only "say".
+Every text (say, titles, lines, more) in the language the user writes in."""
 
     /** One project: what it is, where it stands, what Claude does in it, its decisions, links and releases. */
     fun about(p: Project): String = buildString {
@@ -265,6 +276,9 @@ object Assistant {
         val next = state?.next?.ifBlank { null } ?: local.note
         if (now.isNotBlank()) appendLine("- now: $now")
         if (next.isNotBlank()) appendLine("- next: $next")
+        state?.left?.takeIf { it.isNotEmpty() }?.let { l -> appendLine("- left, in order: " + l.take(12).joinToString(" | ")) }
+        state?.ideas?.takeIf { it.isNotEmpty() }?.let { l -> appendLine("- ideas set aside: " + l.take(8).joinToString(" | ")) }
+        state?.done?.takeIf { it.isNotEmpty() }?.let { l -> appendLine("- done lately: " + l.take(5).joinToString(" | ")) }
         state?.handoff?.let { h -> appendLine("- last session (${h.agent.ifBlank { "an agent" }}, ${java.time.Instant.ofEpochMilli(h.at)}): done \"${h.done}\"; suggested next \"${h.next}\"") }
         ClaudeLink.statusIn(dir.path, ClaudeLink.sessions.value)?.let { s -> appendLine("- Claude Code here now: ${s.mode.name.lowercase()}" + (if (s.detail.isNotBlank()) " (\"${s.detail.take(120)}\")" else "")) }
         val links = (p.actions.map { "${it.label} ${it.url}" } + shared?.links.orEmpty().map { "${it.label} ${it.url}" }).distinct()
