@@ -180,7 +180,9 @@ object Assistant {
      * YDeck's own tools, never the files that hold keys. With [resume] it goes on in that conversation. Throws with why,
      * in words, when there's no answer.
      */
-    fun read(text: String, home: java.io.File, resume: String?, onSession: (String) -> Unit, onStep: (String) -> Unit, onProcess: (Process?) -> Unit): String {
+    fun read(text: String, home: java.io.File, resume: String?, onSession: (String) -> Unit, onStep: (String) -> Unit, onProcess: (Process?) -> Unit,
+             /** False: Claude reads nothing, it answers from [text] alone (quick; the good morning). */
+             tools: Boolean = true): String {
         val claude = Tools.claude?.exe ?: error(tr("Claude Code isn't installed on this PC", "Claude Code לא נמצא במחשב"))
         val dirs = Repo.deck.value.projects.mapNotNull { Settings.state.value.localOf(it.id).dir }
         // Read-only, every project's folder within reach, and never the files that hold keys.
@@ -188,6 +190,7 @@ object Assistant {
             // Sonnet: quick enough for a question, and lighter on the developer's plan than their default model.
             addAll(listOf(claude.path, "-p", "--model", "sonnet", "--output-format", "stream-json", "--verbose"))
             if (resume != null) { add("--resume"); add(resume) }
+            if (!tools) { addAll(listOf("--tools", "", "--strict-mcp-config")); return@buildList }
             dirs.forEach { add("--add-dir"); add(it.path) }
             // YDeck's own tools too (all read only, see [YDeckMcp]): the sessions running now, a search across the projects.
             addAll(listOf("--allowedTools", "Read", "Glob", "Grep", "LS", "mcp__plugin_ydeck_ydeck", "--disallowedTools"))

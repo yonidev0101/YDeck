@@ -93,6 +93,11 @@ object PhoneLink {
     /** One that failed waits until then to try again. */
     @Volatile private var morningRetry = 0L
     @Volatile private var morningBusy = false
+    /** Why the last good morning failed, in words; empty when it didn't. */
+    @Volatile private var morningError = ""
+    /** What the good morning shows on the computer (Settings → Phone): writing now, the last one, or why it failed. */
+    val morningNews = MutableStateFlow(MorningNews())
+    data class MorningNews(val busy: Boolean = false, val at: Long = 0, val error: String = "", val projects: Int = 0)
     /** The last good morning's conversation, a line each ("YDeck: …", "Me: …"): the next morning keeps to it. */
     private val talk = java.util.concurrent.CopyOnWriteArrayList<String>()
 
@@ -119,6 +124,7 @@ object PhoneLink {
             o.optJSONObject("chats")?.let { c -> c.keys().forEach { k -> c.optJSONObject(k)?.let { v -> chats[k] = v.optString("session") to v.optString("home") } } }
             morning = o.optJSONObject("morning")?.let(com.yonidev.ydeck.link.Morning::of)
             morningDay = o.optString("morningDay")
+            morningNews.value = MorningNews(at = morning?.at ?: 0)
             o.optJSONArray("talk")?.let { a -> (0 until a.length()).forEach { talk += a.getString(it) } }
         }
         Thread({
@@ -183,33 +189,58 @@ object PhoneLink {
         makeMorning(today)
     }
 
-    /** A good morning now, to see what it says (Settings → Phone); today's is then this one. */
+    /** A good morning now (Settings → Phone, or "try now" on the phone); today's is then this one. */
     fun morningNow() {
         if (pairing == null || Tools.claude == null || morningBusy) return
         makeMorning(java.time.LocalDate.now().toString())
     }
 
-    val morningMaking: Boolean get() = morningBusy
-
+    /**
+     * Claude writes the good morning from what YDeck knows (it reads nothing, see [GoodMorning]), and it goes out with
+     * the next state. While it writes, the phone and Settings say so; when it fails, they say why.
+     */
     private fun makeMorning(day: String) {
         morningBusy = true
+        morningError = ""
+        val projects = GoodMorning.projects()
+        morningNews.value = morningNews.value.copy(busy = true, error = "", projects = projects.size)
+        nudge()
         asking.execute {
             try {
+                if (projects.isEmpty()) error(tr("No project was worked on in the last two weeks, and none is picked.", "אין פרויקט שעבדת עליו בשבועיים האחרונים, ואף אחד לא נבחר."))
                 val chat = "morning-" + java.util.UUID.randomUUID().toString().take(13)
                 val home = AppDirs.data
-                val text = Assistant.read(GoodMorning.prompt(talk.toList()), home, null, onSession = { chats[chat] = it to home.path }, onStep = {}, onProcess = {})
-                morning = com.yonidev.ydeck.link.Morning(java.util.UUID.randomUUID().toString(), chat, text.take(Answer.MAX), System.currentTimeMillis())
+                val answer = Assistant.read(GoodMorning.prompt(projects, talk.toList()), home, null, onSession = { chats[chat] = it to home.path }, onStep = {}, onProcess = {}, tools = false)
+                val (hello, topics) = GoodMorning.read(answer, projects) ?: error(tr("Claude's answer couldn't be read. Try again.", "לא הצלחתי לקרוא את התשובה של Claude. אפשר לנסות שוב."))
+                val text = GoodMorning.markdown(hello, topics)
+                morning = com.yonidev.ydeck.link.Morning(java.util.UUID.randomUUID().toString(), chat, text.take(Answer.MAX), System.currentTimeMillis(), hello, topics)
                 morningDay = day
                 talk.clear(); talk += "YDeck: " + text.take(1500)
                 while (chats.size > 5) chats.keys.firstOrNull { it != chat }?.let { chats.remove(it) } ?: break
             } catch (e: Throwable) {
+                morningError = e.message ?: tr("Claude didn't answer", "Claude לא ענה")
                 morningRetry = System.currentTimeMillis() + 30 * 60_000L
             } finally {
                 morningBusy = false
+                morningNews.value = MorningNews(at = morning?.at ?: 0, error = morningError, projects = projects.size)
                 pairing?.let { save(it, _state.value.pairedAt) }
                 nudge()
             }
         }
+    }
+
+    /** The phone's word on a topic of the good morning: put off to tomorrow, or set aside. The next morning keeps to it. */
+    private fun morningSaid(note: Note) {
+        val name = Repo.deck.value.byId(note.project)?.name ?: note.project
+        talk += ((if (note.kind == Note.MORNING_LATER) "Me: remind me tomorrow about " else "Me: not now about ") + name + ": " + note.text).take(600)
+        while (talk.size > TALK) talk.removeAt(0)
+    }
+
+    /** A project picked for the good morning, or left out of it, from the phone. */
+    private fun morningPick(note: Note) {
+        val on = note.text == "1"
+        Settings.update { s -> s.copy(morningIn = if (on) s.morningIn + note.project else s.morningIn - note.project,
+            morningOut = if (on) s.morningOut - note.project else s.morningOut + note.project) }
     }
 
     /**
@@ -295,6 +326,8 @@ object PhoneLink {
         if (!Settings.state.value.phoneAsk) return no("off")
         if (Tools.claude == null) return no("claude")
         if (kotlin.math.abs(System.currentTimeMillis() - a.at) > Ask.FRESH_MS) return no("stale")
+        // A good morning asked for from the phone: today's is written now, and comes as the morning does.
+        if (a.morning) { answers += Answer(a.id, a.chat, done = true); morningNow(); return }
         answers += Answer(a.id, a.chat)
         asking.execute {
             val start = System.currentTimeMillis()
@@ -306,8 +339,7 @@ object PhoneLink {
             val home = before?.let { java.io.File(it.second) } ?: Assistant.homeOf(focus)
             val morningChat = a.morning || a.chat == morning?.chat
             val r = runCatching {
-                if (a.morning) Assistant.read(GoodMorning.prompt(talk.toList()), AppDirs.data, null, onSession = { chats[a.chat] = it to AppDirs.data.path }, onStep = {}, onProcess = {})
-                else Assistant.answer(a.question, focus, before?.first, home, phone = true,
+                Assistant.answer(a.question, focus, before?.first, home, phone = true,
                     onSession = { chats[a.chat] = it to home.path },
                     onStep = { step ->
                         reads++
@@ -353,6 +385,8 @@ object PhoneLink {
      */
     private fun store(note: Note): Boolean {
         if (note.kind == Note.NEW_PROJECT) { newProject(note); return true }
+        if (note.kind == Note.MORNING_LATER || note.kind == Note.MORNING_SKIP) { morningSaid(note); return true }
+        if (note.kind == Note.MORNING_PICK) { morningPick(note); return true }
         val project = Repo.deck.value.byId(note.project) ?: return true
         val dir = Settings.state.value.localOf(project.id).dir
         val arg = { i: Int -> note.args.getOrElse(i) { "" } }
@@ -517,7 +551,8 @@ object PhoneLink {
             ask = settings.phoneAsk && Tools.claude != null, answers = answers.toList(),
             waiting = SessionAsks.waiting.value, reply = settings.phoneReply, replied = replied.toList(),
             run = settings.phoneRun, ran = Runs.ran.toList(), runOk = if (settings.phoneRun) settings.runOk.filterKeys { k -> deck.projects.any { it.id == k } } else emptyMap(),
-            morning = morning, morningAt = if (settings.phoneMorning && settings.phoneAsk && Tools.claude != null) settings.morningAt else -1)
+            morning = morning, morningAt = if (settings.phoneMorning && settings.phoneAsk && Tools.claude != null) settings.morningAt else -1,
+            morningBusy = morningBusy, morningError = morningError, morningPicks = if (settings.phoneMorning) GoodMorning.projects().map { it.id } else emptyList())
     }
 
     /** What the project's window shows here: git, the agent, the latest receipts, open loops, the dev server. */

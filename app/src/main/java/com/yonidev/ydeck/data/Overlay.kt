@@ -82,6 +82,7 @@ object Overlay {
         Note.LINK_ADD, Note.LINK_EDIT, Note.LINK_DROP -> "קישורים"
         Note.COPY_ADD, Note.COPY_DROP -> "ערכים להעתקה"
         Note.NEW_PROJECT -> "פרויקט חדש"
+        Note.MORNING_LATER, Note.MORNING_SKIP, Note.MORNING_PICK -> "בוקר טוב"
         else -> "שינוי"
     }
 }

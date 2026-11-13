@@ -147,12 +147,15 @@ fun AskScreen(
     onNewChat: () -> Unit,
     /** Asks for a good morning now: YDeck goes over the projects and starts the day with you. */
     onMorning: ((String) -> Unit)? = null,
+    /** What the field starts with. */
+    initial: String = "",
 ) {
     val c = LocalDeck.current
     var focus by remember(from?.id) { mutableStateOf(from) }
     val chat = computer?.chat ?: Computer.Chat()
-    var text by remember { mutableStateOf("") }
+    var text by remember(initial) { mutableStateOf(initial) }
     val field = remember { FocusRequester() }
+    LaunchedEffect(initial) { if (initial.isNotEmpty()) runCatching { field.requestFocus() } }
     val list = rememberLazyListState()
     val last = chat.turns.lastOrNull()
     LaunchedEffect(chat.turns.size, last?.answer) { if (chat.turns.isNotEmpty()) list.animateScrollToItem(chat.turns.lastIndex) }

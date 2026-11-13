@@ -43,6 +43,7 @@ import com.yonidev.ydeck.data.Deck
 import com.yonidev.ydeck.data.Favicons
 import com.yonidev.ydeck.data.Project
 import com.yonidev.ydeck.data.Repo
+import com.yonidev.ydeck.data.MorningNotice
 import com.yonidev.ydeck.widget.BrandArt
 import com.yonidev.ydeck.widget.DeckWidget
 import com.yonidev.ydeck.widget.DeckWidgetReceiver
@@ -77,6 +78,12 @@ class MainActivity : ComponentActivity() {
     /** A scanned code waiting for "replace the projects here?". */
     private var pendingPair by mutableStateOf<String?>(null)
 
+    /** What was done here with each topic of the good morning (see [MorningCard]). */
+    private var handled by mutableStateOf<Map<String, TopicDone>>(emptyMap())
+
+    /** What the conversation's field starts with (talking about a topic of the good morning). */
+    private var askText by mutableStateOf("")
+
     /** Connecting to a computer just paired: its name while the first state is on its way. */
     private var connecting by mutableStateOf<String?>(null)
 
@@ -91,12 +98,13 @@ class MainActivity : ComponentActivity() {
             Settings.Global.getFloat(contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
         Computer.state(this)
         Computer.schedule(this)
+        handled = MorningNotice.handled(this).mapNotNull { (k, v) -> runCatching { k to TopicDone.valueOf(v) }.getOrNull() }.toMap()
         // While the app is on screen, what the computer sends shows within seconds (Claude starting, stopping, done).
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 while (true) {
                     // Quicker while a question waits for its answer.
-                    delay(if (Computer.state.value?.chat?.busy == true || Computer.state.value?.waiting?.isNotEmpty() == true) 2_500 else 10_000)
+                    delay(if (Computer.state.value?.chat?.busy == true || Computer.state.value?.waiting?.isNotEmpty() == true || Computer.state.value?.morningBusy == true) 2_500 else 10_000)
                     if (Computer.state.value?.paired == true && Computer.sync(this@MainActivity) == Computer.Result.UPDATED) deck = Repo.deck(this@MainActivity)
                 }
             }
@@ -128,13 +136,22 @@ class MainActivity : ComponentActivity() {
                             onAsk = { page = Page.Ask() },
                             onReply = ::reply,
                             onNewProject = if (computer?.paired == true) { name, color -> write("p" + System.currentTimeMillis().toString(36), com.yonidev.ydeck.link.Note.NEW_PROJECT, name, listOf(color)) } else null,
+                            morning = computer?.takeIf { it.paired && (it.morningAt >= 0 || it.morning != null) }?.let { comp -> {
+                                MorningCard(comp, deck, handled,
+                                    onTry = ::tryMorning,
+                                    onGo = { t -> goTopic(comp, t) },
+                                    onLater = { t -> comp.morning?.let { m -> mark(m, t, TopicDone.LATER) }; write(t.project, com.yonidev.ydeck.link.Note.MORNING_LATER, t.say) },
+                                    onTalk = { t -> comp.morning?.let { m -> talkTopic(m, t) } },
+                                    onPick = { id, on -> write(id, com.yonidev.ydeck.link.Note.MORNING_PICK, if (on) "1" else "0") },
+                                )
+                            } },
                         )
                         is Page.Ask -> AskScreen(
                             computer, deck.projects, p.project?.let(deck::byId),
                             onBack = { page = p.project?.let { Page.Project(it) } ?: Page.Home },
                             onAsk = { q, projectId -> ask(q, projectId) },
                             onNewChat = { Computer.newChat(this@MainActivity) },
-                            onMorning = { q -> ask(q, null, morning = true) },
+                            initial = askText,
                         )
                         is Page.Project -> Overlay.deck(deck, computer?.pending.orEmpty()).byId(p.id)?.let { project ->
                             val mine = computer?.pending.orEmpty().filter { it.project == project.id }
@@ -208,6 +225,48 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         intent.getStringExtra(EXTRA_PROJECT)?.let { deck = Repo.deck(this); page = Page.Project(it) }
         if (intent.getBooleanExtra(EXTRA_ASK, false)) { intent.removeExtra(EXTRA_ASK); page = Page.Ask() }
+    }
+
+    /** A topic of the good morning, done with here: shown quietly under it from now on. */
+    private fun mark(m: com.yonidev.ydeck.link.Morning, t: com.yonidev.ydeck.link.MorningTopic, how: TopicDone) {
+        val key = topicKey(m, m.topics.indexOf(t))
+        handled = handled + (key to how)
+        MorningNotice.handle(this, key, how.name)
+    }
+
+    /** A good morning now: asked of the computer, then watched until it comes (or says why not). */
+    private fun tryMorning() {
+        lifecycleScope.launch {
+            val before = Computer.state.value?.morning?.id
+            if (!Computer.askMorning(this@MainActivity)) { toast("אין חיבור לאינטרנט. נסו שוב."); return@launch }
+            for (attempt in 0 until 50) {
+                delay(3_000)
+                Computer.sync(this@MainActivity)
+                val s = Computer.state.value ?: break
+                if (attempt > 3 && !s.morningBusy && (s.morning?.id != before || s.morningError.isNotEmpty())) break
+            }
+        }
+    }
+
+    /** "Let's go": Claude opens on the computer, in that project, with the step the good morning suggested. */
+    private fun goTopic(computer: Computer.State, t: com.yonidev.ydeck.link.MorningTopic) {
+        if (!computer.canLaunch) {
+            toast("כדי לפתוח את Claude מהטלפון, מדליקים פעם אחת במחשב: הגדרות ← טלפון ← ״הטלפון יכול לפתוח את Claude Code״.")
+            return
+        }
+        val m = computer.morning ?: return
+        confirmOwner("פתיחת Claude במחשב") {
+            mark(m, t, TopicDone.GO)
+            send(t.project, com.yonidev.ydeck.link.Launch.NEW, "", t.step.ifBlank { t.say }, false)
+        }
+    }
+
+    /** "Talk about it": the conversation goes on from the good morning, about this topic. */
+    private fun talkTopic(m: com.yonidev.ydeck.link.Morning, t: com.yonidev.ydeck.link.MorningTopic) {
+        mark(m, t, TopicDone.TALK)
+        Computer.talkMorning(this, m)
+        askText = "לגבי " + (deck.byId(t.project)?.name ?: t.project) + ": "
+        page = Page.Ask()
     }
 
     /** Android 13 and up ask before an app shows notifications: once, the first time the good morning is on. */
@@ -454,7 +513,11 @@ class MainActivity : ComponentActivity() {
         const val EXTRA_PROJECT = "project"
         const val EXTRA_ASK = "ask"
 
-        /** Opens the app at the conversation with YDeck (from the good morning's notification). */
+        /** Opens the app at the projects, where the good morning is (from its notification). */
+        fun homeIntent(context: Context) = Intent(context, MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+
+        /** Opens the app at the conversation with YDeck. */
         fun askIntent(context: Context) = Intent(context, MainActivity::class.java)
             .putExtra(EXTRA_ASK, true)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)

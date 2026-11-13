@@ -31,6 +31,21 @@ class MorningTest {
         assertEquals(false, Ask.decode(Ask("a3", "c1", "מה מחכה לי?", "", 5).encode())!!.morning)
     }
 
+    @Test fun claudesAnswerIsReadIntoTopicsOfKnownProjectsOnly() {
+        val nova = Project.sample().copy(id = "nova", name = "Nova")
+        val answer = """Sure:
+            {"hello": "בוקר טוב!", "topics": [
+              {"project": "nova", "kind": "finish", "say": "הייצוא כמעט גמור.", "ask": "מסיימים היום?", "step": "Finish the CSV export."},
+              {"project": "Nova", "kind": "idea", "say": "ווידג׳ט לרצף?"},
+              {"project": "ghost", "kind": "stuck", "say": "לא קיים"}
+            ]}"""
+        val (hello, topics) = GoodMorning.read(answer, listOf(nova))!!
+        assertEquals("בוקר טוב!", hello)
+        assertEquals(listOf("nova", "nova"), topics.map { it.project })
+        assertEquals("Finish the CSV export.", topics[0].step)
+        assertNull(GoodMorning.read("no json here", listOf(nova)))
+    }
+
     @Test fun anEmptyMorningIsDropped() {
         assertNull(Morning.of(JSONObject().put("id", "x").put("chat", "c").put("text", " ")))
     }

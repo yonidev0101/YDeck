@@ -73,9 +73,14 @@ class Snapshot(
     val morning: Morning? = null,
     /** When the phone shows the good morning, in minutes from midnight; -1 when it's off. */
     val morningAt: Int = -1,
+    /** Claude is writing a good morning now; or why the last one failed (empty when it didn't). */
+    val morningBusy: Boolean = false,
+    val morningError: String = "",
+    /** The projects the good morning goes over now (picked, or worked on lately), by id. */
+    val morningPicks: List<String> = emptyList(),
 ) {
     /** The same state made at another time: what changed, without the time it was made. */
-    fun at(time: Long) = Snapshot(time, computer, deck, memory, live, applied, launch, claude, launched, beat, ask, answers, waiting, reply, replied, run, ran, runOk, morning, morningAt)
+    fun at(time: Long) = Snapshot(time, computer, deck, memory, live, applied, launch, claude, launched, beat, ask, answers, waiting, reply, replied, run, ran, runOk, morning, morningAt, morningBusy, morningError, morningPicks)
 
     fun encode(): ByteArray = JSONObject().apply {
         put("app", "YDeck")
@@ -101,6 +106,9 @@ class Snapshot(
         put("runOk", JSONObject().apply { runOk.forEach { (k, v) -> put(k, JSONArray(v)) } })
         morning?.let { put("morning", it.toJson()) }
         put("morningAt", morningAt)
+        put("morningBusy", morningBusy)
+        put("morningError", morningError)
+        put("morningPicks", JSONArray(morningPicks))
     }.toString().toByteArray()
 
     companion object {
@@ -131,6 +139,9 @@ class Snapshot(
                 runOk = o.optJSONObject("runOk")?.let { r -> r.keys().asSequence().associateWith { k -> r.optJSONArray(k)?.let { a -> (0 until a.length()).map { a.optString(it) } }.orEmpty() } }.orEmpty(),
                 morning = o.optJSONObject("morning")?.let(Morning::of),
                 morningAt = o.optInt("morningAt", -1),
+                morningBusy = o.optBoolean("morningBusy"),
+                morningError = o.optString("morningError"),
+                morningPicks = o.optJSONArray("morningPicks")?.let { a -> (0 until a.length()).map { a.optString(it) } }.orEmpty(),
             )
         }
 
@@ -284,9 +295,14 @@ data class Note(val id: String, val project: String, val kind: String, val text:
         const val COPY_DROP = "copy.drop"
         /** A new project, with no folder yet: [project] its id (made here), [text] its name, args[0] its colour. */
         const val NEW_PROJECT = "project.new"
+        /** The good morning: a topic put off to tomorrow, or set aside ([text]: what it said); the project picked for
+         *  the good morning or left out of it ([text] "1"/"0"). */
+        const val MORNING_LATER = "morning.later"
+        const val MORNING_SKIP = "morning.skip"
+        const val MORNING_PICK = "morning.pick"
 
         private val KINDS = setOf(NEXT, DECISION, DONE, ARCHIVE, LEFT_ADD, LEFT_DONE, LEFT_DROP, LEFT_MOVE, LEFT_EDIT, IDEA_ADD, IDEA_TAKE,
-            IDEA_DROP, DONE_DROP, NAME, COLOR, KIND, LINK_ADD, LINK_EDIT, LINK_DROP, COPY_ADD, COPY_DROP, NEW_PROJECT)
+            IDEA_DROP, DONE_DROP, NAME, COLOR, KIND, LINK_ADD, LINK_EDIT, LINK_DROP, COPY_ADD, COPY_DROP, NEW_PROJECT, MORNING_LATER, MORNING_SKIP, MORNING_PICK)
         /** Kinds whose text may be empty. */
         private val MAY_BE_EMPTY = setOf(DONE, KIND)
 
@@ -602,11 +618,42 @@ data class Answer(
  * the developer like a partner would: what to finish today, what is stuck, an idea worth thinking about, with
  * questions. The phone shows it as a notification, and the reply goes on in [chat] as any question to Ask YDeck.
  */
-data class Morning(val id: String, val chat: String, val text: String, val at: Long) {
-    fun toJson(): JSONObject = JSONObject().put("id", id).put("chat", chat).put("text", text).put("at", at)
+data class Morning(
+    val id: String,
+    val chat: String,
+    /** All of it as Markdown: the conversation starts from it. */
+    val text: String,
+    val at: Long,
+    /** The opening line, and two or three topics, each with its own buttons on the phone. */
+    val hello: String = "",
+    val topics: List<MorningTopic> = emptyList(),
+) {
+    fun toJson(): JSONObject = JSONObject().put("id", id).put("chat", chat).put("text", text).put("at", at).put("hello", hello)
+        .put("topics", JSONArray().apply { topics.forEach { put(it.toJson()) } })
 
     companion object {
-        fun of(o: JSONObject): Morning? = Morning(o.optString("id").take(64), o.optString("chat").take(64), o.optString("text").take(Answer.MAX), o.optLong("at"))
+        fun of(o: JSONObject): Morning? = Morning(o.optString("id").take(64), o.optString("chat").take(64), o.optString("text").take(Answer.MAX), o.optLong("at"),
+            o.optString("hello").take(400),
+            o.optJSONArray("topics")?.let { a -> (0 until minOf(a.length(), 4)).mapNotNull { a.optJSONObject(it)?.let(MorningTopic::of) } }.orEmpty())
             .takeIf { it.id.isNotEmpty() && it.chat.isNotEmpty() && it.text.isNotBlank() }
+    }
+}
+
+/**
+ * One thing the good morning brings up: in [project] (its id), of a [kind] (finish, stuck, idea, decide), what it
+ * says and the question it asks, and [step]: what Claude is asked to do there when the developer says "let's go".
+ */
+data class MorningTopic(val project: String, val kind: String, val say: String, val ask: String = "", val step: String = "") {
+    fun toJson(): JSONObject = JSONObject().put("project", project).put("kind", kind).put("say", say).put("ask", ask).put("step", step)
+
+    companion object {
+        const val FINISH = "finish"
+        const val STUCK = "stuck"
+        const val IDEA = "idea"
+        const val DECIDE = "decide"
+
+        fun of(o: JSONObject): MorningTopic? = MorningTopic(o.optString("project").take(100), o.optString("kind").take(20),
+            o.optString("say").take(400), o.optString("ask").take(300), o.optString("step").take(600))
+            .takeIf { it.project.isNotBlank() && it.say.isNotBlank() }
     }
 }

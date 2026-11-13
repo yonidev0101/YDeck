@@ -42,7 +42,20 @@ object MorningNotice {
     }.getOrDefault("" to -1)
 
     private fun keep(c: Context, id: String, at: Int) = runCatching {
-        seenFile(c).writeText(org.json.JSONObject().put("id", id).put("at", at).toString())
+        val o = runCatching { org.json.JSONObject(seenFile(c).readText()) }.getOrDefault(org.json.JSONObject())
+        seenFile(c).writeText(o.put("id", id).put("at", at).toString())
+    }
+
+    /** What was done here with each topic of the good morning (see [com.yonidev.ydeck.ui.topicKey]): the latest ones. */
+    fun handled(c: Context): Map<String, String> = runCatching {
+        val h = org.json.JSONObject(seenFile(c).readText()).getJSONObject("handled")
+        h.keys().asSequence().associateWith { h.getString(it) }
+    }.getOrDefault(emptyMap())
+
+    fun handle(c: Context, key: String, what: String) = runCatching {
+        val o = runCatching { org.json.JSONObject(seenFile(c).readText()) }.getOrDefault(org.json.JSONObject())
+        val h = (handled(c) + (key to what)).entries.toList().takeLast(20)
+        seenFile(c).writeText(o.put("handled", org.json.JSONObject().apply { h.forEach { put(it.key, it.value) } }).toString())
     }
 
     /** A good morning not shown yet, and fresh (from the last 12 hours): true once, then never again for it. */
@@ -60,7 +73,7 @@ object MorningNotice {
                 description = "ההודעה של YDeck בבוקר: מה עושים היום"
             })
         val plain = text.replace(Regex("[*_`#>]"), "").replace(Regex("\\n{2,}"), "\n").trim()
-        val open = PendingIntent.getActivity(app, ID, MainActivity.askIntent(app), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val open = PendingIntent.getActivity(app, ID, MainActivity.homeIntent(app), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val n = NotificationCompat.Builder(app, CHANNEL)
             .setSmallIcon(R.drawable.ic_launcher_monochrome)
             .setContentTitle("בוקר טוב")

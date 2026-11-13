@@ -65,6 +65,8 @@ fun HomeScreen(
     onReply: (waiting: String, text: String, choices: Map<String, String>) -> Unit,
     /** A new project, made here and created on the computer (null when not paired). */
     onNewProject: ((name: String, color: String) -> Unit)? = null,
+    /** The good morning's card, at the top (null when it's off). */
+    morning: (@Composable () -> Unit)? = null,
 ) {
     val c = LocalDeck.current
     if (connecting != null) return Connecting(connecting)
@@ -94,6 +96,7 @@ fun HomeScreen(
                 modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 6.dp),
             )
         }
+        if (morning != null) item(key = "morning") { morning() }
         // What's left open in all the projects, as the computer's sidebar counts it (Claude's state is shown apart).
         // Sessions waiting for you come first, as on the computer's Now.
         val waiting = computer?.waiting.orEmpty()

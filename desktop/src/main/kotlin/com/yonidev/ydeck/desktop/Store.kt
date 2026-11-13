@@ -152,6 +152,10 @@ object Settings {
         val phoneMorning: Boolean = false,
         val morningAt: Int = 8 * 60,
         val morningWeekend: Boolean = false,
+        /** Projects picked for the good morning, and left out of it (by id); the rest go by whether they were worked
+         *  on lately (see [GoodMorning.projects]). */
+        val morningIn: Set<String> = emptySet(),
+        val morningOut: Set<String> = emptySet(),
         /** "system", "en" or "he" (see [I18n]). */
         val language: String = "system",
         /** "system", "light" or "dark". */
@@ -205,6 +209,8 @@ object Settings {
                 put("phoneMorning", s.phoneMorning)
                 put("morningAt", s.morningAt)
                 put("morningWeekend", s.morningWeekend)
+                put("morningIn", org.json.JSONArray(s.morningIn.toList()))
+                put("morningOut", org.json.JSONArray(s.morningOut.toList()))
                 put("runOk", JSONObject().apply { s.runOk.forEach { (k, v) -> put(k, org.json.JSONArray(v)) } })
                 put("language", s.language)
                 put("appearance", s.appearance)
@@ -261,6 +267,8 @@ object Settings {
             phoneMorning = o.optBoolean("phoneMorning", false),
             morningAt = o.optInt("morningAt", 8 * 60).coerceIn(0, 24 * 60 - 1),
             morningWeekend = o.optBoolean("morningWeekend", false),
+            morningIn = o.optJSONArray("morningIn")?.let { a -> (0 until a.length()).map { a.optString(it) }.toSet() }.orEmpty(),
+            morningOut = o.optJSONArray("morningOut")?.let { a -> (0 until a.length()).map { a.optString(it) }.toSet() }.orEmpty(),
             runOk = o.optJSONObject("runOk")?.let { r -> r.keys().asSequence().associateWith { k -> r.optJSONArray(k)?.let { a -> (0 until a.length()).map { a.optString(it) } }.orEmpty() } }.orEmpty(),
             language = o.optString("language", "system"),
             // 1.11: dark became the default; a "system" saved before then was the old default, not a choice.

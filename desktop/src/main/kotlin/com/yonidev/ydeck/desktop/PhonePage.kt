@@ -99,12 +99,31 @@ fun PhoneSettings() {
                         Setting(tr("On Friday and Saturday too", "גם בשישי ובשבת"), hint = tr("Otherwise Sunday to Thursday.", "אחרת ראשון עד חמישי.")) {
                             Toggle(settings.morningWeekend) { on -> Settings.update { it.copy(morningWeekend = on) } }
                         }
-                        var making by remember { mutableStateOf(false) }
-                        LaunchedEffect(making) { while (making) { kotlinx.coroutines.delay(1000); if (!PhoneLink.morningMaking) making = false } }
+                        // Which projects: picked, left out, or (the rest) worked on in the last two weeks.
+                        var picking by remember { mutableStateOf(false) }
+                        val picked = remember(settings, Repo.deck.collectAsState().value) { GoodMorning.projects().map { it.id }.toSet() }
+                        Setting(tr("Which projects", "על אילו פרויקטים"), value = tr("${picked.size} projects", "${picked.size} פרויקטים"),
+                            hint = tr("By itself: the ones you worked on in the last two weeks. Pick or leave out any.", "לבד: אלה שעבדת עליהם בשבועיים האחרונים. אפשר להוסיף או להוציא."),
+                            onClick = { picking = !picking })
+                        if (picking) Repo.deck.value.active.forEach { p ->
+                            Item {
+                                Text(p.name, color = c.fg, fontSize = 13.sp, fontFamily = PlexSans, modifier = Modifier.weight(1f))
+                                Toggle(p.id in picked) { on ->
+                                    Settings.update { s -> s.copy(morningIn = if (on) s.morningIn + p.id else s.morningIn - p.id,
+                                        morningOut = if (on) s.morningOut - p.id else s.morningOut + p.id) }
+                                    PhoneLink.nudge()
+                                }
+                            }
+                        }
+                        val news by PhoneLink.morningNews.collectAsState()
                         Setting(tr("Send one now", "לשלוח אחד עכשיו"),
-                            hint = if (making) tr("Claude is writing it… it reaches the phone the next time it checks (open YDeck there to see it now).", "Claude כותב… הוא יגיע לטלפון בפעם הבאה שהוא בודק (פותחים שם את YDeck כדי לראות עכשיו).")
-                            else tr("To see what it says. It becomes today's good morning.", "כדי לראות מה הוא כותב. הוא יהיה הבוקר טוב של היום."),
-                            onClick = if (making) null else ({ PhoneLink.morningNow(); making = true }))
+                            hint = when {
+                                news.busy -> tr("Claude is going over ${news.projects} projects…", "Claude עובר על ${news.projects} פרויקטים…")
+                                news.error.isNotEmpty() -> tr("Didn't work: ", "לא הצליח: ") + news.error
+                                news.at > 0 -> tr("The last one went to the phone ", "האחרון נשלח לטלפון ") + ago(news.at, System.currentTimeMillis())
+                                else -> tr("To see what it says. It becomes today's good morning.", "כדי לראות מה הוא כותב. הוא יהיה הבוקר טוב של היום.")
+                            },
+                            onClick = if (news.busy) null else ({ PhoneLink.morningNow() }))
                     }
                     if (Tools.claude != null) Setting(tr("The phone can reply to waiting sessions", "הטלפון יכול לענות לסשנים שמחכים"),
                         hint = tr("Off until you turn it on here. A session's question, held in YDeck while you're away, shows on the phone with the drafted reply; what you send goes to Claude as your words. Never a permission: those stay in the terminal.",
