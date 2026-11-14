@@ -147,6 +147,8 @@ object ClaudeLink {
     fun handle(e: JSONObject, now: Long, caller: () -> Proc? = { null }): JSONObject? {
         val id = e.optString("session_id").ifBlank { return null }
         val cwd = e.optString("cwd").ifBlank { return null }
+        // YDeck's own Claude (an answer, the dossier, the save card) isn't the developer's work: not shown, not counted.
+        if (Assistant.isOwn(id, cwd)) return null
         val transcript = e.optString("transcript_path").ifBlank { null }
         val before = _sessions.value[id]
         val proc = before?.proc ?: if (e.optString("hook_event_name") != "SessionEnd") runCatching(caller).getOrNull() else null

@@ -178,6 +178,9 @@ object Assistant {
     /** A session YDeck's own Claude ran elsewhere (the dossier, the save card): not the developer's. */
     fun markOwn(session: String) { own += session }
 
+    /** A new session id for a Claude YDeck starts itself (`--session-id`): known as its own from the first hook. */
+    fun ownId(): String = java.util.UUID.randomUUID().toString().also { own += it }
+
     /** [session] is one of YDeck's own, or runs in YDeck's own folder (where only YDeck starts Claude). */
     fun isOwn(session: String, cwd: String): Boolean =
         session in own || runCatching { java.io.File(cwd).canonicalPath.equals(AppDirs.data.canonicalPath, ignoreCase = true) }.getOrDefault(false)
@@ -200,6 +203,8 @@ object Assistant {
             // Sonnet: quick enough for a question, and lighter on the developer's plan than their default model.
             addAll(listOf(claude.path, "-p", "--model", "sonnet", "--output-format", "stream-json", "--verbose"))
             if (resume != null) { add("--resume"); add(resume) }
+            // A new one gets its id here, so its hooks are known as YDeck's own from the first one.
+            else { add("--session-id"); add(java.util.UUID.randomUUID().toString().also { own += it }) }
             if (!tools) { addAll(listOf("--tools", "", "--strict-mcp-config")); return@buildList }
             dirs.forEach { add("--add-dir"); add(it.path) }
             // YDeck's own tools too (all read only, see [YDeckMcp]): the sessions running now, a search across the projects.

@@ -395,7 +395,7 @@ object GitOps {
             append(diff)
         }
         try {
-            val p = ProcessBuilder(claude.path, "-p", "--output-format", "text", "--allowedTools", "Read", "Glob", "Grep").directory(dir)
+            val p = ProcessBuilder(claude.path, "-p", "--session-id", Assistant.ownId(), "--output-format", "text", "--allowedTools", "Read", "Glob", "Grep").directory(dir)
                 .redirectError(ProcessBuilder.Redirect.DISCARD).start()
             p.outputStream.bufferedWriter(Charsets.UTF_8).use { it.write(prompt) }
             val out = StringBuilder()

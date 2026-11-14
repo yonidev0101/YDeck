@@ -53,7 +53,7 @@ object Handoffs {
         _busy.update { it + dir.path }
         try {
             val prompt = context(dir) ?: return tr("Nothing happened here today", "היום לא קרה כאן כלום")
-            val p = ProcessBuilder(claude.path, "-p", "--model", "haiku", "--output-format", "text").directory(dir).redirectError(ProcessBuilder.Redirect.DISCARD).start()
+            val p = ProcessBuilder(claude.path, "-p", "--model", "haiku", "--session-id", Assistant.ownId(), "--output-format", "text").directory(dir).redirectError(ProcessBuilder.Redirect.DISCARD).start()
             p.outputStream.bufferedWriter(Charsets.UTF_8).use { it.write(prompt) }
             val out = StringBuilder()
             val reader = Thread { runCatching { out.append(p.inputStream.bufferedReader(Charsets.UTF_8).readText()) } }.apply { isDaemon = true; start() }

@@ -310,7 +310,7 @@ object ClaudeSummary {
             val prompt = "Summarize this project for its dashboard in YDeck: what it is, who it is for, and the main stack, in two or three " +
                 "plain sentences in $language. No headings, lists, markdown or preamble: answer with the summary only. Read the README and " +
                 "the code as you need; do not change any file."
-            val p = ProcessBuilder(claude.path, "-p", prompt, "--output-format", "text", "--allowedTools", "Read", "Glob", "Grep", "LS")
+            val p = ProcessBuilder(claude.path, "-p", prompt, "--session-id", Assistant.ownId(), "--output-format", "text", "--allowedTools", "Read", "Glob", "Grep", "LS")
                 .directory(dir).redirectErrorStream(false).start()
             p.outputStream.close()
             val out = p.inputStream.bufferedReader(Charsets.UTF_8).readText().trim()

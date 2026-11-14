@@ -21,8 +21,10 @@ import java.util.concurrent.TimeUnit
 object ClaudeJson {
     fun ask(dir: File, prompt: String, schema: JSONObject, tools: Boolean, minutes: Long = 4, onStep: (String) -> Unit = {}): JSONObject {
         val claude = Tools.claude?.exe ?: error(tr("Claude Code isn't installed on this PC", "Claude Code לא נמצא במחשב"))
+        // Its id set here, so its hooks are known as YDeck's own from the first one (not taken for the developer's work).
+        val id = java.util.UUID.randomUUID().toString().also(Assistant::markOwn)
         val cmd = buildList {
-            addAll(listOf(claude.path, "-p", "--model", "sonnet", "--output-format", "stream-json", "--verbose", "--json-schema", arg(schema.toString())))
+            addAll(listOf(claude.path, "-p", "--model", "sonnet", "--session-id", id, "--output-format", "stream-json", "--verbose", "--json-schema", arg(schema.toString())))
             if (tools) { addAll(listOf("--allowedTools", "Read", "Glob", "Grep", "LS", "--disallowedTools")); addAll(ClaudeFill.SECRETS) }
             else addAll(listOf("--tools", "", "--strict-mcp-config"))
         }

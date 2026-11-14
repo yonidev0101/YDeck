@@ -77,7 +77,7 @@ object ClaudeFill {
         val claude = Tools.claude?.exe ?: error(tr("Claude Code isn't installed on this PC", "Claude Code לא נמצא במחשב"))
         val local = Settings.state.value.localOf(p.id)
         // Read-only, and never the files that hold keys (they aren't Claude's to read, nor a link's to carry).
-        val proc = ProcessBuilder(claude.path, "-p", "--model", "haiku", "--output-format", "stream-json", "--verbose",
+        val proc = ProcessBuilder(claude.path, "-p", "--model", "haiku", "--session-id", Assistant.ownId(), "--output-format", "stream-json", "--verbose",
             "--allowedTools", "Read", "Glob", "Grep", "LS", "--disallowedTools", *SECRETS.toTypedArray())
             .directory(dir).start()
         proc.outputStream.bufferedWriter(Charsets.UTF_8).use { it.write(prompt(p, local)) }
