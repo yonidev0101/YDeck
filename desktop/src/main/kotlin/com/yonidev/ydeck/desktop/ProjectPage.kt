@@ -240,6 +240,7 @@ private fun Overview(p: Project, local: Local, dark: Boolean, actions: AppAction
             val main: @Composable () -> Unit = {
                 Column(verticalArrangement = Arrangement.spacedBy(28.dp)) {
                     LiveAgent(local, dark)
+                    TalkCard(p, dir, dark)
                     OfferFill(p, local, dir)
                     NowLine(dir)
                     GoalCard(dir)
@@ -300,6 +301,8 @@ private fun CardTitle(text: String, modifier: Modifier = Modifier) {
 private fun LiveAgent(local: Local, dark: Boolean) {
     val c = LocalDeck.current
     val session = claudeIn(local.folder)?.takeIf { it.mode == ClaudeMode.WORKING || it.mode == ClaudeMode.WAITING } ?: return
+    // The conversation YDeck runs is on the page already, in [TalkCard].
+    if (Talk.isMine(session.id)) return
     val waiting = session.mode == ClaudeMode.WAITING
     Card(fill = if (waiting) CHANGED_DOT.copy(alpha = if (dark) 0.14f else 0.12f) else c.accentTint, padding = 18.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {

@@ -9,7 +9,7 @@ plugins {
 }
 
 /** The Windows app's own version (the Android app has its own). */
-val desktopVersion = "1.29.0"
+val desktopVersion = "1.30.0"
 
 kotlin {
     jvmToolchain(21)
@@ -156,4 +156,4 @@ tasks.register("distribute") {
 
 // `-Prender`: RenderWidgets draws every widget size into build/widget-renders/ (a visual check, no windows).
 // The live relay test uses the JDK's own CA list: the build JDK (Android Studio's) has no Windows-ROOT store.
-tasks.test { if (!project.hasProperty("relay") && !project.hasProperty("phone")) jvmArgs("-Djavax.net.ssl.trustStoreType=Windows-ROOT"); if (project.hasProperty("render")) systemProperty("render", "1"); if (project.hasProperty("relay")) systemProperty("relay", "1"); if (project.hasProperty("phone")) systemProperty("phone", project.property("phone").toString()); outputs.upToDateWhen { !project.hasProperty("render") } }
+tasks.test { if (!project.hasProperty("relay") && !project.hasProperty("phone")) jvmArgs("-Djavax.net.ssl.trustStoreType=Windows-ROOT"); if (project.hasProperty("render")) systemProperty("render", "1"); if (project.hasProperty("live")) systemProperty("live", "1"); if (project.hasProperty("relay")) systemProperty("relay", "1"); if (project.hasProperty("phone")) systemProperty("phone", project.property("phone").toString()); outputs.upToDateWhen { !project.hasProperty("render") && !project.hasProperty("live") } }
