@@ -38,11 +38,17 @@ data class Pulse(
     val left: List<String> = emptyList(),
     val ideas: List<String> = emptyList(),
     val done: List<String> = emptyList(),
+    /** Everything the project can do (see [LocalFile.built]) and its near goal, from .ydeck.local.json. */
+    val built: List<String> = emptyList(),
+    val goal: Goal? = null,
 ) {
     val port: Int? get() = ports.firstOrNull()
 }
 
 object Pulses {
+    /** Refreshes every folder's pulse in the background (after YDeck wrote to a project's files). */
+    fun refreshSoon() { Thread({ runCatching { kotlinx.coroutines.runBlocking { refresh(Settings.state.value.local.values.mapNotNull { it.folder }) } } }, "ydeck-pulse").apply { isDaemon = true; start() } }
+
     private val _state = MutableStateFlow<Map<String, Pulse>>(emptyMap())
     /** By folder path. */
     val state: StateFlow<Map<String, Pulse>> = _state
@@ -58,6 +64,7 @@ object Pulses {
                 local?.now.orEmpty(), shared[d]?.releases?.firstOrNull(), shared[d]?.summary.orEmpty(), shared[d]?.summaryAt ?: 0,
                 shared[d]?.decisions.orEmpty(), local?.handoff, local?.suggestion.orEmpty(),
                 local?.left.orEmpty(), local?.ideas.orEmpty(), local?.done.orEmpty(),
+                local?.built.orEmpty(), local?.goal,
             )
         }
     }

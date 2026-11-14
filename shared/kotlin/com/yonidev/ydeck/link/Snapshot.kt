@@ -10,6 +10,8 @@ import org.json.JSONObject
 
 data class MemDecision(val text: String, val date: String)
 data class MemRelease(val version: String, val date: String, val note: String)
+/** A step toward the project's goal. */
+data class MemStep(val text: String, val done: Boolean)
 
 /** One project's memory, as the phone shows it. Times in ms, 0 when unknown. */
 data class Memory(
@@ -29,7 +31,18 @@ data class Memory(
     val doneItems: List<String> = emptyList(),
     /** What moved, day by day (newest first, the last week): see [JournalDay]. */
     val journal: List<JournalDay> = emptyList(),
+    /** Everything the project can do that a user sees. */
+    val built: List<String> = emptyList(),
+    /** The near goal and its steps (empty title: no goal). */
+    val goal: String = "",
+    val goalSteps: List<MemStep> = emptyList(),
+    /** The save card: what isn't saved, in words, and what to do (empty: not known yet). */
+    val saving: String = "",
+    val savingProposal: String = "",
 ) {
+    /** Steps done and all of them; null when there's no goal. */
+    val goalShare: Pair<Int, Int>? get() = if (goal.isBlank() || goalSteps.isEmpty()) null else goalSteps.count { it.done } to goalSteps.size
+
     /** Something still waits: a next step was left. */
     val open: Boolean get() = next.isNotBlank()
 }
@@ -154,6 +167,8 @@ class Snapshot(
             put("releases", JSONArray().apply { releases.forEach { put(JSONObject().put("version", it.version).put("date", it.date).put("note", it.note)) } })
             put("left", JSONArray(left)); put("ideas", JSONArray(ideas)); put("doneItems", JSONArray(doneItems))
             put("journal", JSONArray().apply { journal.forEach { put(it.toJson()) } })
+            put("built", JSONArray(built)); put("goal", goal); put("saving", saving); put("savingProposal", savingProposal)
+            put("goalSteps", JSONArray().apply { goalSteps.forEach { put(JSONObject().put("text", it.text).put("done", it.done)) } })
         }
 
         fun memoryOf(o: JSONObject): Memory {
@@ -166,6 +181,8 @@ class Snapshot(
                 releases = objs("releases").map { MemRelease(it.optString("version"), it.optString("date"), it.optString("note")) }.filter { it.version.isNotBlank() },
                 left = strings("left"), ideas = strings("ideas"), doneItems = strings("doneItems"),
                 journal = objs("journal").map(JournalDay::of).filter { it.date.isNotBlank() },
+                built = strings("built"), goal = o.optString("goal"), saving = o.optString("saving"), savingProposal = o.optString("savingProposal"),
+                goalSteps = objs("goalSteps").map { MemStep(it.optString("text"), it.optBoolean("done")) }.filter { it.text.isNotBlank() },
             )
         }
     }

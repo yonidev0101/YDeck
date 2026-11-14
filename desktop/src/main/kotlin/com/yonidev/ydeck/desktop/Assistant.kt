@@ -175,6 +175,9 @@ object Assistant {
     /** The sessions YDeck's own Claude ran (answers, good mornings), so their hooks are not taken for the developer's. */
     private val own: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
 
+    /** A session YDeck's own Claude ran elsewhere (the dossier, the save card): not the developer's. */
+    fun markOwn(session: String) { own += session }
+
     /** [session] is one of YDeck's own, or runs in YDeck's own folder (where only YDeck starts Claude). */
     fun isOwn(session: String, cwd: String): Boolean =
         session in own || runCatching { java.io.File(cwd).canonicalPath.equals(AppDirs.data.canonicalPath, ignoreCase = true) }.getOrDefault(false)

@@ -14,6 +14,7 @@ import com.yonidev.ydeck.link.MemDecision
 import com.yonidev.ydeck.link.Note
 import com.yonidev.ydeck.link.MemRelease
 import com.yonidev.ydeck.link.Memory
+import com.yonidev.ydeck.link.MemStep
 import com.yonidev.ydeck.link.NewKey
 import com.yonidev.ydeck.link.Pairing
 import com.yonidev.ydeck.link.Reply
@@ -583,6 +584,11 @@ object PhoneLink {
                 folder = dir?.name.orEmpty(),
                 left = mine?.left.orEmpty().take(30), ideas = mine?.ideas.orEmpty().take(30), doneItems = mine?.done.orEmpty(),
                 journal = if (dir != null) Journal.days(p.id, 7) else emptyList(),
+                built = mine?.built.orEmpty().take(60),
+                goal = mine?.goal?.title.orEmpty(),
+                goalSteps = mine?.goal?.steps.orEmpty().map { MemStep(it.text, it.done) },
+                saving = dir?.let { Saving.cards.value[it.path] }?.state.orEmpty(),
+                savingProposal = dir?.let { Saving.cards.value[it.path] }?.proposal.orEmpty(),
             )
         }
         val live = deck.projects.mapNotNull { p -> settings.localOf(p.id).folder?.let { p.id to live(it) } }.toMap()

@@ -30,10 +30,29 @@ data class SharedFile(
     val summary: String = "", val summaryAt: Long = 0,
     val decisions: List<Decision> = emptyList(),
 )
+/** One step toward the project's goal, done or not. */
+data class GoalStep(val text: String, val done: Boolean)
+
+/**
+ * The project's near goal ("first version in the store") and its steps: the share of steps done is the project's
+ * progress. One goal at a time; it's set only once the developer agreed to it.
+ */
+data class Goal(val title: String, val steps: List<GoalStep>) {
+    val doneCount: Int get() = steps.count { it.done }
+    /** Done out of all, or null when there are no steps (then no share is shown). */
+    val share: Pair<Int, Int>? get() = if (steps.isEmpty()) null else doneCount to steps.size
+    /** "3 of 5 · 60%" */
+    val percent: Int? get() = share?.let { (d, t) -> d * 100 / t }
+}
+
 data class LocalFile(
     val now: String, val next: String, val handoff: Handoff? = null, val modifiedAt: Long = 0,
     /** What's left to do, in order; ideas that came up and were set aside, not built; what was done lately, newest first. */
     val left: List<String> = emptyList(), val ideas: List<String> = emptyList(), val done: List<String> = emptyList(),
+    /** Everything the project can do that a user sees, one short line each (no limit, unlike [done]). */
+    val built: List<String> = emptyList(),
+    /** The near goal, when one was set. */
+    val goal: Goal? = null,
 ) {
     /**
      * The handoff's next step as a suggestion: only while the handoff is the newest thing in the file. Once the next
@@ -67,8 +86,39 @@ object ProjectFiles {
         LocalFile(o.optString("now").trim(), o.optString("next").trim(), h?.let {
             Handoff(it.optString("done").trim(), it.optString("next").trim(), runCatching { java.time.Instant.parse(it.optString("at")).toEpochMilli() }.getOrDefault(0L), it.optString("agent"))
         }?.takeIf { it.done.isNotEmpty() || it.next.isNotEmpty() }, f.lastModified(),
-            left = items(o, Plan.LEFT), ideas = items(o, Plan.IDEAS), done = items(o, Plan.DONE))
+            left = items(o, Plan.LEFT), ideas = items(o, Plan.IDEAS), done = items(o, Plan.DONE),
+            built = items(o, BUILT), goal = goalOf(o.optJSONObject(GOAL)))
     }.getOrNull()
+
+    const val BUILT = "built"
+    const val GOAL = "goal"
+
+    /** The goal as an agent may write it: steps as objects ({"text", "done"}) or plain strings (not done yet). */
+    fun goalOf(o: JSONObject?): Goal? {
+        o ?: return null
+        val title = o.optString("title").trim().takeIf { it.isNotEmpty() } ?: return null
+        val a = o.optJSONArray("steps") ?: JSONArray()
+        val steps = (0 until a.length()).mapNotNull { i ->
+            val s = a.optJSONObject(i)
+            val text = (s?.optString("text") ?: a.optString(i)).trim()
+            if (text.isEmpty()) null else GoalStep(text, s?.optBoolean("done") == true)
+        }.distinctBy { it.text }
+        return Goal(title, steps)
+    }
+
+    fun goalJson(g: Goal): JSONObject = JSONObject().put("title", g.title.trim())
+        .put("steps", JSONArray().apply { g.steps.filter { it.text.isNotBlank() }.distinctBy { it.text.trim() }.forEach { put(JSONObject().put("text", it.text.trim()).put("done", it.done)) } })
+
+    /** The goal rewritten (null: no goal); whatever else the file holds stays. */
+    fun writeGoal(dir: File, goal: Goal?) {
+        runCatching {
+            val f = File(dir, LOCAL)
+            val o = runCatching { JSONObject(f.readText()) }.getOrDefault(JSONObject())
+            if (goal == null) o.remove(GOAL) else o.put(GOAL, goalJson(goal))
+            f.writeText(o.toString(2) + "\n")
+            keepLocalOutOfGit(dir)
+        }
+    }
 
     /** A list of short lines in the file: strings, or objects with a "text" (as an agent may write them). */
     private fun items(o: JSONObject, key: String): List<String> {
@@ -210,6 +260,11 @@ object ProjectFiles {
             }
             if (!local?.left.isNullOrEmpty()) appendLine("Left to do: " + local!!.left.take(12).joinToString("; ") + ".")
             if (!local?.ideas.isNullOrEmpty()) appendLine("Ideas set aside (not to be built unless the user asks): " + local!!.ideas.take(12).joinToString("; ") + ".")
+            local?.goal?.let { g ->
+                appendLine("The project's goal: \"${g.title}\", ${g.doneCount} of ${g.steps.size} steps done: " +
+                    g.steps.joinToString("; ") { (if (it.done) "[x] " else "[ ] ") + it.text } + ".")
+            }
+            if (!local?.built.isNullOrEmpty()) appendLine("What the project can already do: " + local!!.built.take(40).joinToString("; ") + ".")
             val decisions = readShared(dir)?.decisions.orEmpty()
             if (decisions.isNotEmpty()) {
                 appendLine("Decisions already made in this project (keep to them unless the user changes them):")
@@ -219,6 +274,8 @@ object ProjectFiles {
             val repo = Settings.state.value.repoFiles
             appendLine("The user asked YDeck to have these files kept up to date. Do it as part of the work, and mention it in a few words when you do:")
             appendLine("- When you finish a meaningful piece of work, or the user is about to stop, write $LOCAL in the project root, keeping what is already in it: {\"now\": \"what is in progress, one short line\", \"next\": \"the next concrete step\", \"left\": [\"what is still left to do, one short line each, in order\"], \"ideas\": [\"ideas that came up and were set aside\"], \"done\": [\"what was finished, newest first, at most 10\"]}, in the language the user writes in. Move what you finished from \"left\" to the start of \"done\". It is personal and kept out of git.")
+            appendLine("- In the same file, \"built\" lists everything the project can do that a user sees, one short line per capability (\"Sign in with Google\", \"Pay with Stripe\"), with no limit: when you finish such a capability, add its line or update the one that's there; when one is removed, take its line out.")
+            appendLine("- \"goal\" in the same file is the project's near goal: {\"title\": \"...\", \"steps\": [{\"text\": \"...\", \"done\": false}]}. When you finish one of its steps, set its \"done\" to true. Don't add, remove or reword the goal or its steps unless the user asks: they set it.")
             appendLine("- Something the user only wondered about or thought aloud (\"maybe\", \"what do you say\", \"I had an idea\") goes into \"ideas\": don't build it and don't put it in \"left\" unless they say to. They see the three lists in YDeck and move ideas on themselves.")
             appendLine("- When the user asks to close the project for today (\"close for today\", \"wrap up\", \"סגור להיום\"), run the /ydeck:${ClaudePlugin.CLOSE_DAY} command: it commits, pushes, stops what runs and leaves the next step, so nothing stays open.")
             if (!repo) {
