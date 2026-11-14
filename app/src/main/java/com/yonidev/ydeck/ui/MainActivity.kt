@@ -287,7 +287,12 @@ class MainActivity : ComponentActivity() {
                     toast("כדי לפתוח את Claude מהטלפון, מדליקים פעם אחת במחשב: הגדרות ← טלפון ← ״הטלפון יכול לפתוח את Claude Code״.")
                     return
                 }
-                confirmOwner("פתיחת Claude במחשב") { done(); send(item.project, com.yonidev.ydeck.link.Launch.NEW, "", item.text, false) }
+                // Claude works on it in the project, in the conversation on its page, here on the phone.
+                confirmOwner("לכתוב ל־Claude בפרויקט") {
+                    done()
+                    write(item.project, com.yonidev.ydeck.link.Note.TALK_SAY, item.text)
+                    page = Page.Project(item.project)
+                }
             }
             CardAct.DONE -> { done(); write(item.project, com.yonidev.ydeck.link.Note.LEFT_DONE, item.text) }
             CardAct.TAKE -> { done(); write(item.project, com.yonidev.ydeck.link.Note.IDEA_TAKE, item.text) }

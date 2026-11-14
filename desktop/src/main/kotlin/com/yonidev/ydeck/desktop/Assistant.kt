@@ -83,7 +83,11 @@ import java.util.concurrent.TimeUnit
 
 object Assistant {
     /** A question and its answer (or what went wrong); [reads]: the files Claude looked at, [seconds] it took. */
-    data class Turn(val question: String, val answer: String? = null, val error: String? = null, val reads: Int = 0, val seconds: Int = 0)
+    data class Turn(val question: String, val answer: String? = null, val error: String? = null, val reads: Int = 0, val seconds: Int = 0,
+                    /** What the answer suggests doing, as buttons (see [Partner]). */
+                    val acts: List<Partner.Act> = emptyList(),
+                    /** When it was asked. */
+                    val at: Long = 0)
 
     private val _open = MutableStateFlow(false)
     /** The panel beside the app's page is open. */
@@ -108,6 +112,16 @@ object Assistant {
     /** Bumps with each new conversation, so an answer to the one before doesn't land in it. */
     @Volatile private var generation = 0
 
+    init {
+        // The conversation goes on from where it was, even after a restart or the next day.
+        val kept = Partner.load()
+        _turns.value = kept.turns
+        session = kept.session
+        sessionHome = kept.home?.let { java.io.File(it) }?.takeIf { it.isDirectory }
+    }
+
+    private fun keep() = Partner.save(session, sessionHome?.path, _turns.value)
+
     /** A conversation to draw, for the renders. */
     fun preview(turns: List<Turn>) { _turns.value = turns }
 
@@ -122,6 +136,7 @@ object Assistant {
         sessionHome = null
         _turns.value = emptyList()
         _step.value = null
+        keep()
     }
 
     /** Asks [question]; [focus] is the project on the page, so "this project" means it. */
@@ -130,7 +145,7 @@ object Assistant {
         if (q.isEmpty() || _busy.value) return
         _busy.value = true
         _step.value = null
-        _turns.update { it + Turn(q) }
+        _turns.update { it + Turn(q, at = System.currentTimeMillis()) }
         val gen = generation
         val start = System.currentTimeMillis()
         Thread({
@@ -138,8 +153,13 @@ object Assistant {
             val r = runCatching { run(q, focus, gen) { reads++ } }
             val seconds = ((System.currentTimeMillis() - start) / 1000).toInt()
             if (gen == generation) {
-                _turns.update { list -> list.dropLast(1) + r.fold({ Turn(q, answer = it, reads = reads, seconds = seconds) }, { Turn(q, error = it.message ?: tr("Claude didn't answer", "Claude לא ענה")) }) }
+                val at = System.currentTimeMillis()
+                _turns.update { list -> list.dropLast(1) + r.fold({ a ->
+                    val (text, acts) = Partner.split(a, Repo.deck.value.projects)
+                    Turn(q, answer = text, reads = reads, seconds = seconds, acts = acts, at = at)
+                }, { Turn(q, error = it.message ?: tr("Claude didn't answer", "Claude לא ענה"), at = at) }) }
                 if (r.isSuccess) _answeredAt.value = System.currentTimeMillis()
+                keep()
             }
             _step.value = null
             _busy.value = false
@@ -150,14 +170,18 @@ object Assistant {
         val resume = session
         val home = sessionHome?.takeIf { resume != null } ?: homeOf(focus)
         if (resume == null) sessionHome = home
+        fun go(resume: String?, home: java.io.File, recap: String) = answer(question, focus, resume, home, phone = false,
+            onSession = { if (gen == generation) session = it },
+            onStep = { _step.value = it; onRead() },
+            onProcess = { proc = it }, recap = recap)
         return try {
-            answer(question, focus, resume, home, phone = false,
-                onSession = { if (gen == generation) session = it },
-                onStep = { _step.value = it; onRead() },
-                onProcess = { proc = it })
+            go(resume, home, "")
         } catch (e: Exception) {
-            if (resume == null && gen == generation) session = null
-            throw e
+            if (gen == generation) session = null
+            // Yesterday's Claude session may be gone: a new one starts, from what was said lately.
+            if (resume == null || gen != generation) throw e
+            val fresh = homeOf(focus).also { sessionHome = it }
+            go(null, fresh, Partner.recap(_turns.value.dropLast(1)))
         }
     }
 
@@ -166,9 +190,11 @@ object Assistant {
      * [resume] it goes on in that conversation. [onSession] gets the conversation's id, [onStep] each thing Claude
      * reads, [onProcess] the process (to stop it). Throws with why, in words, when there's no answer.
      */
-    fun answer(question: String, focus: Project?, resume: String?, home: java.io.File, phone: Boolean, onSession: (String) -> Unit, onStep: (String) -> Unit, onProcess: (Process?) -> Unit): String {
+    fun answer(question: String, focus: Project?, resume: String?, home: java.io.File, phone: Boolean, onSession: (String) -> Unit, onStep: (String) -> Unit, onProcess: (Process?) -> Unit,
+               /** What was said lately, for a conversation that starts again. */
+               recap: String = ""): String {
         val deck = Repo.deck.value
-        val text = if (resume == null) prompt(deck, focus, question, phone) else followUp(focus, question, phone)
+        val text = if (resume == null) prompt(deck, focus, question, phone, recap) else followUp(focus, question, phone)
         return read(text, home, resume, onSession, onStep, onProcess)
     }
 
@@ -202,7 +228,8 @@ object Assistant {
         val cmd = buildList {
             // Sonnet: quick enough for a question, and lighter on the developer's plan than their default model.
             addAll(listOf(claude.path, "-p", "--model", "sonnet", "--output-format", "stream-json", "--verbose"))
-            if (resume != null) { add("--resume"); add(resume) }
+            // A conversation kept from an earlier day is still YDeck's own.
+            if (resume != null) { add("--resume"); add(resume); own += resume }
             // A new one gets its id here, so its hooks are known as YDeck's own from the first one.
             else { add("--session-id"); add(java.util.UUID.randomUUID().toString().also { own += it }) }
             if (!tools) { addAll(listOf("--tools", "", "--strict-mcp-config")); return@buildList }
@@ -238,12 +265,15 @@ object Assistant {
     }
 
     /** The first question: the projects as YDeck knows them, then the question. */
-    fun prompt(deck: Deck, focus: Project?, question: String, phone: Boolean = false): String = buildString {
-        appendLine("You are YDeck, the user's project dashboard, answering their questions about their projects (\"Ask YDeck\"), from what YDeck knows (below) and, when needed, by reading the projects' folders. Do not change any file, and never read .env files or anything that holds a key.")
+    fun prompt(deck: Deck, focus: Project?, question: String, phone: Boolean = false, recap: String = ""): String = buildString {
+        appendLine("You are YDeck, the user's project dashboard and their partner across all their projects (\"Ask YDeck\"): you answer about the projects, and when asked what to do, you recommend, plainly, and say why. From what YDeck knows (below) and, when needed, by reading the projects' folders. Do not change any file, and never read .env files or anything that holds a key.")
+        appendLine("This conversation goes on from day to day: what the user said before still holds.")
         appendLine("Answer in the language the user writes in, short and plain: the answer first, then only the details that help. Name the project each fact comes from. When YDeck doesn't know and the folders don't say, say so; don't guess.")
         if (phone) appendLine("The user asks from YDeck on their phone, away from the computer: keep it brief, and no wide tables or long code.")
-        if (phone) appendLine(CARD_FORMAT)
+        if (phone) appendLine(CARD_FORMAT) else appendLine(Partner.FORMAT)
         appendLine("Today is ${LocalDate.now()}.")
+        Partner.about.value.trim().takeIf { it.isNotEmpty() }?.let { appendLine(); appendLine("About the user, in their words:"); appendLine(it.take(4000)) }
+        if (recap.isNotBlank()) { appendLine(); appendLine("What you and the user said lately:"); appendLine(recap) }
         appendLine()
         appendLine("The projects (${deck.projects.size}):")
         deck.projects.forEach { appendLine(); append(about(it)) }
@@ -255,7 +285,7 @@ object Assistant {
 
     private fun followUp(focus: Project?, question: String, phone: Boolean = false): String =
         (focus?.let { "(This question is about the project \"${it.name}\".)\n" } ?: "(This question is about all the projects.)\n") +
-            (if (phone) CARD_FORMAT + "\n\n" else "") + question
+            (if (phone) CARD_FORMAT + "\n\n" else "(If something follows that YDeck can do, end with the ydeck-actions block, as before.)\n") + question
 
     /** How an answer to the phone is written: as a card ([Card]) the phone shows in order, with a button on each line. */
     private val CARD_FORMAT = """Write your answer as JSON only, nothing before or after it:
@@ -287,6 +317,14 @@ Every text (say, titles, lines, more) in the language the user writes in."""
         state?.left?.takeIf { it.isNotEmpty() }?.let { l -> appendLine("- left, in order: " + l.take(12).joinToString(" | ")) }
         state?.ideas?.takeIf { it.isNotEmpty() }?.let { l -> appendLine("- ideas set aside: " + l.take(8).joinToString(" | ")) }
         state?.done?.takeIf { it.isNotEmpty() }?.let { l -> appendLine("- done lately: " + l.take(5).joinToString(" | ")) }
+        state?.goal?.let { g -> appendLine("- goal: \"${g.title}\", " + (g.percent?.let { "$it% (" } ?: "(") + "${g.doneCount} of ${g.steps.size} steps); next step toward it: " + (g.steps.firstOrNull { !it.done }?.text ?: "none, reached")) }
+        state?.built?.takeIf { it.isNotEmpty() }?.let { l -> appendLine("- can already do (${l.size}): " + l.take(15).joinToString(" | ")) }
+        Saving.cards.value[dir.path]?.takeIf { !it.clean }?.let { appendLine("- not saved: ${it.state}") }
+        Journal.days(p.id, 7).takeIf { it.isNotEmpty() }?.let { days ->
+            appendLine("- moved this week: " + days.take(5).joinToString(" | ") { d ->
+                d.date + ": " + (d.done.take(3).map { "done $it" } + d.added.take(2).map { "added $it" } + listOfNotNull(d.commits.size.takeIf { it > 0 }?.let { "$it commits" })).joinToString(", ")
+            })
+        }
         state?.handoff?.let { h -> appendLine("- last session (${h.agent.ifBlank { "an agent" }}, ${java.time.Instant.ofEpochMilli(h.at)}): done \"${h.done}\"; suggested next \"${h.next}\"") }
         ClaudeLink.statusIn(dir.path, ClaudeLink.sessions.value)?.let { s -> appendLine("- Claude Code here now: ${s.mode.name.lowercase()}" + (if (s.detail.isNotBlank()) " (\"${s.detail.take(120)}\")" else "")) }
         val links = (p.actions.map { "${it.label} ${it.url}" } + shared?.links.orEmpty().map { "${it.label} ${it.url}" }).distinct()
@@ -396,8 +434,68 @@ private fun TurnView(t: Assistant.Turn, working: Boolean, step: String?) {
             t.answer != null -> {
                 if (t.reads > 0) Text(tr("Read ${t.reads} files · ${t.seconds} s", "קרא ${t.reads} קבצים · ${t.seconds} שניות"), color = c.faint, fontSize = 12.5.sp, fontFamily = PlexSans)
                 MarkdownView(t.answer, Modifier.fillMaxWidth())
+                if (t.acts.isNotEmpty()) Acts(t)
             }
             t.error != null -> Text(t.error, color = c.danger, fontSize = 13.sp, fontFamily = PlexSans, style = TextStyle(textDirection = TextDirection.Content))
+        }
+    }
+}
+
+/** What the answer suggests doing, one button each; once done, it says so in its place. */
+@Composable
+private fun Acts(t: Assistant.Turn) {
+    val c = LocalDeck.current
+    var done by remember(t.at, t.question) { mutableStateOf<Map<Int, String>>(emptyMap()) }
+    val deck = Repo.deck.collectAsState().value
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        t.acts.forEachIndexed { i, a ->
+            val project = deck.byId(a.project)?.name
+            val label = when (a.kind) {
+                Partner.GO -> tr("Let's go", "יאללה")
+                Partner.LEFT -> tr("Add to left", "ל״נשאר״")
+                Partner.IDEA -> tr("To ideas", "לרעיונות")
+                Partner.NEXT -> tr("Make it the next step", "לצעד הבא")
+                else -> tr("Add to About me", "ל״עליי״")
+            }
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.surface2).padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    if (project != null) Text(project, color = c.faint, fontSize = 11.5.sp, fontFamily = PlexSans)
+                    Text(a.text, color = c.fg, fontSize = 13.sp, lineHeight = 19.sp, fontFamily = PlexSans, maxLines = 4, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        style = TextStyle(textDirection = dirOf(a.text)))
+                }
+                Spacer(Modifier.width(10.dp))
+                val was = done[i]
+                if (was != null) Text(was, color = if (was == DONE_WORD) c.liveText else c.danger, fontSize = 12.5.sp, fontFamily = PlexSans)
+                else Pill(label, if (a.kind == Partner.GO) Tone.PRIMARY else Tone.TINT, small = true) {
+                    done = done + (i to (Partner.run(a) ?: DONE_WORD))
+                }
+            }
+        }
+    }
+}
+
+private val DONE_WORD: String get() = tr("Done", "נעשה")
+
+/** About me: how the developer works, their goals, what they focus on, in their words. Read into every conversation. */
+@Composable
+fun AboutMeEditor(onClose: () -> Unit) {
+    val c = LocalDeck.current
+    var text by remember { mutableStateOf(Partner.about.value) }
+    Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(tr("About me", "עליי"), color = c.fg, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, fontFamily = PlexSans)
+        Text(tr("How you work, your goals for the month, what you focus on now. YDeck reads it into every conversation, so its advice fits you. A line it suggests is added only when you click.",
+            "איך אתה עובד, המטרות לחודש, במה אתה מתמקד עכשיו. YDeck קורא את זה בכל שיחה, כדי שההמלצות יתאימו לך. שורה שהוא מציע נוספת רק כשלוחצים."),
+            color = c.muted, fontSize = 12.5.sp, lineHeight = 19.sp, fontFamily = PlexSans, style = TextStyle(textDirection = TextDirection.Content))
+        val shape = RoundedCornerShape(12.dp)
+        Box(Modifier.fillMaxWidth().heightIn(min = 180.dp).clip(shape).background(c.surface).border(1.dp, c.line, shape).padding(12.dp)) {
+            val style = TextStyle(color = c.fg, fontSize = 14.sp, fontFamily = PlexSans, lineHeight = 21.sp, textDirection = TextDirection.Content)
+            if (text.isEmpty()) Text(tr("- I work mostly from my phone\n- This month: the first version of the shop", "- אני עובד בעיקר מהטלפון\n- החודש: גרסה ראשונה של החנות"), style = style.copy(color = c.faint))
+            BasicTextField(text, { text = it.take(8000) }, textStyle = style, cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth())
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Pill(tr("Save", "שמירה"), Tone.PRIMARY, small = true) { Partner.setAbout(text); onClose() }
+            Pill(tr("Cancel", "ביטול"), Tone.PLAIN, small = true, onClick = onClose)
         }
     }
 }
@@ -502,19 +600,31 @@ fun AssistantPanel(deck: Deck, route: Screen) {
     Row(Modifier.width(ASSISTANT_WIDTH.dp).fillMaxHeight()) {
         Box(Modifier.width(1.dp).fillMaxHeight().background(c.line))
         Column(Modifier.weight(1f).fillMaxHeight().background(c.bg)) {
+            var aboutMe by remember { mutableStateOf(false) }
             AskHeader(askMood(text.isNotEmpty())) {
+                IconButton(Glyph.INFO, tr("About me", "עליי"), size = 30.dp, tint = if (aboutMe) c.accentText else c.muted, filled = false) { aboutMe = !aboutMe }
                 if (turns.isNotEmpty()) IconButton(Glyph.EDIT, tr("New chat", "שיחה חדשה"), size = 30.dp, tint = c.muted, filled = false) { Assistant.reset() }
                 IconButton(Glyph.CLOSE, tr("Close", "סגירה"), size = 30.dp, tint = c.muted, filled = false) { Assistant.close() }
             }
             Box(Modifier.fillMaxWidth().height(1.dp).background(c.line))
+            if (aboutMe) { AboutMeEditor { aboutMe = false }; Spacer(Modifier.weight(1f)); return@Column }
             WaitingCards(deck)
             AskThread(focus, Modifier.weight(1f).fillMaxWidth())
             Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                WhatNow()
                 AskComposer(focus, { focus = it }, text, { text = it }, field)
                 AskFootnote()
             }
         }
     }
+}
+
+/** "What now?": one recommendation across the projects, with the way in. Always at hand above the field. */
+@Composable
+fun WhatNow() {
+    val busy by Assistant.busy.collectAsState()
+    if (busy || Tools.claude == null) return
+    Row { Suggestion(tr("What now?", "מה עכשיו?")) { Assistant.ask(Partner.WHAT_NOW, null) } }
 }
 
 /** In the search window: the conversation, with a way to go on in the app. */

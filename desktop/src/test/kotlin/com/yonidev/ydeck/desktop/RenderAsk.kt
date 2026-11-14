@@ -59,7 +59,7 @@ class RenderAsk {
                 Assistant.preview(listOf(
                     Assistant.Turn("מה החלטנו על עדכונים ב־${p.name}, ומה עוד לא בדקנו?",
                         answer = "ב־**${p.name}** הוחלט ב־22.10 שהאפליקציה בודקת את GitHub כל 6 שעות, מודיעה פעם אחת לכל גרסה, ו״עדכון עכשיו״ מתקין את ה־MSI ופותח מחדש.\n\nמה עוד לא נבדק:\n\n- עדכון אמיתי מ־1.18.5 ל־1.18.6 במחשב נקי\n- מה קורה כש־GitHub לא זמין (`Updates.kt` לא מנסה שוב)",
-                        reads = 2, seconds = 6),
+                        reads = 2, seconds = 6, acts = listOf(Partner.Act(Partner.GO, p.id, "תבדוק עדכון מ־1.18.5 ל־1.18.6 במחשב נקי"), Partner.Act(Partner.LEFT, p.id, "לנסות מה קורה כש־GitHub לא זמין"))),
                     Assistant.Turn("ומה עם הטלפון?"),
                 ))
                 shot(File(out, "window-$mode.png"), 700, 640) {

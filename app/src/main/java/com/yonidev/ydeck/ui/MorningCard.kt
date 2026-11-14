@@ -255,7 +255,12 @@ internal fun GoStatus(computer: Computer.State, project: String, at: Long) {
     val launch = computer.launches.lastOrNull { it.first.project == project && it.first.at >= at - 60_000 }
     val live = computer.live(project)
     val finished = live?.receipts?.firstOrNull { it.startAt >= at - 60_000 && it.endAt > 0 }
+    // "Let's go" from an answer writes to Claude in the project (no launch): its conversation says where it is.
+    val talk = computer.memory[project]
     val (words, color, done) = when {
+        launch == null && talk != null && talk.talkAsk.isNotBlank() -> Triple("Claude מבקש אישור: פותחים את הפרויקט", c.open, false)
+        launch == null && talk != null && talk.talkBusy -> Triple("Claude עובד על זה…", c.accentText, false)
+        launch == null && talk != null && talk.talk.lastOrNull()?.kind == com.yonidev.ydeck.link.MemTalk.CLAUDE -> Triple("Claude ענה: פותחים את הפרויקט", c.closed, true)
         launch == null || launch.second == null -> Triple("נשלח למחשב…", c.faint, false)
         launch.second?.ok == false -> Triple("לא נפתח: " + when (launch.second?.why) {
             "off" -> "פתיחת Claude מהטלפון כבויה במחשב"

@@ -182,6 +182,7 @@ fun AskScreen(
                     !canAsk -> OffNotice(computer!!)
                     else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (onMorning != null && focus == null) Suggestion(MORNING_ASK) { onMorning(MORNING_ASK) }
+                        if (focus == null) Suggestion("מה עכשיו?") { onAsk(WHAT_NOW, null) }
                         examples(focus).forEach { q -> Suggestion(q) { onAsk(q, focus?.id) } }
                     }
                 }
@@ -336,6 +337,9 @@ fun AskBar(chat: Computer.Chat?, onClick: () -> Unit) {
         Text(if (chat?.turns?.isNotEmpty() == true) "לחזור לשיחה" else "$ASK_TITLE…", color = c.muted, fontSize = 15.sp, modifier = Modifier.weight(1f))
     }
 }
+
+/** "What now?": one thing to work on now, across the projects, with the way in ("let's go"). */
+private const val WHAT_NOW = "מה עכשיו? תמליץ על דבר אחד לעבוד עליו עכשיו, מכל הפרויקטים: איזה פרויקט, מה בדיוק, ולמה, במשפט. תתחשב במה שהתקדם לאחרונה, במה שנשאר, ביעדים ובמה שמחכה לי. את ההמלצה תכתוב כשורה ב״left״, כדי שאפשר יהיה ללחוץ יאללה."
 
 /** Starts the day with YDeck (a good morning, now). */
 private const val MORNING_ASK = "בוקר טוב, מה עושים היום?"

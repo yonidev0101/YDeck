@@ -60,3 +60,17 @@ class TalkTest {
         assertEquals("src/a.ts", Talk.permissionWhat("Write", JSONObject().put("file_path", File(dir, "src\\a.ts").path), dir, ""))
     }
 }
+
+class RemoteUrlTest {
+    @org.junit.Test fun theLinkWhileRemoteControlIsOn() {
+        val dir = java.nio.file.Files.createTempDirectory("ydeck-remote").toFile()
+        val folder = Transcript.folderOf(dir).apply { mkdirs() }
+        val f = java.io.File(folder, "s1.jsonl")
+        try {
+            f.writeText("""{"type":"system","subtype":"bridge_status","content":"/remote-control is active","url":"https://claude.ai/code/session_013QY","isMeta":false}""" + "\n")
+            org.junit.Assert.assertEquals("https://claude.ai/code/session_013QY", Transcript.remoteUrl(dir, "s1"))
+            f.appendText("""{"type":"system","content":"Remote Control disconnected"}""" + "\n")
+            org.junit.Assert.assertNull(Transcript.remoteUrl(dir, "s1"))
+        } finally { folder.deleteRecursively(); dir.deleteRecursively() }
+    }
+}
