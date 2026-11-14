@@ -369,6 +369,8 @@ object PhoneLink {
             Launch.RESUME -> l.session.takeIf { Launch.isSessionId(it) && File(Claude.sessionsDir(dir), "$it.jsonl").isFile } ?: return no("session")
             else -> null
         }
+        // The conversation YDeck runs on the project's page goes to the terminal: YDeck lets go of it first (one writer).
+        if (resume != null && Talk.chats.value[dir.path]?.session == resume) Talk.handOff(dir)
         val ok = Tools.claudeIn(dir, project.name, resume, remote = project.name.takeIf { l.remote }, prompt = l.prompt.ifBlank { null })
         if (ok) opened.tryEmit(project.name)
         return if (ok) Launched(l.id, true) else no("start")
@@ -514,6 +516,10 @@ object PhoneLink {
             }
             Note.TALK_NEW -> Talk.fresh(dir)
             Note.TALK_STOP -> Talk.stop(dir)
+            // A permission, answered on the phone: only the one still waiting (by its id), and only when fresh.
+            Note.TALK_ALLOW -> if (working && fresh && Talk.chats.value[dir.path]?.ask?.request == note.text) {
+                Talk.answer(dir, when (note.args.firstOrNull()) { "always" -> Talk.Answer.ALWAYS; "no" -> Talk.Answer.NO; else -> Talk.Answer.ONCE })
+            }
         }
     }
 
@@ -677,6 +683,9 @@ object PhoneLink {
             talkTitle = chat.title, talkBusy = chat.busy,
             talkAsk = chat.ask?.let { a -> toolWords(a.tool) + (if (a.what.isNotBlank()) ": " + a.what.take(300) else "") }.orEmpty(),
             talkError = chat.error.orEmpty(), talkElsewhere = Talk.elsewhere(chat.session),
+            talkAskId = chat.ask?.request.orEmpty(), talkAskAlways = chat.ask?.always.orEmpty(),
+            talkSession = chat.session.orEmpty(),
+            talkUrl = chat.session?.takeIf { Talk.elsewhere(it) }?.let { Transcript.remoteUrl(dir, it) }.orEmpty(),
         )
     }
 

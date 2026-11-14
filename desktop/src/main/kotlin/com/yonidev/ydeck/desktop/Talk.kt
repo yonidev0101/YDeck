@@ -357,6 +357,30 @@ object Transcript {
         }
     }
 
+    /**
+     * The conversation's Remote Control link (https://claude.ai/code/session_…), from the last time Claude Code said it
+     * was on; null when it never was, or was turned off after.
+     */
+    fun remoteUrl(dir: File, session: String): String? {
+        val f = File(folderOf(dir), "$session.jsonl").takeIf { it.isFile } ?: return null
+        var url: String? = null
+        runCatching {
+            // The end of the file is enough: the link is said again whenever Remote Control connects.
+            val from = maxOf(0L, f.length() - (8L shl 20))
+            java.io.RandomAccessFile(f, "r").use { raf ->
+                raf.seek(from)
+                val bytes = ByteArray((f.length() - from).toInt()).also { raf.readFully(it) }
+                String(bytes, Charsets.UTF_8).lineSequence().forEach { line ->
+                    when {
+                        line.contains("\"subtype\":\"bridge_status\"") -> url = Regex("\"url\":\"(https://claude\\.ai/[^\"]+)\"").find(line)?.groupValues?.get(1) ?: url
+                        line.contains("Remote Control disconnected") -> url = null
+                    }
+                }
+            }
+        }
+        return url
+    }
+
     /** What the developer wrote in a user line (not a tool's result). */
     fun userText(o: JSONObject): String? = when (val c = o.optJSONObject("message")?.opt("content")) {
         is String -> c

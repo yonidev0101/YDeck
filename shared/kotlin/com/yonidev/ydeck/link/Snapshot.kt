@@ -65,6 +65,12 @@ data class Memory(
     val talkError: String = "",
     /** The conversation is open in a terminal on the computer: shown, written to there. */
     val talkElsewhere: Boolean = false,
+    /** The permission Claude waits for: its id (answered with [Note.TALK_ALLOW]), and what "always" would allow (empty: no "always"). */
+    val talkAskId: String = "",
+    val talkAskAlways: String = "",
+    /** Claude Code's id for the conversation (to open it elsewhere), and its Remote Control link while it's open with one. */
+    val talkSession: String = "",
+    val talkUrl: String = "",
 ) {
     /** Steps done and all of them; null when there's no goal. */
     val goalShare: Pair<Int, Int>? get() = if (goal.isBlank() || goalSteps.isEmpty()) null else goalSteps.count { it.done } to goalSteps.size
@@ -200,6 +206,7 @@ class Snapshot(
             put("dossierBusy", dossierBusy); put("dossierError", dossierError)
             put("talk", JSONArray().apply { talk.forEach { put(JSONObject().put("kind", it.kind).put("text", it.text)) } })
             put("talkTitle", talkTitle); put("talkBusy", talkBusy); put("talkAsk", talkAsk); put("talkError", talkError); put("talkElsewhere", talkElsewhere)
+            put("talkAskId", talkAskId); put("talkAskAlways", talkAskAlways); put("talkSession", talkSession); put("talkUrl", talkUrl)
         }
 
         fun memoryOf(o: JSONObject): Memory {
@@ -220,6 +227,8 @@ class Snapshot(
                 talk = objs("talk").map { MemTalk(it.optString("kind"), it.optString("text")) }.filter { it.text.isNotBlank() },
                 talkTitle = o.optString("talkTitle"), talkBusy = o.optBoolean("talkBusy"), talkAsk = o.optString("talkAsk"),
                 talkError = o.optString("talkError"), talkElsewhere = o.optBoolean("talkElsewhere"),
+                talkAskId = o.optString("talkAskId"), talkAskAlways = o.optString("talkAskAlways"),
+                talkSession = o.optString("talkSession"), talkUrl = o.optString("talkUrl"),
             )
         }
     }
@@ -372,12 +381,14 @@ data class Note(val id: String, val project: String, val kind: String, val text:
         const val TALK_SAY = "talk.say"
         const val TALK_NEW = "talk.new"
         const val TALK_STOP = "talk.stop"
+        /** The answer to the permission Claude waits for: [text] its id, args[0] "once", "always" or "no". */
+        const val TALK_ALLOW = "talk.allow"
         /** How long a request that makes something happen on the computer waits on the relay before it's dropped. */
         const val FRESH_MS = 15 * 60_000L
 
         private val KINDS = setOf(NEXT, DECISION, DONE, ARCHIVE, LEFT_ADD, LEFT_DONE, LEFT_DROP, LEFT_MOVE, LEFT_EDIT, IDEA_ADD, IDEA_TAKE,
             IDEA_DROP, DONE_DROP, NAME, COLOR, KIND, LINK_ADD, LINK_EDIT, LINK_DROP, COPY_ADD, COPY_DROP, NEW_PROJECT, MORNING_LATER, MORNING_SKIP, MORNING_PICK, MORNING_GO,
-            GOAL_SUGGEST, GOAL_TAKE, GOAL_DISMISS, GOAL_STEP, SAVE_DO, TALK_SAY, TALK_NEW, TALK_STOP)
+            GOAL_SUGGEST, GOAL_TAKE, GOAL_DISMISS, GOAL_STEP, SAVE_DO, TALK_SAY, TALK_NEW, TALK_STOP, TALK_ALLOW)
         /** Kinds whose text may be empty. */
         private val MAY_BE_EMPTY = setOf(DONE, KIND, GOAL_SUGGEST, GOAL_TAKE, GOAL_DISMISS, SAVE_DO, TALK_NEW, TALK_STOP)
 

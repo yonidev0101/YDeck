@@ -87,8 +87,12 @@ private fun Working(text: String) {
  * is on at the computer.
  */
 @Composable
-fun TalkOf(m: Memory, on: Boolean, edit: Edit?) {
+fun TalkOf(m: Memory, on: Boolean, edit: Edit?,
+            /** Opens the conversation on the computer with Remote Control on, so it can go on in the Claude app (the session's id, or "" for a new one). */
+            onRemote: ((String) -> Unit)? = null) {
     val c = LocalDeck.current
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var remoteAsked by remember { mutableStateOf(0L) }
     if (edit == null) return
     var text by remember { mutableStateOf("") }
     var all by remember { mutableStateOf(false) }
@@ -107,9 +111,17 @@ fun TalkOf(m: Memory, on: Boolean, edit: Edit?) {
         }
         when {
             m.talkAsk.isNotBlank() -> Column(Modifier.fillMaxWidth().clip(ROUND).background(c.open.copy(alpha = 0.14f)).padding(14.dp)) {
-                Text("Claude מחכה לאישור במחשב", color = c.openText, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Text("Claude מבקש אישור", color = c.openText, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                 Text(m.talkAsk, color = c.fg, fontSize = 13.sp, lineHeight = 19.sp, modifier = Modifier.padding(top = 4.dp), style = TextStyle(textDirection = TextDirection.Content))
-                Text("אישורים נותנים רק ליד המחשב: בכרטיס של הפרויקט ב־YDeck.", color = c.muted, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+                if (on && m.talkAskId.isNotBlank()) {
+                    Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button("לאשר") { edit(Note.TALK_ALLOW, m.talkAskId, listOf("once")) }
+                        if (m.talkAskAlways.isNotBlank()) Button("תמיד", primary = false) { edit(Note.TALK_ALLOW, m.talkAskId, listOf("always")) }
+                        Button("לא", primary = false) { edit(Note.TALK_ALLOW, m.talkAskId, listOf("no")) }
+                    }
+                    if (m.talkAskAlways.isNotBlank()) Text("תמיד: " + m.talkAskAlways, color = c.muted, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp),
+                        style = TextStyle(textDirection = dirOf(m.talkAskAlways)))
+                } else Text("אפשר לאשר במחשב, בכרטיס של הפרויקט ב־YDeck.", color = c.muted, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
             }
             m.talkBusy -> Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.weight(1f)) { Working("Claude עובד…") }
@@ -136,6 +148,21 @@ fun TalkOf(m: Memory, on: Boolean, edit: Edit?) {
             }
             if (m.talk.isNotEmpty() && !m.talkBusy) Text("שיחה חדשה", color = c.accentText, fontSize = 13.sp,
                 modifier = Modifier.clip(CircleShape).clickable { edit(Note.TALK_NEW, "", emptyList()) }.padding(vertical = 4.dp))
+        }
+        // The same conversation in the Claude app (for pictures, files, anything past words): by its Remote Control
+        // link when it has one; else the computer opens it in a terminal with Remote Control on, and the link follows.
+        when {
+            m.talkUrl.isNotBlank() -> Button("פתח באפליקציית Claude", primary = false) {
+                runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(m.talkUrl))) }
+            }
+            onRemote != null && !m.talkBusy && m.talkSession.isNotBlank() -> {
+                val waiting = System.currentTimeMillis() - remoteAsked < 90_000
+                Button(if (waiting) "נפתח במחשב…" else "להמשיך באפליקציית Claude", primary = false, enabled = !waiting) {
+                    remoteAsked = System.currentTimeMillis(); onRemote(m.talkSession)
+                }
+                if (waiting) Text("המחשב פותח את השיחה עם Remote Control. הכפתור ״פתח באפליקציית Claude״ יופיע כאן תוך כמה שניות.",
+                    color = c.muted, fontSize = 12.sp, lineHeight = 17.sp)
+            }
         }
     }
 }

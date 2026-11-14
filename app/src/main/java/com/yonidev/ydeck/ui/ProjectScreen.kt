@@ -164,7 +164,8 @@ fun ProjectScreen(
         when (tab) {
             Tab.MEMORY -> item {
                 MemoryTab(memory, live, pending, if (canWrite) { kind -> writing = kind } else null,
-                    onDone = if (canWrite) { next -> onWrite?.invoke(Note.DONE, next) } else null, edit = edit, ask = { asking = it }, working = launchOn)
+                    onDone = if (canWrite) { next -> onWrite?.invoke(Note.DONE, next) } else null, edit = edit, ask = { asking = it }, working = launchOn,
+                    onRemote = if (onLaunch != null && launchOn) { session -> onLaunch(if (session.isBlank()) Launch.NEW else Launch.RESUME, session, "", true) } else null)
             }
             Tab.GIT -> item { GitTab(live) }
             Tab.LINKS -> item { LinksTab(p, live) }
@@ -284,7 +285,8 @@ private fun Tabs(selected: Tab, counts: Map<Tab, Int>, onSelect: (Tab) -> Unit) 
 private fun MemoryTab(m: Memory?, live: Live?, pending: List<Note>, write: ((String) -> Unit)?, onDone: ((String) -> Unit)?,
                       edit: ((String, String, List<String>) -> Unit)? = null, ask: (TextAsk) -> Unit = {},
                       /** The computer lets the phone write to Claude and save (see TalkOf). */
-                      working: Boolean = false) {
+                      working: Boolean = false,
+                      onRemote: ((String) -> Unit)? = null) {
     val c = LocalDeck.current
     if (m == null) {
         FootNote("לפרויקט הזה אין עדיין תיקייה ב־YDeck במחשב, אז אין לו זיכרון. כשמחברים לו תיקייה, יופיעו כאן הצעד הבא, הסשן האחרון, ההחלטות ו־Git.")
@@ -313,7 +315,7 @@ private fun MemoryTab(m: Memory?, live: Live?, pending: List<Note>, write: ((Str
                 style = TextStyle(textDirection = dirOf(m.now)),
             )
         }
-        if (live != null) TalkOf(m, working, edit)
+        if (live != null) TalkOf(m, working, edit, onRemote)
         GoalOf(m, edit)
         SavingOf(m, live, working, edit)
         PathOf(if (closing) m.copy(next = "") else m, write, onDone, edit, ask)

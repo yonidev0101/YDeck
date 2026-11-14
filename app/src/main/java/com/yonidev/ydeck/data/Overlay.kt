@@ -68,6 +68,7 @@ object Overlay {
                 Note.GOAL_SUGGEST -> x.copy(dossierBusy = true, dossierError = "")
                 Note.SAVE_DO -> x.copy(savingBusy = true, savingResult = "")
                 Note.TALK_SAY -> x.copy(talk = x.talk + com.yonidev.ydeck.link.MemTalk(com.yonidev.ydeck.link.MemTalk.USER, t), talkBusy = true, talkError = "")
+                Note.TALK_ALLOW -> if (x.talkAskId == t) x.copy(talkAsk = "", talkAskId = "", talkAskAlways = "") else x
                 Note.TALK_NEW -> x.copy(talk = emptyList(), talkTitle = "", talkError = "", talkElsewhere = false)
                 else -> x
             }
@@ -76,7 +77,7 @@ object Overlay {
     }
 
     /** Requests the page already shows in place (the goal, saving, the conversation): not listed again as waiting. */
-    val inPlace = setOf(Note.GOAL_SUGGEST, Note.GOAL_TAKE, Note.GOAL_DISMISS, Note.GOAL_STEP, Note.SAVE_DO, Note.TALK_SAY, Note.TALK_NEW, Note.TALK_STOP)
+    val inPlace = setOf(Note.GOAL_SUGGEST, Note.GOAL_TAKE, Note.GOAL_DISMISS, Note.GOAL_STEP, Note.SAVE_DO, Note.TALK_SAY, Note.TALK_NEW, Note.TALK_STOP, Note.TALK_ALLOW)
 
     /** A change in words, for the line that lists what still waits for the computer. */
     fun words(n: Note): String = when (n.kind) {
