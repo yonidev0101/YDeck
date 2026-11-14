@@ -189,7 +189,7 @@ private fun Header(p: Project, m: Memory?, live: Live?) {
     val c = LocalDeck.current
     val progress = m?.progress()
     Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 4.dp, bottom = 6.dp)) {
-        // The mark is the progress: the ring fills with what was done out of what was planned, the logo inside it.
+        // The mark is the progress: the ring fills with the goal's steps done, the logo inside it.
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
             if (progress != null) ProgressMark(progress.first, progress.second, 112.dp) { Logo(p, 46.dp) }
             else Logo(p, 56.dp)
@@ -205,7 +205,7 @@ private fun Header(p: Project, m: Memory?, live: Live?) {
                         letterSpacing = (-0.02).em, style = TextStyle(textDirection = TextDirection.Ltr),
                     )
                     val left = progress.second - progress.first
-                    Text(if (left == 0) "הכול נעשה" else "נעשו · נשארו $left", color = c.muted, fontSize = 13.sp)
+                    Text(if (left == 0) "היעד הושג" else "מהיעד · נשארו $left", color = c.muted, fontSize = 13.sp)
                 } else if (about.isNotBlank()) Text(about, color = c.muted, fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 if (live != null && live.agentMode.isNotBlank() && live.agentMode != "WORKING" && live.agentMode != "WAITING") Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                     ClaudeDot(live.agentMode, 7.dp)
@@ -310,6 +310,8 @@ private fun MemoryTab(m: Memory?, live: Live?, pending: List<Note>, write: ((Str
                 style = TextStyle(textDirection = dirOf(m.now)),
             )
         }
+        GoalOf(m)
+        SavingOf(m)
         PathOf(if (closing) m.copy(next = "") else m, write, onDone, edit, ask)
         Moved(m.journal)
         if (live != null && live.loops.isNotEmpty()) Section("פתוח עכשיו") {
@@ -344,7 +346,70 @@ private fun MemoryTab(m: Memory?, live: Live?, pending: List<Note>, write: ((Str
                     }.padding(horizontal = 12.dp, vertical = 7.dp))
             }
         }
+        BuiltOf(m)
         More(m, write)
+    }
+}
+
+/** The near goal (set on the computer): its share and its steps, the next one marked. Nothing without a goal. */
+@Composable
+private fun GoalOf(m: Memory) {
+    val c = LocalDeck.current
+    val share = m.goalShare ?: return
+    Section("היעד", trailing = "${share.first} מתוך ${share.second}") {
+        Text(m.goal, color = c.fg, fontSize = 19.sp, lineHeight = 26.sp, fontWeight = FontWeight.Medium, style = TextStyle(textDirection = dirOf(m.goal)))
+        val next = m.goalSteps.indexOfFirst { !it.done }
+        Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+            m.goalSteps.forEachIndexed { i, s ->
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    when {
+                        s.done -> Box(Modifier.size(16.dp).clip(CircleShape).background(c.closed))
+                        i == next -> Box(Modifier.size(16.dp).clip(CircleShape).border(2.dp, c.accentText, CircleShape))
+                        else -> Box(Modifier.size(16.dp).clip(CircleShape).border(2.dp, c.line, CircleShape))
+                    }
+                    Text(s.text, color = if (s.done) c.faint else c.fg, fontSize = 15.sp, lineHeight = 21.sp,
+                        fontWeight = if (i == next) FontWeight.Medium else FontWeight.Normal, style = TextStyle(textDirection = dirOf(s.text)))
+                }
+            }
+        }
+    }
+}
+
+/** The save card, as the computer wrote it: what isn't saved, in words, and what it suggests. Done from the computer. */
+@Composable
+private fun SavingOf(m: Memory) {
+    val c = LocalDeck.current
+    if (m.saving.isBlank()) return
+    val clean = m.savingProposal.isBlank()
+    Section("שמירה") {
+        Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Box(Modifier.padding(top = 8.dp)) { Box(Modifier.size(8.dp).clip(CircleShape).background(if (clean) c.closed else c.open)) }
+            Column(Modifier.weight(1f)) {
+                Body(m.saving)
+                if (!clean) Text("הצעה: " + m.savingProposal, color = c.muted, fontSize = 13.sp, lineHeight = 19.sp, modifier = Modifier.padding(top = 4.dp),
+                    style = TextStyle(textDirection = dirOf(m.savingProposal)))
+            }
+        }
+    }
+}
+
+/** Everything the project can do: the first few, the rest on a tap. */
+@Composable
+private fun BuiltOf(m: Memory) {
+    val c = LocalDeck.current
+    if (m.built.isEmpty()) return
+    var all by remember { mutableStateOf(false) }
+    Section("מה נבנה · ${m.built.size}") {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            (if (all) m.built else m.built.take(6)).forEach { t ->
+                Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Box(Modifier.padding(top = 9.dp)) { Box(Modifier.size(5.dp).clip(CircleShape).background(c.faint)) }
+                    Body(t)
+                }
+            }
+            if (m.built.size > 6) Text(if (all) "פחות" else "כל ה־${m.built.size}", color = c.accentText, fontSize = 14.sp, fontWeight = FontWeight.Medium,
+                modifier = Modifier.clip(CircleShape).clickable { all = !all }.padding(vertical = 6.dp))
+        }
     }
 }
 

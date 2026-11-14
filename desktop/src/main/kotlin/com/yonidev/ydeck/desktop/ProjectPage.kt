@@ -81,7 +81,7 @@ fun ProjectPage(p: Project, tab: Tab, dark: Boolean, actions: AppActions) {
 private fun Header(p: Project, local: Local, actions: AppActions) {
     val dir = local.dir
     val c = LocalDeck.current
-    // The mark is the progress: the ring fills with what was done out of what was planned, the logo inside it.
+    // The mark is the progress: the ring fills with the goal's steps done, the logo inside it.
     val progress = dir?.let { Pulses.state.collectAsState().value[it.path] }?.progress()
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.clip(RoundedCornerShape(16.dp)).clickable { Nav.set(Screen.Details(p.id)) }) {
@@ -101,7 +101,7 @@ private fun Header(p: Project, local: Local, actions: AppActions) {
                         style = TextStyle(textDirection = TextDirection.Ltr),
                     )
                     val left = progress.second - progress.first
-                    Text(if (left == 0) tr("all done", "הכול נעשה") else tr("done · $left left", "נעשו · נשארו $left"), color = c.muted, fontSize = 13.sp,
+                    Text(if (left == 0) tr("goal reached", "היעד הושג") else tr("of the goal · $left left", "מהיעד · נשארו $left"), color = c.muted, fontSize = 13.sp,
                         fontFamily = PlexSans, modifier = Modifier.padding(bottom = 7.dp))
                 }
             }
@@ -227,22 +227,37 @@ private fun Tabs(p: Project, tab: Tab, local: Local) {
 // ── overview ──
 
 /*
- * One column, read top to bottom, each thing once: an agent at work (only while it is), the next step, what's open,
- * and the project's memory (summary, decisions, recent sessions) folded below. The header already says where git
- * stands and opens Claude, so the page doesn't say it again.
+ * The project's dossier, in two columns: the wide one is where the work goes (an agent at work, what's in progress,
+ * the goal and its share, the path of what's left, ideas); the narrow one is what the project is and has (saving in
+ * words, what was built, anything else open, the memory). On a narrow window they stack, the wide one first.
  */
 @Composable
 private fun Overview(p: Project, local: Local, dark: Boolean, actions: AppActions) {
     val dir = local.dir
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 44.dp, vertical = 24.dp)) {
         if (dir == null) { ConnectFolder(p, actions); return@Column }
-        Column(Modifier.widthIn(max = 860.dp), verticalArrangement = Arrangement.spacedBy(32.dp)) {
-            LiveAgent(local, dark)
-            OfferFill(p, local, dir)
-            NowLine(dir)
-            PlanLists(p, local, dir)
-            LoopsCard(p, local)
-            Memory(p, local, dir)
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val main: @Composable () -> Unit = {
+                Column(verticalArrangement = Arrangement.spacedBy(28.dp)) {
+                    LiveAgent(local, dark)
+                    OfferFill(p, local, dir)
+                    NowLine(dir)
+                    GoalCard(dir)
+                    PlanLists(p, local, dir)
+                }
+            }
+            val side: @Composable () -> Unit = {
+                Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                    SaveCardView(p, dir)
+                    BuiltCard(dir)
+                    LoopsCard(p, local, git = false)
+                    Memory(p, local, dir)
+                }
+            }
+            if (maxWidth >= 900.dp) Row(Modifier.widthIn(max = 1280.dp), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+                Box(Modifier.weight(1.55f)) { main() }
+                Box(Modifier.weight(1f)) { side() }
+            } else Column(Modifier.widthIn(max = 860.dp), verticalArrangement = Arrangement.spacedBy(28.dp)) { main(); side() }
         }
     }
 }

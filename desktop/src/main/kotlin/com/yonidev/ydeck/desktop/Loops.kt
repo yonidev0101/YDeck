@@ -163,11 +163,16 @@ fun GroupScope.LoopRow(p: Project, local: Local, loop: Loop) {
     }
 }
 
-/** The project's loops on its overview; nothing open says so, briefly. */
+/**
+ * The project's loops on its overview; nothing open says so, briefly. Without [git], only what isn't git's (a
+ * session's receipt, a server, missing keys), and nothing at all when there's none: the save card speaks for git.
+ */
 @Composable
-fun LoopsCard(p: Project, local: Local) {
+fun LoopsCard(p: Project, local: Local, git: Boolean = true) {
     val c = LocalDeck.current
-    val loops = loopsOf(local).filter { it.kind != LoopKind.AGENT }
+    val gitKinds = setOf(LoopKind.CONFLICTS, LoopKind.UNCOMMITTED, LoopKind.PUSH, LoopKind.PUBLISH, LoopKind.PULL)
+    val loops = loopsOf(local).filter { it.kind != LoopKind.AGENT && (git || it.kind !in gitKinds) }
+    if (loops.isEmpty() && !git) return
     if (loops.isEmpty()) {
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.paper).padding(horizontal = 18.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             GlyphIcon(Glyph.CHECK, 16.dp, c.liveText)

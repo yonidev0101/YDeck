@@ -22,7 +22,7 @@ object ClaudeJson {
     fun ask(dir: File, prompt: String, schema: JSONObject, tools: Boolean, minutes: Long = 4, onStep: (String) -> Unit = {}): JSONObject {
         val claude = Tools.claude?.exe ?: error(tr("Claude Code isn't installed on this PC", "Claude Code לא נמצא במחשב"))
         val cmd = buildList {
-            addAll(listOf(claude.path, "-p", "--model", "sonnet", "--output-format", "stream-json", "--verbose", "--json-schema", schema.toString()))
+            addAll(listOf(claude.path, "-p", "--model", "sonnet", "--output-format", "stream-json", "--verbose", "--json-schema", arg(schema.toString())))
             if (tools) { addAll(listOf("--allowedTools", "Read", "Glob", "Grep", "LS", "--disallowedTools")); addAll(ClaudeFill.SECRETS) }
             else addAll(listOf("--tools", "", "--strict-mcp-config"))
         }
@@ -50,6 +50,12 @@ object ClaudeJson {
         answer?.let { return it }
         error(ClaudeFill.why(failed.orEmpty() + "\n" + err))
     }
+
+    /**
+     * [text] as one argument on Windows' command line: Java passes it as is, so the quotes inside would be taken for the
+     * argument's own and dropped; escaped, the program gets them back.
+     */
+    fun arg(text: String): String = if (System.getProperty("os.name").orEmpty().startsWith("Windows")) text.replace("\"", "\\\"") else text
 
     /** {"type": "array", "items": {"type": "string"}} */
     fun strings(): JSONObject = JSONObject().put("type", "array").put("items", JSONObject().put("type", "string"))

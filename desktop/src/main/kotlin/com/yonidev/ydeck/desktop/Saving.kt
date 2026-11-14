@@ -86,9 +86,16 @@ object Saving {
         file.writeText(JSONObject().apply { _cards.value.forEach { (k, v) -> put(k, v.toJson()) } }.toString())
     }
 
+    /** Cards are written on their own (off in the renders, where no Claude should run). */
+    @Volatile var auto = true
+
+    /** A card to draw, for the renders. */
+    fun preview(dir: File, card: SaveCard) = _cards.update { it + (dir.path to card) }
+
     /** The card for [dir], written again only when git's state changed since the last one. In the background. */
     fun ensure(dir: File) {
         val key = dir.path
+        if (!auto) return
         if (key in _busy.value) return
         _busy.update { it + key }
         Thread({

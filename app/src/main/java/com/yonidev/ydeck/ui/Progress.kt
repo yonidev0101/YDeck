@@ -27,15 +27,12 @@ import kotlin.math.sin
 
 /*
  * The mark is the progress. YDeck's ring (open at the top right, the amber dot in the opening, as in [Mark]) fills
- * with what was done out of done + left. When nothing is left it reaches the dot, and the dot turns green. On first
+ * with the goal's steps done out of all of them. When nothing is left it reaches the dot, and the dot turns green. On first
  * show it draws itself from nothing to where the project stands, like the mark loading.
  */
 
-/** Done and done + left, as the lists say them; null when the project keeps no lists. */
-fun Memory.progress(): Pair<Int, Int>? {
-    val total = doneItems.size + left.size
-    return if (total == 0) null else doneItems.size to total
-}
+/** The goal's steps done, out of all of them; null when the project has no goal (as on the computer). */
+fun Memory.progress(): Pair<Int, Int>? = goalShare
 
 /** The expo-out the brand moves with: things land, they don't float. */
 private val ExpoOut = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)
