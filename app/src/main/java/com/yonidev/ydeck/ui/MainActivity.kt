@@ -106,7 +106,7 @@ class MainActivity : ComponentActivity() {
             repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 while (true) {
                     // Quicker while a question waits for its answer.
-                    delay(if (Computer.state.value?.chat?.busy == true || Computer.state.value?.waiting?.isNotEmpty() == true || Computer.state.value?.morningBusy == true) 2_500 else 10_000)
+                    delay(if (Computer.state.value?.chat?.busy == true || Computer.state.value?.waiting?.isNotEmpty() == true || Computer.state.value?.morningBusy == true || Computer.state.value?.memory?.values?.any { it.talkBusy || it.dossierBusy || it.savingBusy } == true) 2_500 else 10_000)
                     if (Computer.state.value?.paired == true && Computer.sync(this@MainActivity) == Computer.Result.UPDATED) deck = Repo.deck(this@MainActivity)
                 }
             }

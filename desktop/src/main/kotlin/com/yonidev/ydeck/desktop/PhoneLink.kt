@@ -15,6 +15,7 @@ import com.yonidev.ydeck.link.Note
 import com.yonidev.ydeck.link.MemRelease
 import com.yonidev.ydeck.link.Memory
 import com.yonidev.ydeck.link.MemStep
+import com.yonidev.ydeck.link.MemTalk
 import com.yonidev.ydeck.link.NewKey
 import com.yonidev.ydeck.link.Pairing
 import com.yonidev.ydeck.link.Reply
@@ -151,12 +152,33 @@ object PhoneLink {
             var claude = ClaudeLink.sessions.value
             var waiting = SessionAsks.waiting.value
             var asking = Runs.asking.value
+            var talk = Talk.chats.value
+            var dossier = Dossier.busy.value
+            var suggested = Dossier.suggested.value
+            var cards = Saving.cards.value
+            var saving = Saving.busy.value
+            var results = Saving.results.value
+            var git: Any? = null
             while (true) {
                 Thread.sleep(2_000)
                 if (SessionAsks.waiting.value !== waiting) { waiting = SessionAsks.waiting.value; nudge() }
                 if (Runs.asking.value !== asking) { asking = Runs.asking.value; nudge() }
                 if (Repo.deck.value !== seen) { seen = Repo.deck.value; nudge() }
                 if (ClaudeLink.sessions.value !== claude) { claude = ClaudeLink.sessions.value; nudge() }
+                // The dossier, saving and the conversations on the projects' pages: the phone sees them as they move.
+                if (Talk.chats.value !== talk) { talk = Talk.chats.value; nudge() }
+                if (Dossier.busy.value !== dossier || Dossier.suggested.value !== suggested) { dossier = Dossier.busy.value; suggested = Dossier.suggested.value; nudge() }
+                if (Saving.cards.value !== cards || Saving.busy.value !== saving || Saving.results.value !== results) {
+                    cards = Saving.cards.value; saving = Saving.busy.value; results = Saving.results.value; nudge()
+                }
+                // Each project's save card kept ready (Claude asked only when git's state really changed), so the
+                // phone has it without the page being opened here.
+                val gitNow = Git.state.value
+                if (gitNow !== git) {
+                    git = gitNow
+                    Repo.deck.value.projects.filter { !it.archived }.mapNotNull { Settings.state.value.localOf(it.id).dir }
+                        .filter { gitNow.containsKey(it.path) }.forEach(Saving::ensureQuietly)
+                }
             }
         }, "phone-link-watch").apply { isDaemon = true }.start()
     }
@@ -455,8 +477,44 @@ object PhoneLink {
                 if (dir != null) PhoneEdits.list(dir, note.kind, note.text, arg(0))
             Note.NAME, Note.COLOR, Note.KIND, Note.LINK_ADD, Note.LINK_EDIT, Note.LINK_DROP, Note.COPY_ADD, Note.COPY_DROP ->
                 PhoneEdits.details(project, note.kind, note.text, note.args)?.let { saveProject(it) }
+            else -> if (dir != null) dossierNote(dir, note)
         }
         return true
+    }
+
+    /**
+     * The phone works on a project's dossier, saving and conversation. Data (taking a goal, ticking a step) is done
+     * as is. Reading the project is Ask YDeck's kind of work (reading only): on with "the phone can ask YDeck". Saving
+     * and writing to Claude change the project: on with "the phone can open Claude Code", and only when fresh, so a
+     * request that waited while this computer was off doesn't run by surprise later.
+     */
+    private fun dossierNote(dir: File, note: Note) {
+        val s = Settings.state.value
+        val fresh = kotlin.math.abs(System.currentTimeMillis() - note.at) <= Note.FRESH_MS
+        val working = s.phoneLaunch && Tools.claude != null
+        when (note.kind) {
+            Note.GOAL_SUGGEST -> if (s.phoneAsk && Tools.claude != null && fresh) Dossier.start(dir)
+            Note.GOAL_TAKE -> Dossier.suggested.value[dir.path]?.let { Dossier.takeGoal(dir, it) }
+            Note.GOAL_DISMISS -> Dossier.dismissGoal(dir)
+            Note.GOAL_STEP -> ProjectFiles.readLocal(dir)?.goal?.let { g ->
+                val done = note.args.firstOrNull() != "0"
+                ProjectFiles.writeGoal(dir, g.copy(steps = g.steps.map { if (it.text == note.text) it.copy(done = done) else it }))
+                Pulses.refreshSoon()
+            }
+            Note.SAVE_DO -> if (working && fresh) Thread({ Saving.runAndKeep(dir); nudge() }, "ydeck-phone-save").apply { isDaemon = true; start() }
+            Note.TALK_SAY -> {
+                Talk.load(dir)
+                when {
+                    !working -> Talk.fail(dir, tr("Writing to Claude from the phone is off: turn on \"The phone can open Claude Code\" in YDeck's settings on the computer.",
+                        "כתיבה ל־Claude מהטלפון כבויה: מדליקים את ״הטלפון יכול לפתוח את Claude Code״ בהגדרות של YDeck במחשב."))
+                    !fresh -> Talk.fail(dir, tr("The message waited too long for the computer, so it wasn't sent. Send it again.",
+                        "ההודעה חיכתה יותר מדי למחשב, אז היא לא נשלחה. אפשר לשלוח שוב."))
+                    else -> Talk.send(dir, note.text)
+                }
+            }
+            Note.TALK_NEW -> Talk.fresh(dir)
+            Note.TALK_STOP -> Talk.stop(dir)
+        }
     }
 
     /** A project made on the phone: a name and a colour, no folder yet (that is connected here). */
@@ -589,7 +647,14 @@ object PhoneLink {
                 goalSteps = mine?.goal?.steps.orEmpty().map { MemStep(it.text, it.done) },
                 saving = dir?.let { Saving.cards.value[it.path] }?.state.orEmpty(),
                 savingProposal = dir?.let { Saving.cards.value[it.path] }?.proposal.orEmpty(),
-            )
+                savingSteps = dir?.let { Saving.cards.value[it.path] }?.steps?.takeIf { it.isNotEmpty() }?.let(::stepsWords).orEmpty(),
+                savingBusy = dir != null && dir.path in Saving.busy.value,
+                savingResult = dir?.let { Saving.results.value[it.path] }?.takeIf { System.currentTimeMillis() - it.first < 10 * 60_000 }?.second?.let { if (it.isEmpty()) "ok" else it }.orEmpty(),
+                suggestedGoal = dir?.let { Dossier.suggested.value[it.path] }?.title.orEmpty(),
+                suggestedSteps = dir?.let { Dossier.suggested.value[it.path] }?.steps?.map { it.text }.orEmpty(),
+                dossierBusy = dir != null && dir.path in Dossier.busy.value,
+                dossierError = dir?.let { Dossier.errors.value[it.path] }.orEmpty(),
+            ).let { m -> if (dir == null) m else withTalk(m, dir) }
         }
         val live = deck.projects.mapNotNull { p -> settings.localOf(p.id).folder?.let { p.id to live(it) } }.toMap()
         return Snapshot(System.currentTimeMillis(), computer, JSONObject(Repo.exportJson(deck)), memory, live, applied.toList(),
@@ -599,6 +664,20 @@ object PhoneLink {
             run = settings.phoneRun, ran = Runs.ran.toList(), runOk = if (settings.phoneRun) settings.runOk.filterKeys { k -> deck.projects.any { it.id == k } } else emptyMap(),
             morning = morning, morningAt = if (settings.phoneMorning && settings.phoneAsk && Tools.claude != null) settings.morningAt else -1,
             morningBusy = morningBusy, morningError = morningError, morningPicks = if (settings.phoneAsk) GoodMorning.projects().map { it.id } else emptyList())
+    }
+
+    /** The conversation with Claude in the project (the one on its page, or a recent one), its last lines. */
+    private fun withTalk(m: Memory, dir: File): Memory {
+        Talk.load(dir)
+        val chat = Talk.chats.value[dir.path] ?: return m
+        return m.copy(
+            talk = chat.lines.takeLast(16).map { l ->
+                MemTalk(when (l.kind) { Talk.Kind.USER -> MemTalk.USER; Talk.Kind.CLAUDE -> MemTalk.CLAUDE; Talk.Kind.STEP -> MemTalk.STEP }, l.text.take(3000))
+            },
+            talkTitle = chat.title, talkBusy = chat.busy,
+            talkAsk = chat.ask?.let { a -> toolWords(a.tool) + (if (a.what.isNotBlank()) ": " + a.what.take(300) else "") }.orEmpty(),
+            talkError = chat.error.orEmpty(), talkElsewhere = Talk.elsewhere(chat.session),
+        )
     }
 
     /** What the project's window shows here: git, the agent, the latest receipts, open loops, the dev server. */

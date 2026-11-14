@@ -176,7 +176,8 @@ private fun AskPermission(dir: File, ask: Talk.Ask, dark: Boolean) {
     }
 }
 
-private fun toolWords(tool: String): String = when (tool) {
+/** What Claude asks to do, in words ("run a command"). */
+fun toolWords(tool: String): String = when (tool) {
     "Bash", "PowerShell" -> tr("run a command", "להריץ פקודה")
     "Edit", "MultiEdit", "NotebookEdit" -> tr("change a file", "לשנות קובץ")
     "Write" -> tr("write a file", "לכתוב קובץ")

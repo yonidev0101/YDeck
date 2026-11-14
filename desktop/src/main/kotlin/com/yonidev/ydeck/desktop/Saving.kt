@@ -89,6 +89,32 @@ object Saving {
     /** Cards are written on their own (off in the renders, where no Claude should run). */
     @Volatile var auto = true
 
+    private val _results = MutableStateFlow<Map<String, Pair<Long, String>>>(emptyMap())
+    /** By folder: when the last "do it" ran, and what became of it: "" when it worked, else why not, in words. */
+    val results: StateFlow<Map<String, Pair<Long, String>>> = _results
+
+    /** One at a time, for the cards written without anyone looking (every project, for the phone). */
+    private val quiet = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "ydeck-saving-all").apply { isDaemon = true } }
+    private val queued: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+
+    /** Like [ensure], but queued behind the others: each project's card ready before anyone opens its page. */
+    fun ensureQuietly(dir: File) {
+        val key = dir.path
+        if (!auto || key in _busy.value || !queued.add(key)) return
+        quiet.execute {
+            try {
+                if (key !in _busy.value) {
+                    _busy.update { it + key }
+                    runCatching { update(dir) }.onFailure { e -> _errors.update { it + (key to (e.message ?: tr("Claude didn't answer", "Claude לא ענה"))) } }
+                    _busy.update { it - key }
+                }
+            } finally { queued.remove(key) }
+        }
+    }
+
+    /** Runs the card's steps and keeps what came of it (for the phone). */
+    fun runAndKeep(dir: File): String? = run(dir).also { why -> _results.update { it + (dir.path to (System.currentTimeMillis() to (why ?: ""))) } }
+
     /** A card to draw, for the renders. */
     fun preview(dir: File, card: SaveCard) = _cards.update { it + (dir.path to card) }
 

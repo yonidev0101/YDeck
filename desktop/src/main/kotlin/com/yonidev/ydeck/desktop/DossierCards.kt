@@ -231,7 +231,7 @@ fun SaveCardView(p: Project, dir: File) {
                 if (card.steps.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                     Pill(if (busy) tr("Working…", "עובד…") else tr("Do it", "תעשה"), Tone.PRIMARY, enabled = !busy, small = true) {
                         result = null
-                        scope.launch { result = withContext(Dispatchers.IO) { Saving.run(dir) } ?: "" }
+                        scope.launch { result = withContext(Dispatchers.IO) { Saving.runAndKeep(dir) } ?: "" }
                     }
                     Quiet(stepsWords(card.steps))
                 }

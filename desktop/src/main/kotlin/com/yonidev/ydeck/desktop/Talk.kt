@@ -159,6 +159,9 @@ object Talk {
         Thread { if (!r.proc.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)) r.proc.destroyForcibly() }.apply { isDaemon = true; start() }
     }
 
+    /** Says why a message couldn't go (from the phone: it waited too long, or writing is off). */
+    fun fail(dir: File, why: String) = set(dir.path) { it.copy(error = why) }
+
     /** Before opening the conversation in a terminal: YDeck lets go of it, so there's one writer. */
     fun handOff(dir: File) = close(dir.path)
 

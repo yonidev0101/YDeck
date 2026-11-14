@@ -72,8 +72,8 @@ fun PhoneSettings() {
                         }
                     }
                     if (Tools.claude != null) Setting(tr("The phone can open Claude Code", "הטלפון יכול לפתוח את Claude Code"),
-                        hint = tr("Off until you turn it on here. In a project's folder, in a new terminal: a new session, the last one, or an earlier one, with Remote Control if asked. Claude works in your usual permission mode, and a notification shows each time.",
-                            "כבוי עד שמדליקים כאן. בתיקיית הפרויקט, בטרמינל חדש: סשן חדש, האחרון או סשן קודם, עם Remote Control אם ביקשו. Claude עובד במצב ההרשאות הרגיל שלך, וכל פתיחה מופיעה כהתראה.")) {
+                        hint = tr("Off until you turn it on here. In a project's folder, in a new terminal: a new session, the last one, or an earlier one, with Remote Control if asked. Claude works in your usual permission mode, and a notification shows each time. It also lets the phone write to Claude on a project's page and run the save card's steps; permissions are still given only here.",
+                            "כבוי עד שמדליקים כאן. בתיקיית הפרויקט, בטרמינל חדש: סשן חדש, האחרון או סשן קודם, עם Remote Control אם ביקשו. Claude עובד במצב ההרשאות הרגיל שלך, וכל פתיחה מופיעה כהתראה. זה גם מאפשר לכתוב ל־Claude מעמוד הפרויקט בטלפון ולבצע את כרטיס השמירה; אישורי הרשאה ניתנים רק כאן.")) {
                         Toggle(settings.phoneLaunch) { on -> Settings.update { it.copy(phoneLaunch = on) }; PhoneLink.nudge() }
                     }
                     if (Tools.claude != null) Setting(tr("The phone can ask YDeck", "הטלפון יכול לשאול את YDeck"),

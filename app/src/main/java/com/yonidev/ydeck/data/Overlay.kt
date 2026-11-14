@@ -60,11 +60,23 @@ object Overlay {
                 Note.IDEA_TAKE -> if (t in x.ideas) x.copy(ideas = x.ideas - t, left = x.left - t + t) else x
                 Note.IDEA_DROP -> x.copy(ideas = x.ideas - t)
                 Note.DONE_DROP -> x.copy(doneItems = x.doneItems - t)
+                // The dossier and the conversation: shown at once as the computer will have them.
+                Note.GOAL_STEP -> x.copy(goalSteps = x.goalSteps.map { if (it.text == t) it.copy(done = n.args.firstOrNull() != "0") else it })
+                Note.GOAL_TAKE -> if (x.suggestedGoal.isBlank()) x else x.copy(goal = x.suggestedGoal,
+                    goalSteps = x.suggestedSteps.map { com.yonidev.ydeck.link.MemStep(it, false) }, suggestedGoal = "", suggestedSteps = emptyList())
+                Note.GOAL_DISMISS -> x.copy(suggestedGoal = "", suggestedSteps = emptyList())
+                Note.GOAL_SUGGEST -> x.copy(dossierBusy = true, dossierError = "")
+                Note.SAVE_DO -> x.copy(savingBusy = true, savingResult = "")
+                Note.TALK_SAY -> x.copy(talk = x.talk + com.yonidev.ydeck.link.MemTalk(com.yonidev.ydeck.link.MemTalk.USER, t), talkBusy = true, talkError = "")
+                Note.TALK_NEW -> x.copy(talk = emptyList(), talkTitle = "", talkError = "", talkElsewhere = false)
                 else -> x
             }
         }
         return x
     }
+
+    /** Requests the page already shows in place (the goal, saving, the conversation): not listed again as waiting. */
+    val inPlace = setOf(Note.GOAL_SUGGEST, Note.GOAL_TAKE, Note.GOAL_DISMISS, Note.GOAL_STEP, Note.SAVE_DO, Note.TALK_SAY, Note.TALK_NEW, Note.TALK_STOP)
 
     /** A change in words, for the line that lists what still waits for the computer. */
     fun words(n: Note): String = when (n.kind) {
@@ -83,6 +95,12 @@ object Overlay {
         Note.COPY_ADD, Note.COPY_DROP -> "ערכים להעתקה"
         Note.NEW_PROJECT -> "פרויקט חדש"
         Note.MORNING_LATER, Note.MORNING_SKIP, Note.MORNING_PICK -> "בוקר טוב"
+        Note.GOAL_SUGGEST -> "להציע יעד"
+        Note.GOAL_TAKE, Note.GOAL_DISMISS, Note.GOAL_STEP -> "היעד"
+        Note.SAVE_DO -> "שמירה"
+        Note.TALK_SAY -> "הודעה ל־Claude"
+        Note.TALK_NEW -> "שיחה חדשה"
+        Note.TALK_STOP -> "עצירה"
         else -> "שינוי"
     }
 }

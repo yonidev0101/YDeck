@@ -164,7 +164,7 @@ fun ProjectScreen(
         when (tab) {
             Tab.MEMORY -> item {
                 MemoryTab(memory, live, pending, if (canWrite) { kind -> writing = kind } else null,
-                    onDone = if (canWrite) { next -> onWrite?.invoke(Note.DONE, next) } else null, edit = edit, ask = { asking = it })
+                    onDone = if (canWrite) { next -> onWrite?.invoke(Note.DONE, next) } else null, edit = edit, ask = { asking = it }, working = launchOn)
             }
             Tab.GIT -> item { GitTab(live) }
             Tab.LINKS -> item { LinksTab(p, live) }
@@ -282,15 +282,18 @@ private fun Tabs(selected: Tab, counts: Map<Tab, Int>, onSelect: (Tab) -> Unit) 
 @Composable
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 private fun MemoryTab(m: Memory?, live: Live?, pending: List<Note>, write: ((String) -> Unit)?, onDone: ((String) -> Unit)?,
-                      edit: ((String, String, List<String>) -> Unit)? = null, ask: (TextAsk) -> Unit = {}) {
+                      edit: ((String, String, List<String>) -> Unit)? = null, ask: (TextAsk) -> Unit = {},
+                      /** The computer lets the phone write to Claude and save (see TalkOf). */
+                      working: Boolean = false) {
     val c = LocalDeck.current
     if (m == null) {
         FootNote("לפרויקט הזה אין עדיין תיקייה ב־YDeck במחשב, אז אין לו זיכרון. כשמחברים לו תיקייה, יופיעו כאן הצעד הבא, הסשן האחרון, ההחלטות ו־Git.")
         return
     }
     Column {
-        if (pending.isNotEmpty()) Block("ממתין למחשב") {
-            pending.forEachIndexed { i, n ->
+        val listed = pending.filter { it.kind !in com.yonidev.ydeck.data.Overlay.inPlace }
+        if (listed.isNotEmpty()) Block("ממתין למחשב") {
+            listed.forEachIndexed { i, n ->
                 if (i > 0) Hair()
                 Text(com.yonidev.ydeck.data.Overlay.words(n), color = c.faint, fontSize = 12.sp)
                 if (n.text.isNotBlank() && n.kind != Note.ARCHIVE && n.kind != Note.COLOR) Body(n.text)
@@ -310,8 +313,9 @@ private fun MemoryTab(m: Memory?, live: Live?, pending: List<Note>, write: ((Str
                 style = TextStyle(textDirection = dirOf(m.now)),
             )
         }
-        GoalOf(m)
-        SavingOf(m)
+        if (live != null) TalkOf(m, working, edit)
+        GoalOf(m, edit)
+        SavingOf(m, live, working, edit)
         PathOf(if (closing) m.copy(next = "") else m, write, onDone, edit, ask)
         Moved(m.journal)
         if (live != null && live.loops.isNotEmpty()) Section("פתוח עכשיו") {
@@ -351,69 +355,6 @@ private fun MemoryTab(m: Memory?, live: Live?, pending: List<Note>, write: ((Str
     }
 }
 
-/** The near goal (set on the computer): its share and its steps, the next one marked. Nothing without a goal. */
-@Composable
-private fun GoalOf(m: Memory) {
-    val c = LocalDeck.current
-    val share = m.goalShare ?: return
-    Section("היעד", trailing = "${share.first} מתוך ${share.second}") {
-        Text(m.goal, color = c.fg, fontSize = 19.sp, lineHeight = 26.sp, fontWeight = FontWeight.Medium, style = TextStyle(textDirection = dirOf(m.goal)))
-        val next = m.goalSteps.indexOfFirst { !it.done }
-        Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-            m.goalSteps.forEachIndexed { i, s ->
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    when {
-                        s.done -> Box(Modifier.size(16.dp).clip(CircleShape).background(c.closed))
-                        i == next -> Box(Modifier.size(16.dp).clip(CircleShape).border(2.dp, c.accentText, CircleShape))
-                        else -> Box(Modifier.size(16.dp).clip(CircleShape).border(2.dp, c.line, CircleShape))
-                    }
-                    Text(s.text, color = if (s.done) c.faint else c.fg, fontSize = 15.sp, lineHeight = 21.sp,
-                        fontWeight = if (i == next) FontWeight.Medium else FontWeight.Normal, style = TextStyle(textDirection = dirOf(s.text)))
-                }
-            }
-        }
-    }
-}
-
-/** The save card, as the computer wrote it: what isn't saved, in words, and what it suggests. Done from the computer. */
-@Composable
-private fun SavingOf(m: Memory) {
-    val c = LocalDeck.current
-    if (m.saving.isBlank()) return
-    val clean = m.savingProposal.isBlank()
-    Section("שמירה") {
-        Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Box(Modifier.padding(top = 8.dp)) { Box(Modifier.size(8.dp).clip(CircleShape).background(if (clean) c.closed else c.open)) }
-            Column(Modifier.weight(1f)) {
-                Body(m.saving)
-                if (!clean) Text("הצעה: " + m.savingProposal, color = c.muted, fontSize = 13.sp, lineHeight = 19.sp, modifier = Modifier.padding(top = 4.dp),
-                    style = TextStyle(textDirection = dirOf(m.savingProposal)))
-            }
-        }
-    }
-}
-
-/** Everything the project can do: the first few, the rest on a tap. */
-@Composable
-private fun BuiltOf(m: Memory) {
-    val c = LocalDeck.current
-    if (m.built.isEmpty()) return
-    var all by remember { mutableStateOf(false) }
-    Section("מה נבנה · ${m.built.size}") {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            (if (all) m.built else m.built.take(6)).forEach { t ->
-                Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Box(Modifier.padding(top = 9.dp)) { Box(Modifier.size(5.dp).clip(CircleShape).background(c.faint)) }
-                    Body(t)
-                }
-            }
-            if (m.built.size > 6) Text(if (all) "פחות" else "כל ה־${m.built.size}", color = c.accentText, fontSize = 14.sp, fontWeight = FontWeight.Medium,
-                modifier = Modifier.clip(CircleShape).clickable { all = !all }.padding(vertical = 6.dp))
-        }
-    }
-}
-
-/** A quiet section: a small label (and a count at its end), then its content. No boxes, no lines. */
 @Composable
 private fun Section(label: String, trailing: String? = null, top: androidx.compose.ui.unit.Dp = 30.dp, content: @Composable () -> Unit) {
     val c = LocalDeck.current

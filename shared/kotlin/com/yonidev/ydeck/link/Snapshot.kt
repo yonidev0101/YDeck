@@ -12,6 +12,10 @@ data class MemDecision(val text: String, val date: String)
 data class MemRelease(val version: String, val date: String, val note: String)
 /** A step toward the project's goal. */
 data class MemStep(val text: String, val done: Boolean)
+/** One line of the conversation with Claude in the project: [kind] "user", "claude" or "step" (one thing Claude did). */
+data class MemTalk(val kind: String, val text: String) {
+    companion object { const val USER = "user"; const val CLAUDE = "claude"; const val STEP = "step" }
+}
 
 /** One project's memory, as the phone shows it. Times in ms, 0 when unknown. */
 data class Memory(
@@ -39,6 +43,28 @@ data class Memory(
     /** The save card: what isn't saved, in words, and what to do (empty: not known yet). */
     val saving: String = "",
     val savingProposal: String = "",
+    /** What the save card's button does, in words ("commit · push"); empty: nothing to do. */
+    val savingSteps: String = "",
+    /** The card is being written, or its steps run, now. */
+    val savingBusy: Boolean = false,
+    /** What became of the last "do it": "ok", or why not, in words; empty: not done lately. */
+    val savingResult: String = "",
+    /** A goal Claude suggests, until it's taken or set aside (empty: none). */
+    val suggestedGoal: String = "",
+    val suggestedSteps: List<String> = emptyList(),
+    /** Claude is reading the project to fill it in (what was built, a goal); or why the last read failed. */
+    val dossierBusy: Boolean = false,
+    val dossierError: String = "",
+    /** The conversation with Claude in this project, the last lines; empty: none lately. */
+    val talk: List<MemTalk> = emptyList(),
+    val talkTitle: String = "",
+    /** Claude works on it now. */
+    val talkBusy: Boolean = false,
+    /** Claude waits for a permission, answered at the computer: what it asks, in words (empty: none). */
+    val talkAsk: String = "",
+    val talkError: String = "",
+    /** The conversation is open in a terminal on the computer: shown, written to there. */
+    val talkElsewhere: Boolean = false,
 ) {
     /** Steps done and all of them; null when there's no goal. */
     val goalShare: Pair<Int, Int>? get() = if (goal.isBlank() || goalSteps.isEmpty()) null else goalSteps.count { it.done } to goalSteps.size
@@ -169,6 +195,11 @@ class Snapshot(
             put("journal", JSONArray().apply { journal.forEach { put(it.toJson()) } })
             put("built", JSONArray(built)); put("goal", goal); put("saving", saving); put("savingProposal", savingProposal)
             put("goalSteps", JSONArray().apply { goalSteps.forEach { put(JSONObject().put("text", it.text).put("done", it.done)) } })
+            put("savingSteps", savingSteps); put("savingBusy", savingBusy); put("savingResult", savingResult)
+            put("suggestedGoal", suggestedGoal); put("suggestedSteps", JSONArray(suggestedSteps))
+            put("dossierBusy", dossierBusy); put("dossierError", dossierError)
+            put("talk", JSONArray().apply { talk.forEach { put(JSONObject().put("kind", it.kind).put("text", it.text)) } })
+            put("talkTitle", talkTitle); put("talkBusy", talkBusy); put("talkAsk", talkAsk); put("talkError", talkError); put("talkElsewhere", talkElsewhere)
         }
 
         fun memoryOf(o: JSONObject): Memory {
@@ -183,6 +214,12 @@ class Snapshot(
                 journal = objs("journal").map(JournalDay::of).filter { it.date.isNotBlank() },
                 built = strings("built"), goal = o.optString("goal"), saving = o.optString("saving"), savingProposal = o.optString("savingProposal"),
                 goalSteps = objs("goalSteps").map { MemStep(it.optString("text"), it.optBoolean("done")) }.filter { it.text.isNotBlank() },
+                savingSteps = o.optString("savingSteps"), savingBusy = o.optBoolean("savingBusy"), savingResult = o.optString("savingResult"),
+                suggestedGoal = o.optString("suggestedGoal"), suggestedSteps = strings("suggestedSteps"),
+                dossierBusy = o.optBoolean("dossierBusy"), dossierError = o.optString("dossierError"),
+                talk = objs("talk").map { MemTalk(it.optString("kind"), it.optString("text")) }.filter { it.text.isNotBlank() },
+                talkTitle = o.optString("talkTitle"), talkBusy = o.optBoolean("talkBusy"), talkAsk = o.optString("talkAsk"),
+                talkError = o.optString("talkError"), talkElsewhere = o.optBoolean("talkElsewhere"),
             )
         }
     }
@@ -323,11 +360,26 @@ data class Note(val id: String, val project: String, val kind: String, val text:
         const val MORNING_PICK = "morning.pick"
         /** "Let's go" on a topic of the good morning ([text]: what it said): the next morning follows it up. */
         const val MORNING_GO = "morning.go"
+        /** The dossier: Claude reads the project to fill in what was built and suggest a goal; the suggested goal taken
+         *  or set aside; a goal step ticked or unticked ([text]: the step). */
+        const val GOAL_SUGGEST = "goal.suggest"
+        const val GOAL_TAKE = "goal.take"
+        const val GOAL_DISMISS = "goal.dismiss"
+        const val GOAL_STEP = "goal.step"
+        /** The save card's button: YDeck runs its steps (a closed list: commit, push, .gitignore, merge). */
+        const val SAVE_DO = "save.do"
+        /** Writing to Claude in the project: a message ([text], may span lines), a new conversation, stop. */
+        const val TALK_SAY = "talk.say"
+        const val TALK_NEW = "talk.new"
+        const val TALK_STOP = "talk.stop"
+        /** How long a request that makes something happen on the computer waits on the relay before it's dropped. */
+        const val FRESH_MS = 15 * 60_000L
 
         private val KINDS = setOf(NEXT, DECISION, DONE, ARCHIVE, LEFT_ADD, LEFT_DONE, LEFT_DROP, LEFT_MOVE, LEFT_EDIT, IDEA_ADD, IDEA_TAKE,
-            IDEA_DROP, DONE_DROP, NAME, COLOR, KIND, LINK_ADD, LINK_EDIT, LINK_DROP, COPY_ADD, COPY_DROP, NEW_PROJECT, MORNING_LATER, MORNING_SKIP, MORNING_PICK, MORNING_GO)
+            IDEA_DROP, DONE_DROP, NAME, COLOR, KIND, LINK_ADD, LINK_EDIT, LINK_DROP, COPY_ADD, COPY_DROP, NEW_PROJECT, MORNING_LATER, MORNING_SKIP, MORNING_PICK, MORNING_GO,
+            GOAL_SUGGEST, GOAL_TAKE, GOAL_DISMISS, GOAL_STEP, SAVE_DO, TALK_SAY, TALK_NEW, TALK_STOP)
         /** Kinds whose text may be empty. */
-        private val MAY_BE_EMPTY = setOf(DONE, KIND)
+        private val MAY_BE_EMPTY = setOf(DONE, KIND, GOAL_SUGGEST, GOAL_TAKE, GOAL_DISMISS, SAVE_DO, TALK_NEW, TALK_STOP)
 
         /** The longest note the computer accepts. */
         const val MAX = 1000
@@ -341,7 +393,7 @@ data class Note(val id: String, val project: String, val kind: String, val text:
             val kind = o.optString("note").takeIf { it in KINDS } ?: return null
             // Plain text only: no control characters, one line except for a decision, never longer than MAX.
             val raw = o.optString("text")
-            val text = if (kind == DECISION) raw.filter { it == '\n' || !it.isISOControl() }.trim().take(MAX) else line(raw)
+            val text = if (kind == DECISION || kind == TALK_SAY) raw.filter { it == '\n' || !it.isISOControl() }.trim().take(if (kind == TALK_SAY) 4000 else MAX) else line(raw)
             if (text.isEmpty() && kind !in MAY_BE_EMPTY) return null
             val args = o.optJSONArray("args")?.let { a -> (0 until minOf(a.length(), 4)).map { line(a.optString(it)) } } ?: emptyList()
             Note(o.optString("id").take(64), o.optString("project").take(100), kind, text, o.optLong("at"), args)
