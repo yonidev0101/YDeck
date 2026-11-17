@@ -71,6 +71,8 @@ data class Memory(
     /** Claude Code's id for the conversation (to open it elsewhere), and its Remote Control link while it's open with one. */
     val talkSession: String = "",
     val talkUrl: String = "",
+    /** YDeck's one line on the project: where it really stands and what holds it, thought through (empty: none yet). */
+    val insight: String = "",
 ) {
     /** Steps done and all of them; null when there's no goal. */
     val goalShare: Pair<Int, Int>? get() = if (goal.isBlank() || goalSteps.isEmpty()) null else goalSteps.count { it.done } to goalSteps.size
@@ -206,7 +208,7 @@ class Snapshot(
             put("dossierBusy", dossierBusy); put("dossierError", dossierError)
             put("talk", JSONArray().apply { talk.forEach { put(JSONObject().put("kind", it.kind).put("text", it.text)) } })
             put("talkTitle", talkTitle); put("talkBusy", talkBusy); put("talkAsk", talkAsk); put("talkError", talkError); put("talkElsewhere", talkElsewhere)
-            put("talkAskId", talkAskId); put("talkAskAlways", talkAskAlways); put("talkSession", talkSession); put("talkUrl", talkUrl)
+            put("talkAskId", talkAskId); put("talkAskAlways", talkAskAlways); put("talkSession", talkSession); put("talkUrl", talkUrl); put("insight", insight)
         }
 
         fun memoryOf(o: JSONObject): Memory {
@@ -228,7 +230,7 @@ class Snapshot(
                 talkTitle = o.optString("talkTitle"), talkBusy = o.optBoolean("talkBusy"), talkAsk = o.optString("talkAsk"),
                 talkError = o.optString("talkError"), talkElsewhere = o.optBoolean("talkElsewhere"),
                 talkAskId = o.optString("talkAskId"), talkAskAlways = o.optString("talkAskAlways"),
-                talkSession = o.optString("talkSession"), talkUrl = o.optString("talkUrl"),
+                talkSession = o.optString("talkSession"), talkUrl = o.optString("talkUrl"), insight = o.optString("insight"),
             )
         }
     }

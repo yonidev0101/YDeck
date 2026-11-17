@@ -138,6 +138,7 @@ class MainActivity : ComponentActivity() {
                             onAsk = { page = Page.Ask() },
                             onReply = ::reply,
                             onNewProject = if (computer?.paired == true) { name, color -> write("p" + System.currentTimeMillis().toString(36), com.yonidev.ydeck.link.Note.NEW_PROJECT, name, listOf(color)) } else null,
+                            onEdit = if (computer?.paired == true) { id, kind, text, args -> write(id, kind, text, args) } else null,
                             morning = computer?.takeIf { it.paired && (it.canAsk || it.morning != null) }?.let { comp -> {
                                 MorningCard(comp, deck, handled,
                                     onTry = ::tryMorning,

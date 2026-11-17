@@ -67,6 +67,8 @@ fun HomeScreen(
     onNewProject: ((name: String, color: String) -> Unit)? = null,
     /** The good morning's card, at the top (null when it's off). */
     morning: (@Composable () -> Unit)? = null,
+    /** A request to the computer about a project (a permission answered, saving), as on its page; null when not paired. */
+    onEdit: ((project: String, kind: String, text: String, args: List<String>) -> Unit)? = null,
 ) {
     val c = LocalDeck.current
     if (connecting != null) return Connecting(connecting)
@@ -108,18 +110,14 @@ fun HomeScreen(
         val waitingN = active.count { needsYou(it.id) }
         val workingN = lives.count { it.agentMode == "WORKING" }
         val leftN = active.sumOf { computer?.memory?.get(it.id)?.left?.size ?: 0 }
-        if (paired || leftN > 0) item {
-            Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Stat(waitingN, "מחכה לך", Filter.WAITING, filter, Modifier.weight(1f)) { filter = if (filter == it) null else it }
-                Stat(workingN, "עובד", Filter.WORKING, filter, Modifier.weight(1f)) { filter = if (filter == it) null else it }
-                Stat(leftN, "נשארו", Filter.LEFT, filter, Modifier.weight(1f)) { filter = if (filter == it) null else it }
-            }
-        }
-        if (waiting.isNotEmpty()) {
-            item { SectionHeader(if (waiting.size == 1) "מחכה לך" else "${waiting.size} מחכים לך") }
+        // What waits for you, from every project, in one box at the top; each with its one button.
+        val needs = active.flatMap { p -> homeNeeds(p, computer?.memory?.get(p.id), computer?.live(p.id)) }
+        if (waiting.isNotEmpty() || needs.isNotEmpty()) {
+            item { SectionHeader("מחכה לך · ${waiting.size + needs.size}") }
             items(waiting, key = { "w:" + it.id }) { w ->
                 WaitingCard(w, deck.byId(w.project), computer!!.canReply, computer.replies.lastOrNull { it.first.waiting == w.id }) { text, choices -> onReply(w.id, text, choices) }
             }
+            items(needs, key = { "n:" + it.project.id + it.kind }) { n -> NeedRow(n, computer?.canLaunch == true, onEdit) { onOpen(n.project) } }
         }
         val shown = when (filter) {
             Filter.WAITING -> active.filter { needsYou(it.id) }
@@ -127,7 +125,7 @@ fun HomeScreen(
             Filter.LEFT -> active.filter { computer?.memory?.get(it.id)?.left?.isNotEmpty() == true }
             null -> active
         }
-        item { SectionHeader(filter?.label ?: "פרויקטים") }
+        item { SectionHeader(filter?.label ?: "הפרויקטים") }
         item { Line() }
         items(shown, key = { it.id }) { p ->
             ProjectRow(p, computer?.memory?.get(p.id), computer?.live(p.id), onClick = { onOpen(p) })
@@ -187,6 +185,38 @@ private fun Stat(n: Int, word: String, f: Filter, on: Filter?, modifier: Modifie
     }
 }
 
+/** One thing that waits for you in a project: Claude asking for a permission, or work not saved. */
+private data class HomeNeed(val project: Project, val kind: String, val text: String, val askId: String = "", val canSave: Boolean = false, val busy: Boolean = false)
+
+private fun homeNeeds(p: Project, m: Memory?, live: com.yonidev.ydeck.link.Live?): List<HomeNeed> = buildList {
+    if (m != null && m.talkAsk.isNotBlank()) add(HomeNeed(p, "ask", m.talkAsk, askId = m.talkAskId))
+    if (live?.hasGit == true && (live.changes > 0 || live.ahead > 0)) add(HomeNeed(p, "save",
+        when { live.changes == 1 -> "קובץ אחד לא שמור"; live.changes > 1 -> "${live.changes} קבצים לא שמורים"; live.ahead == 1 -> "שמירה אחת לא הועלתה"; else -> "${live.ahead} שמירות לא הועלו" },
+        canSave = m?.savingSteps?.isNotBlank() == true, busy = m?.savingBusy == true))
+}
+
+@Composable
+private fun NeedRow(n: HomeNeed, working: Boolean, onEdit: ((String, String, String, List<String>) -> Unit)?, onOpen: () -> Unit) {
+    val c = LocalDeck.current
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).clip(RoundedCornerShape(20.dp)).background(c.surface2).clickable(onClick = onOpen).padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Logo(n.project, 36.dp)
+        Column(Modifier.weight(1f)) {
+            Text(n.project.name, color = c.muted, fontSize = 12.5.sp, maxLines = 1)
+            Text(if (n.kind == "ask") "Claude מבקש: " + n.text else n.text, color = c.fg, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                style = TextStyle(textDirection = TextDirection.Content))
+        }
+        val (label, act) = when {
+            n.kind == "ask" && working && onEdit != null && n.askId.isNotBlank() -> "לאשר" to { onEdit(n.project.id, com.yonidev.ydeck.link.Note.TALK_ALLOW, n.askId, listOf("once")) }
+            n.kind == "save" && working && onEdit != null && n.canSave -> (if (n.busy) "שומר…" else "לשמור") to { if (!n.busy) onEdit(n.project.id, com.yonidev.ydeck.link.Note.SAVE_DO, "", emptyList()) }
+            else -> "פתיחה" to onOpen
+        }
+        val strong = label == "לאשר"
+        Text(label, color = if (strong) c.bg else c.fg, fontSize = 14.sp, fontWeight = FontWeight.Medium,
+            modifier = Modifier.clip(androidx.compose.foundation.shape.CircleShape).background(if (strong) c.fg else c.line).clickable(onClick = act).padding(horizontal = 16.dp, vertical = 8.dp))
+    }
+}
+
 /** The archive's line: how many are in it, and an arrow that says whether it's open. */
 @Composable
 private fun ArchiveRow(count: Int, open: Boolean, onTap: () -> Unit) {
@@ -218,10 +248,7 @@ private fun ProjectRow(p: Project, memory: Memory?, live: com.yonidev.ydeck.link
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        // A thin ring around the logo: what was done out of what was planned, as the project page's mark says it.
-        val progress = memory?.progress()
-        if (progress != null) RingedLogo(p, progress.first, progress.second, 48.dp)
-        else Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) { Logo(p, 40.dp) }
+        Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) { Logo(p, 40.dp) }
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(p.name, color = c.fg, fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 210.dp))
@@ -242,8 +269,24 @@ private fun ProjectRow(p: Project, memory: Memory?, live: com.yonidev.ydeck.link
                 memory?.next?.isNotBlank() == true -> Text("הבא: ${memory.next}", color = c.faint, fontSize = 13.sp, lineHeight = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     style = TextStyle(textDirection = dirOf(memory.next)), modifier = Modifier.padding(top = 2.dp))
                 memory?.left?.isNotEmpty() == true -> Text(if (memory.left.size == 1) "נשאר דבר אחד" else "נשארו ${memory.left.size}", color = c.faint, fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp))
+                memory != null && memory.goalShare == null && memory.built.isEmpty() && live != null -> Text("אין יעד עדיין", color = c.faint, fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp))
                 else -> (memory?.summary?.takeIf { it.isNotBlank() } ?: p.kind).takeIf { it.isNotBlank() }?.let { t ->
                     Text(t, color = c.faint, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, style = TextStyle(textDirection = dirOf(t)), modifier = Modifier.padding(top = 2.dp))
+                }
+            }
+        }
+        memory?.let { m ->
+            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                val from = java.time.LocalDate.now().minusDays(6)
+                val moved = m.journal.filter { runCatching { !java.time.LocalDate.parse(it.date).isBefore(from) }.getOrDefault(false) }.sumOf { it.done.size }
+                if (moved > 0) Text("+$moved", color = c.closed, fontSize = 13.sp, fontFamily = PlexMono)
+                m.goalShare?.let { (d, t) ->
+                    Row(Modifier.width(56.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                        val next = m.goalSteps.indexOfFirst { !it.done }
+                        m.goalSteps.forEachIndexed { i, s ->
+                            Box(Modifier.weight(1f).height(4.dp).clip(RoundedCornerShape(2.dp)).background(when { s.done -> c.closed; i == next -> claudeColor("WORKING"); else -> c.line }))
+                        }
+                    }
                 }
             }
         }

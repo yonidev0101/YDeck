@@ -9,7 +9,7 @@ plugins {
 }
 
 /** The Windows app's own version (the Android app has its own). */
-val desktopVersion = "1.32.0"
+val desktopVersion = "1.33.0"
 
 kotlin {
     jvmToolchain(21)

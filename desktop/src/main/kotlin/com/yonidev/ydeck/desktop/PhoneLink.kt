@@ -159,6 +159,8 @@ object PhoneLink {
             var saving = Saving.busy.value
             var results = Saving.results.value
             var git: Any? = null
+            var insights = Insights.lines.value
+            var thought = 0L
             while (true) {
                 Thread.sleep(2_000)
                 if (SessionAsks.waiting.value !== waiting) { waiting = SessionAsks.waiting.value; nudge() }
@@ -167,6 +169,12 @@ object PhoneLink {
                 if (ClaudeLink.sessions.value !== claude) { claude = ClaudeLink.sessions.value; nudge() }
                 // The dossier, saving and the conversations on the projects' pages: the phone sees them as they move.
                 if (Talk.chats.value !== talk) { talk = Talk.chats.value; nudge() }
+                if (Insights.lines.value !== insights) { insights = Insights.lines.value; nudge() }
+                // YDeck's line on each project, written again only when the project moved (see [Insights]).
+                if (System.currentTimeMillis() - thought > 5 * 60_000) {
+                    thought = System.currentTimeMillis()
+                    Repo.deck.value.projects.filter { !it.archived }.forEach { p -> Settings.state.value.localOf(p.id).dir?.let { Insights.ensure(p, it) } }
+                }
                 if (Dossier.busy.value !== dossier || Dossier.suggested.value !== suggested) { dossier = Dossier.busy.value; suggested = Dossier.suggested.value; nudge() }
                 if (Saving.cards.value !== cards || Saving.busy.value !== saving || Saving.results.value !== results) {
                     cards = Saving.cards.value; saving = Saving.busy.value; results = Saving.results.value; nudge()
@@ -660,6 +668,7 @@ object PhoneLink {
                 suggestedSteps = dir?.let { Dossier.suggested.value[it.path] }?.steps?.map { it.text }.orEmpty(),
                 dossierBusy = dir != null && dir.path in Dossier.busy.value,
                 dossierError = dir?.let { Dossier.errors.value[it.path] }.orEmpty(),
+                insight = dir?.let { Insights.lines.value[it.path] }?.line.orEmpty(),
             ).let { m -> if (dir == null) m else withTalk(m, dir) }
         }
         val live = deck.projects.mapNotNull { p -> settings.localOf(p.id).folder?.let { p.id to live(it) } }.toMap()

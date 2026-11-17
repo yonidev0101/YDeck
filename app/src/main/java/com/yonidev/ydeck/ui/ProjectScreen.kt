@@ -1,5 +1,9 @@
 package com.yonidev.ydeck.ui
 
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
@@ -132,45 +136,69 @@ fun ProjectScreen(
     var details by remember { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
     val edit = if (memory != null) onEdit else null
-    PageScaffold(
+    // Four questions, always in this order: how is it moving, what needs me, what's next, what's in it. The rest
+    // (ideas, decisions, links, Git, commands) lives one tap away, in "What's in the project".
+    var inside by rememberSaveable { mutableStateOf<String?>(null) }
+    var talking by rememberSaveable { mutableStateOf(false) }
+    val onRemote: ((String) -> Unit)? = if (onLaunch != null && launchOn) { session -> onLaunch(if (session.isBlank()) Launch.NEW else Launch.RESUME, session, "", true) } else null
+    val menuItems: List<Pair<String, () -> Unit>> = buildList {
+        add("עריכת פרטים וקישורים" to { details = true })
+        if (onRun != null && live != null) add("להריץ פקודה" to { running = true })
+        if (onLaunch != null && live != null) {
+            add("לפתוח את Claude בטרמינל" to { launching = true })
+            add("סגירה להיום" to { onLaunch(Launch.NEW, "", "/ydeck:close-day", false) })
+        }
+        if (onEdit != null) add((if (p.archived) "החזרה מהארכיון" else "העברה לארכיון") to { onEdit(Note.ARCHIVE, if (p.archived) "0" else "1", emptyList()) })
+    }
+    val runsCard: (@Composable () -> Unit)? = if (onRun != null && live != null) {
+        { RunCard(runs, runOn, runOk, onRun = { line -> sentAt = System.currentTimeMillis() - 1_000; onRun(line, com.yonidev.ydeck.data.RunChoice.window(context)) },
+            onOpen = { watching = it }) { running = true } }
+    } else null
+    if (inside != null) {
+        androidx.activity.compose.BackHandler { inside = null }
+        PageScaffold(title = "מה יש ב־" + p.name, onBack = { inside = null }) {
+            InsidePage(p, memory, live, inside!!, { inside = it }, edit, if (canWrite) { kind -> writing = kind } else null, { asking = it },
+                runs = runsCard)
+        }
+    } else PageScaffold(
         title = p.name, onBack = onBack,
         actions = {
             if (onAsk != null) IconButton(onClick = onAsk) { AskMark(askMood(chat, false), 22.dp) }
-            if (canWrite) IconButton(onClick = { writing = Note.NEXT }) { Icon(Icons.Outlined.Edit, "כתיבה", tint = c.fg) }
-            // The project's own actions: its details, Git and closing the day (through Claude there), the archive.
-            if (onEdit != null) Box {
+            if (menuItems.isNotEmpty()) Box {
                 IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, "עוד", tint = c.fg) }
-                ItemMenu(menu, { menu = false }, buildList {
-                    add("עריכת פרטים וקישורים" to { details = true })
-                    if (onLaunch != null && live != null) {
-                        add("שמירה ב־Git (commit + push)" to { onLaunch(Launch.NEW, "", GIT_PROMPT, false) })
-                        add("סגירה להיום" to { onLaunch(Launch.NEW, "", "/ydeck:close-day", false) })
-                    }
-                    add((if (p.archived) "החזרה מהארכיון" else "העברה לארכיון") to { onEdit(Note.ARCHIVE, if (p.archived) "0" else "1", emptyList()) })
-                })
+                ItemMenu(menu, { menu = false }, menuItems)
             }
         },
+        // Writing to Claude: always in the same place, at the bottom.
+        bottomBar = { if (live != null && edit != null) TalkBar(memory) { talking = true } },
     ) {
-        item { Header(p, memory, live) }
-        if (onReply != null) waiting.forEach { w ->
-            item(key = "w:" + w.id) { WaitingCard(w, p, canReply, replies.lastOrNull { it.first.waiting == w.id }) { text, choices -> onReply(w.id, text, choices) } }
+        item { Moving(p, memory, live, edit) }
+        // What needs you: one box, gone when there's nothing.
+        val asks = if (onReply != null) waiting else emptyList()
+        val needs = memory?.let { needsOf(it, live) }.orEmpty()
+        if (asks.isNotEmpty() || needs.isNotEmpty()) item { QuestionLabel("מחכה לך · " + (asks.size + needs.size)) }
+        asks.forEach { w ->
+            item(key = "w:" + w.id) { WaitingCard(w, p, canReply, replies.lastOrNull { it.first.waiting == w.id }) { text, choices -> onReply?.invoke(w.id, text, choices) } }
         }
-        if (onLaunch != null && live != null) item { ClaudeCard(launches.lastOrNull(), launchOn) { launching = true } }
-        if (onRun != null && live != null) item {
-            RunCard(runs, runOn, runOk, onRun = { line -> sentAt = System.currentTimeMillis() - 1_000; onRun(line, com.yonidev.ydeck.data.RunChoice.window(context)) },
-                onOpen = { watching = it }) { running = true }
+        if (needs.isNotEmpty()) item { NeedsOf(needs, memory!!, launchOn, edit) { talking = true } }
+        if (memory != null) item {
+            QuestionLabel("הלאה")
+            PathOf(if (pending.any { it.kind == Note.DONE }) memory.copy(next = "") else memory, if (canWrite) { kind -> writing = kind } else null,
+                if (canWrite) { next -> onWrite?.invoke(Note.DONE, next) } else null, edit, { asking = it })
         }
-        item { Tabs(tab, mapOf(Tab.GIT to (live?.changes ?: 0), Tab.LINKS to p.actions.size)) { tab = it } }
-        when (tab) {
-            Tab.MEMORY -> item {
-                MemoryTab(memory, live, pending, if (canWrite) { kind -> writing = kind } else null,
-                    onDone = if (canWrite) { next -> onWrite?.invoke(Note.DONE, next) } else null, edit = edit, ask = { asking = it }, working = launchOn,
-                    onRemote = if (onLaunch != null && launchOn) { session -> onLaunch(if (session.isBlank()) Launch.NEW else Launch.RESUME, session, "", true) } else null)
-            }
-            Tab.GIT -> item { GitTab(live) }
-            Tab.LINKS -> item { LinksTab(p, live) }
+        if (memory != null && memory.talk.isNotEmpty()) item { LastTalk(memory) { talking = true } }
+        item { InsideRow(memory, live) { inside = "built" } }
+        val listed = pending.filter { it.kind !in com.yonidev.ydeck.data.Overlay.inPlace }
+        if (listed.isNotEmpty()) item {
+            Text("ממתין למחשב: " + listed.joinToString(" · ") { com.yonidev.ydeck.data.Overlay.words(it) }, color = c.faint, fontSize = 12.5.sp,
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp))
+        }
+        if (memory == null) item {
+            Text("לפרויקט הזה עוד אין תיקייה ב־YDeck במחשב. כשמחברים לו תיקייה, יופיעו כאן היעד, מה מחכה לך ומה הלאה.",
+                color = c.muted, fontSize = 14.sp, lineHeight = 21.sp, modifier = Modifier.padding(24.dp))
         }
     }
+    if (talking && memory != null) TalkSheet(memory, launchOn, edit, onRemote) { talking = false }
     asking?.let { a -> TextSheet(a) { asking = null } }
     if (details && onEdit != null) DetailsSheet(p, { details = false }, onEdit)
     writing?.let { kind -> WriteSheet(kind, onDismiss = { writing = null }, onSend = { k, text -> writing = null; onWrite?.invoke(k, text) }) }
@@ -1297,5 +1325,271 @@ private fun dayName(date: String): String {
         today -> "היום"
         today.minusDays(1) -> "אתמול"
         else -> "${d.dayOfMonth}.${d.monthValue}"
+    }
+}
+
+
+// ── the project page, in four questions ──
+
+@Composable
+private fun QuestionLabel(text: String) {
+    Text(text, style = SectionLabelStyle, color = LocalDeck.current.faint, modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 26.dp, bottom = 10.dp))
+}
+
+/** Steps ticked off in the last seven days, from the journal. */
+private fun movedThisWeek(m: Memory): Int {
+    val from = java.time.LocalDate.now().minusDays(6)
+    return m.journal.filter { runCatching { !java.time.LocalDate.parse(it.date).isBefore(from) }.getOrDefault(false) }.sumOf { it.done.size }
+}
+
+/**
+ * How is it moving: Claude's state, YDeck's line on the project, and the goal as a bar of its steps (tap: the steps,
+ * ticked here), with what moved this week (tap: day by day). No goal: Claude's suggestion, or a way to ask for one.
+ */
+@Composable
+private fun Moving(p: Project, m: Memory?, live: Live?, edit: ((String, String, List<String>) -> Unit)?) {
+    val c = LocalDeck.current
+    var steps by rememberSaveable { mutableStateOf(false) }
+    var week by rememberSaveable { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 2.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Logo(p, 34.dp)
+            val mode = live?.agentMode.orEmpty()
+            if (mode.isNotBlank() && mode != "DONE") {
+                ClaudeDot(mode, 7.dp)
+                Text(claudeText(live!!.copy(agentRemote = false)), color = if (mode == "OPEN") c.muted else claudeColor(mode), fontSize = 13.5.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+            } else Text(listOfNotNull(p.kind.takeIf { it.isNotBlank() }, live?.version?.takeIf { it.isNotBlank() }?.let { "גרסה ⁦$it⁩" }).joinToString(" · "),
+                color = c.muted, fontSize = 13.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        m ?: return@Column
+        val line = m.insight.ifBlank { m.now }.trim().trimEnd('.')
+        if (line.isNotBlank()) Text(
+            androidx.compose.ui.text.buildAnnotatedString { append(line); pushStyle(androidx.compose.ui.text.SpanStyle(color = c.open)); append("."); pop() },
+            color = c.fg, fontSize = 24.sp, lineHeight = 32.sp, fontFamily = Display, fontWeight = FontWeight.Light, style = TextStyle(textDirection = dirOf(line)),
+        )
+        val share = m.goalShare ?: return@Column
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { steps = !steps }.padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(m.goal, color = c.muted, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f), style = TextStyle(textDirection = dirOf(m.goal)))
+                Text("${share.first}/${share.second}", color = c.muted, fontSize = 13.sp, fontFamily = PlexMono, style = TextStyle(textDirection = TextDirection.Ltr))
+            }
+            val next = m.goalSteps.indexOfFirst { !it.done }
+            Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                m.goalSteps.forEachIndexed { i, s ->
+                    Box(Modifier.weight(1f).height(6.dp).clip(RoundedCornerShape(3.dp)).background(when { s.done -> c.closed; i == next -> claudeColor("WORKING"); else -> c.line }))
+                }
+            }
+        }
+        if (steps) Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            val next = m.goalSteps.indexOfFirst { !it.done }
+            m.goalSteps.forEachIndexed { i, s ->
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
+                    .then(if (edit != null) Modifier.clickable { edit(Note.GOAL_STEP, s.text, listOf(if (s.done) "0" else "1")) } else Modifier)
+                    .padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    when {
+                        s.done -> Box(Modifier.size(16.dp).clip(CircleShape).background(c.closed))
+                        i == next -> Box(Modifier.size(16.dp).clip(CircleShape).border(2.dp, claudeColor("WORKING"), CircleShape))
+                        else -> Box(Modifier.size(16.dp).clip(CircleShape).border(2.dp, c.line, CircleShape))
+                    }
+                    Text(s.text, color = if (s.done) c.faint else c.fg, fontSize = 15.sp, style = TextStyle(textDirection = dirOf(s.text)))
+                }
+            }
+            if (edit != null) Text("נוגעים בצעד כדי לסמן אותו.", color = c.faint, fontSize = 12.sp)
+        }
+        val moved = movedThisWeek(m)
+        Text(if (moved > 0) "השבוע: ${if (moved == 1) "צעד אחד" else "$moved צעדים"} קדימה" else "השבוע: עוד לא זז",
+            color = if (moved > 0) c.closed else c.faint, fontSize = 13.sp,
+            modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(enabled = m.journal.isNotEmpty()) { week = !week }.padding(vertical = 2.dp))
+        if (week) Moved(m.journal)
+    }
+    if (m != null && m.goalShare == null) GoalOf(m, edit)
+}
+
+/** One thing waiting for you in this project (besides a session's question, shown as its own card). */
+private sealed interface Need
+private data object PermissionNeed : Need
+private data object SaveNeed : Need
+
+private fun needsOf(m: Memory, live: Live?): List<Need> = buildList {
+    if (m.talkAsk.isNotBlank()) add(PermissionNeed)
+    if (live?.hasGit == true && (live.changes > 0 || live.ahead > 0)) add(SaveNeed)
+}
+
+/** What needs you, each with its one button. */
+@Composable
+private fun NeedsOf(needs: List<Need>, m: Memory, working: Boolean, edit: ((String, String, List<String>) -> Unit)?, onTalk: () -> Unit) {
+    val c = LocalDeck.current
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        needs.forEach { n ->
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(c.surface2).padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                when (n) {
+                    PermissionNeed -> {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Dot(c.open, 8.dp)
+                            Text("Claude מבקש: " + m.talkAsk, color = c.fg, fontSize = 15.sp, lineHeight = 21.sp, maxLines = 3, overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f).clickable(onClick = onTalk), style = TextStyle(textDirection = TextDirection.Content))
+                        }
+                        if (working && edit != null && m.talkAskId.isNotBlank()) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            PillButton("לאשר", strong = true, modifier = Modifier.weight(1f)) { edit(Note.TALK_ALLOW, m.talkAskId, listOf("once")) }
+                            if (m.talkAskAlways.isNotBlank()) PillButton("תמיד") { edit(Note.TALK_ALLOW, m.talkAskId, listOf("always")) }
+                            PillButton("לא", quiet = true) { edit(Note.TALK_ALLOW, m.talkAskId, listOf("no")) }
+                        }
+                    }
+                    SaveNeed -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Dot(c.open, 8.dp)
+                        Column(Modifier.weight(1f)) {
+                            Text(m.saving.ifBlank { "שינויים לא שמורים" }.let { firstSentence(it) }, color = c.fg, fontSize = 15.sp, lineHeight = 21.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                                style = TextStyle(textDirection = TextDirection.Content))
+                            when {
+                                m.savingResult.isNotBlank() && m.savingResult != "ok" -> Text(m.savingResult, color = c.danger, fontSize = 12.5.sp, maxLines = 2)
+                                m.savingProposal.isNotBlank() -> Text(m.savingProposal, color = c.muted, fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, style = TextStyle(textDirection = TextDirection.Content))
+                            }
+                        }
+                        if (working && edit != null && m.savingSteps.isNotBlank()) PillButton(if (m.savingBusy) "שומר…" else "לשמור", enabled = !m.savingBusy) { edit(Note.SAVE_DO, "", emptyList()) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** The first sentence of a card's words, so it reads at a glance. */
+private fun firstSentence(t: String): String = t.trim().split(Regex("(?<=[.!?])\\s+")).firstOrNull()?.trim().orEmpty().ifBlank { t }
+
+@Composable
+private fun PillButton(text: String, strong: Boolean = false, quiet: Boolean = false, enabled: Boolean = true, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val c = LocalDeck.current
+    Box(modifier.clip(CircleShape).background(when { strong -> c.fg; quiet -> androidx.compose.ui.graphics.Color.Transparent; else -> c.line })
+        .clickable(enabled = enabled, onClick = onClick).padding(horizontal = 16.dp, vertical = 9.dp), contentAlignment = Alignment.Center) {
+        Text(text, color = when { !enabled -> c.faint; strong -> c.bg; quiet -> c.muted; else -> c.fg }, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+    }
+}
+
+/** The last word in the conversation with Claude here; a tap opens it. */
+@Composable
+private fun LastTalk(m: Memory, onOpen: () -> Unit) {
+    val c = LocalDeck.current
+    val last = m.talk.lastOrNull { it.kind != com.yonidev.ydeck.link.MemTalk.STEP } ?: return
+    QuestionLabel("השיחה עם Claude")
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp).clip(RoundedCornerShape(16.dp)).clickable(onClick = onOpen).padding(horizontal = 8.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(if (last.kind == com.yonidev.ydeck.link.MemTalk.USER) "אתה:" else "Claude:", color = c.faint, fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp))
+        Text(last.text.replace(Regex("[*#`]"), ""), color = c.muted, fontSize = 14.sp, lineHeight = 21.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f), style = TextStyle(textDirection = dirOf(last.text)))
+        if (m.talkBusy) Text("עובד…", color = claudeColor("WORKING"), fontSize = 12.5.sp)
+    }
+}
+
+/** One line that opens everything else: what was built, ideas, decisions, links, Git, commands. */
+@Composable
+private fun InsideRow(m: Memory?, live: Live?, onOpen: () -> Unit) {
+    val c = LocalDeck.current
+    Column(Modifier.padding(top = 22.dp)) {
+        Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(1.dp).background(c.line))
+        Row(Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(horizontal = 24.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("מה יש בפרויקט", color = c.fg, fontSize = 15.sp, modifier = Modifier.weight(1f))
+            val counts = listOfNotNull(
+                m?.built?.size?.takeIf { it > 0 }?.let { "$it נבנה" },
+                m?.ideas?.size?.takeIf { it > 0 }?.let { "$it רעיונות" },
+                m?.decisions?.size?.takeIf { it > 0 }?.let { "$it החלטות" },
+            )
+            if (counts.isNotEmpty()) Text(counts.joinToString(" · "), color = c.muted, fontSize = 13.sp, maxLines = 1)
+            Spacer(Modifier.width(6.dp))
+            Text("‹", color = c.faint, fontSize = 20.sp)
+        }
+    }
+}
+
+/** The bar at the bottom: writing to Claude, one tap away from anywhere on the page. */
+@Composable
+private fun TalkBar(m: Memory?, onOpen: () -> Unit) {
+    val c = LocalDeck.current
+    Row(Modifier.fillMaxWidth().background(c.bg).navigationBarsPadding().padding(horizontal = 14.dp, vertical = 10.dp)) {
+        Row(Modifier.weight(1f).height(48.dp).clip(CircleShape).background(c.surface2).clickable(onClick = onOpen).padding(start = 18.dp, end = 6.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("✳", color = androidx.compose.ui.graphics.Color(0xFFD97757), fontSize = 16.sp)
+            Text(if (m?.talkBusy == true) "Claude עובד…" else "לכתוב ל־Claude", color = if (m?.talkBusy == true) claudeColor("WORKING") else c.faint, fontSize = 15.sp, modifier = Modifier.weight(1f))
+            Box(Modifier.size(36.dp).clip(CircleShape).background(c.line), contentAlignment = Alignment.Center) { Text("↑", color = c.bg, fontSize = 17.sp, fontWeight = FontWeight.Medium) }
+        }
+    }
+}
+
+/** The conversation with Claude in this project, full height. */
+@Composable
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+private fun TalkSheet(m: Memory, on: Boolean, edit: ((String, String, List<String>) -> Unit)?, onRemote: ((String) -> Unit)?, onDismiss: () -> Unit) {
+    val c = LocalDeck.current
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = c.bg) {
+        Column(Modifier.fillMaxWidth().verticalScroll(androidx.compose.foundation.rememberScrollState()).imePadding().padding(bottom = 24.dp)) {
+            TalkOf(m, on, edit, onRemote)
+        }
+    }
+}
+
+/** Everything else in the project, by kind: what was built, ideas, decisions, links, Git, commands. */
+private fun androidx.compose.foundation.lazy.LazyListScope.InsidePage(
+    p: Project, m: Memory?, live: Live?, tab: String, onTab: (String) -> Unit,
+    edit: ((String, String, List<String>) -> Unit)?, write: ((String) -> Unit)?, ask: (TextAsk) -> Unit,
+    runs: (@Composable () -> Unit)?,
+) {
+    item {
+        val c = LocalDeck.current
+        Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            m?.summary?.takeIf { it.isNotBlank() }?.let { Text(it, color = c.muted, fontSize = 14.sp, lineHeight = 21.sp, style = TextStyle(textDirection = dirOf(it))) }
+            val tabs = buildList {
+                add("built" to ("נבנה" + (m?.built?.size?.takeIf { it > 0 }?.let { " $it" } ?: "")))
+                add("ideas" to ("רעיונות" + (m?.ideas?.size?.takeIf { it > 0 }?.let { " $it" } ?: "")))
+                add("decisions" to ("החלטות" + (m?.decisions?.size?.takeIf { it > 0 }?.let { " $it" } ?: "")))
+                add("links" to "קישורים")
+                if (live?.hasGit == true) add("git" to "Git")
+                if (runs != null) add("runs" to "פקודות")
+            }
+            Row(Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                tabs.forEach { (k, label) ->
+                    val on = k == tab
+                    Text(label, color = if (on) c.bg else c.fg, fontSize = 13.sp, fontWeight = FontWeight.Medium,
+                        modifier = Modifier.clip(CircleShape).background(if (on) c.fg else c.surface2).clickable { onTab(k) }.padding(horizontal = 14.dp, vertical = 8.dp))
+                }
+            }
+        }
+    }
+    when (tab) {
+        "built" -> item {
+            if (m != null && m.built.isNotEmpty()) BuiltOf(m)
+            else Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("עוד לא מולא. Claude יכול לקרוא את הפרויקט ולמלא מה הוא כבר יודע לעשות.", color = LocalDeck.current.muted, fontSize = 14.sp, lineHeight = 21.sp)
+                if (edit != null) PillButton("למלא עכשיו", strong = true) { edit(Note.GOAL_SUGGEST, "", emptyList()) }
+            }
+        }
+        "ideas" -> item { if (m != null) IdeasOf(m, edit, ask) }
+        "decisions" -> item { if (m != null) { Decisions(m, write); m.releases.firstOrNull()?.let { r -> Block("גרסה אחרונה") { Body(r.version + (if (r.note.isNotBlank()) " · " + r.note else "")) } } } }
+        "links" -> item { LinksTab(p, live) }
+        "git" -> item { GitTab(live) }
+        "runs" -> item { runs?.invoke() }
+    }
+}
+
+/** The ideas set aside: tapped, one moves on to what's left, or goes. */
+@Composable
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+private fun IdeasOf(m: Memory, edit: ((String, String, List<String>) -> Unit)?, ask: (TextAsk) -> Unit) {
+    val c = LocalDeck.current
+    androidx.compose.foundation.layout.FlowRow(Modifier.padding(24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        m.ideas.forEach { t ->
+            var open by remember { mutableStateOf(false) }
+            Box {
+                Text(t, color = c.fg, fontSize = 14.sp, lineHeight = 19.sp, style = TextStyle(textDirection = dirOf(t)),
+                    modifier = Modifier.clip(RoundedCornerShape(50)).background(c.surface2).then(if (edit != null) Modifier.clickable { open = true } else Modifier)
+                        .padding(horizontal = 14.dp, vertical = 8.dp))
+                if (edit != null) ItemMenu(open, { open = false }, listOf(
+                    "להעביר ל״נשאר״" to { edit(Note.IDEA_TAKE, t, emptyList()) },
+                    "מחיקה" to { edit(Note.IDEA_DROP, t, emptyList()) },
+                ), danger = true)
+            }
+        }
+        if (edit != null) Text("+ רעיון", color = c.accentText, fontSize = 14.sp,
+            modifier = Modifier.clip(RoundedCornerShape(50)).border(1.dp, c.line, RoundedCornerShape(50)).clickable {
+                ask(TextAsk("רעיון חדש", "מה הרעיון?") { edit(Note.IDEA_ADD, it, emptyList()) })
+            }.padding(horizontal = 14.dp, vertical = 8.dp))
     }
 }
