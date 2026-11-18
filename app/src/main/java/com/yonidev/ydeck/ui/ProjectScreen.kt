@@ -151,7 +151,7 @@ fun ProjectScreen(
         if (onEdit != null) add((if (p.archived) "החזרה מהארכיון" else "העברה לארכיון") to { onEdit(Note.ARCHIVE, if (p.archived) "0" else "1", emptyList()) })
     }
     val runsCard: (@Composable () -> Unit)? = if (onRun != null && live != null) {
-        { RunCard(runs, runOn, runOk, onRun = { line -> sentAt = System.currentTimeMillis() - 1_000; onRun(line, com.yonidev.ydeck.data.RunChoice.window(context)) },
+        { RunCard(runs, runOn, runOk, memory?.commands.orEmpty(), onRun = { line -> sentAt = System.currentTimeMillis() - 1_000; onRun(line, com.yonidev.ydeck.data.RunChoice.window(context)) },
             onOpen = { watching = it }) { running = true } }
     } else null
     if (inside != null) {
@@ -206,7 +206,11 @@ fun ProjectScreen(
         running = false; sentAt = System.currentTimeMillis() - 1_000; onRun(line, window)
     }
     val shownRun = watching?.let { id -> runs.lastOrNull { it.first.id == id } } ?: if (sentAt > 0) runs.lastOrNull { it.first.at >= sentAt } else null
-    shownRun?.let { (r, n) -> RunOutSheet(r, n, onDismiss = { watching = null; sentAt = 0 }) }
+    shownRun?.let { (r, n) ->
+        RunOutSheet(r, n, runOk, (runOk + memory?.commands.orEmpty()).distinct(),
+            onNext = if (onRun != null && runOn) { line -> watching = null; sentAt = System.currentTimeMillis() - 1_000; onRun(line, r.window) } else null,
+            onDismiss = { watching = null; sentAt = 0 })
+    }
     if (launching) LaunchSheet(live?.sessions.orEmpty(), live, onDismiss = { launching = false }) { mode, session, prompt, remote ->
         launching = false
         onLaunch?.invoke(mode, session, prompt, remote)
@@ -959,7 +963,7 @@ private fun ranWords(r: com.yonidev.ydeck.link.RunCommand, n: com.yonidev.ydeck.
 /** "Run a command on the computer": the lines allowed always for one tap, a new one, and the last few, with how they went. */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun RunCard(runs: List<Pair<com.yonidev.ydeck.link.RunCommand, com.yonidev.ydeck.link.Ran?>>, on: Boolean, ok: List<String>, onRun: (String) -> Unit,
+private fun RunCard(runs: List<Pair<com.yonidev.ydeck.link.RunCommand, com.yonidev.ydeck.link.Ran?>>, on: Boolean, ok: List<String>, saved: List<String>, onRun: (String) -> Unit,
                     onOpen: (String) -> Unit, onNew: () -> Unit) {
     val c = LocalDeck.current
     Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 6.dp)) {
@@ -978,21 +982,14 @@ private fun RunCard(runs: List<Pair<com.yonidev.ydeck.link.RunCommand, com.yonid
                         color = c.muted, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
             }
-            // Allowed always: one tap, and it runs (the computer still says so on its screen).
-            if (on && ok.isNotEmpty()) androidx.compose.foundation.layout.FlowRow(
+            // The project's commands, one tap each: those allowed always run at once (the computer still says so on its
+            // screen); the others go to the computer for approval, as a typed one does.
+            val chips = (ok + saved).distinct()
+            if (on && chips.isNotEmpty()) androidx.compose.foundation.layout.FlowRow(
                 Modifier.padding(start = 14.dp, end = 14.dp, bottom = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                ok.forEach { line ->
-                    Row(
-                        Modifier.clip(RoundedCornerShape(50)).background(c.surface2).clickable { onRun(line) }.heightIn(min = 36.dp).padding(horizontal = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_s_play), null, tint = c.closed, modifier = Modifier.size(13.dp))
-                        Text(line, color = c.fg, fontSize = 13.sp, fontFamily = PlexMono, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            style = TextStyle(textDirection = TextDirection.Ltr), modifier = Modifier.widthIn(max = 220.dp))
-                    }
-                }
+                chips.forEach { line -> CommandChip(line, line in ok) { onRun(line) } }
             }
         }
         // The last few, newest first: the line, and how it went.
@@ -1007,6 +1004,20 @@ private fun RunCard(runs: List<Pair<com.yonidev.ydeck.link.RunCommand, com.yonid
                 }
             }
         }
+    }
+}
+
+/** One of the project's commands: a tap runs it (green: allowed always, at once; grey: after approval on the computer). */
+@Composable
+private fun CommandChip(line: String, ok: Boolean, onRun: () -> Unit) {
+    val c = LocalDeck.current
+    Row(
+        Modifier.clip(RoundedCornerShape(50)).background(c.surface2).clickable(onClick = onRun).heightIn(min = 36.dp).padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_s_play), null, tint = if (ok) c.closed else c.faint, modifier = Modifier.size(13.dp))
+        Text(line, color = c.fg, fontSize = 13.sp, fontFamily = PlexMono, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            style = TextStyle(textDirection = TextDirection.Ltr), modifier = Modifier.widthIn(max = 220.dp))
     }
 }
 
@@ -1060,7 +1071,8 @@ private fun RunSheet(ok: List<String>, onDismiss: () -> Unit, onSend: (line: Str
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun RunOutSheet(r: com.yonidev.ydeck.link.RunCommand, n: com.yonidev.ydeck.link.Ran?, onDismiss: () -> Unit) {
+private fun RunOutSheet(r: com.yonidev.ydeck.link.RunCommand, n: com.yonidev.ydeck.link.Ran?, ok: List<String>, chips: List<String>,
+                        onNext: ((String) -> Unit)?, onDismiss: () -> Unit) {
     val c = LocalDeck.current
     val context = LocalContext.current
     val live by com.yonidev.ydeck.data.LiveOut.state.collectAsState()
@@ -1115,7 +1127,35 @@ private fun RunOutSheet(r: com.yonidev.ydeck.link.RunCommand, n: com.yonidev.yde
                     else -> ""
                 }, color = c.faint, fontSize = 12.sp)
             }
+            // The next one, from here: typed, or one of the project's commands; it opens in this same page.
+            if (onNext != null) NextCommand(ok, chips.filterNot { it == r.line }, onNext)
         }
+    }
+}
+
+/** Under a command's output: a line for the next command and the project's commands, so one follows another. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun NextCommand(ok: List<String>, chips: List<String>, onRun: (String) -> Unit) {
+    val c = LocalDeck.current
+    var line by remember { mutableStateOf("") }
+    val clean = com.yonidev.ydeck.link.RunCommand.clean(line)
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.surface2).padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f).padding(vertical = 8.dp)) {
+                val style = TextStyle(color = c.fg, fontSize = 15.sp, fontFamily = PlexMono, textDirection = TextDirection.Ltr)
+                if (line.isEmpty()) Text("הפקודה הבאה", style = style.copy(color = c.faint, fontFamily = PlexSans, textDirection = TextDirection.Rtl), modifier = Modifier.fillMaxWidth())
+                BasicTextField(line, { line = it.replace('\n', ' ').take(com.yonidev.ydeck.link.RunCommand.MAX) }, textStyle = style, singleLine = true,
+                    cursorBrush = SolidColor(c.fg), modifier = Modifier.fillMaxWidth())
+            }
+            Text(if (clean != null && clean in ok) "הרצה" else "לאישור", color = if (clean != null) c.bg else c.faint, fontSize = 14.sp, fontWeight = FontWeight.Medium,
+                modifier = Modifier.clip(RoundedCornerShape(50)).background(if (clean != null) c.fg else c.line)
+                    .clickable(enabled = clean != null) { clean?.let { onRun(it); line = "" } }.padding(horizontal = 16.dp, vertical = 9.dp))
+        }
+        if (chips.isNotEmpty()) androidx.compose.foundation.layout.FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) { chips.take(12).forEach { l -> CommandChip(l, l in ok) { onRun(l) } } }
     }
 }
 

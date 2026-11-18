@@ -118,6 +118,19 @@ object Runs {
         put(Ran(q.r.id, q.r.project, q.r.line, Ran.NO, why = "denied", at = System.currentTimeMillis()))
     }
 
+    /**
+     * A command that ran well joins the project's commands by itself (on this PC only, never in the repository's
+     * .ydeck.json, since a line may hold a key), so it's one tap the next time, here and on the phone. One that
+     * failed (a typo) isn't kept; one already there stays as it is.
+     */
+    fun keep(project: String, line: String) {
+        val clean = line.trim().takeIf { it.isNotEmpty() } ?: return
+        if (Repo.deck.value.byId(project) == null) return
+        val l = Settings.state.value.localOf(project)
+        if (l.commands.any { it.line.trim() == clean }) return
+        Settings.setLocal(project, l.copy(commands = l.commands + Command("", clean)))
+    }
+
     /** No longer approved always: the next time it asks again. */
     fun forget(project: String, line: String) = Settings.update { s ->
         val left = s.runOk[project].orEmpty().filterNot { it == line }
@@ -193,6 +206,7 @@ object Runs {
             LiveLine.send(listOf(RunOut(o.id, o.end - more.length, more, true, o.code)))
             show(o)
             val r = ran.firstOrNull { it.id == o.id }
+            if (r != null && o.code == 0) keep(r.project, o.line)
             if (r != null) put(r.copy(state = Ran.DONE, code = o.code, at = System.currentTimeMillis(), tail = Ran.tailOf(o.shown(Ran.TAIL_MAX * 2))))
             RunScript.clean(o.files)
         }

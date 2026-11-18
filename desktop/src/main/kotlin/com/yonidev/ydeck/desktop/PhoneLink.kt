@@ -657,6 +657,7 @@ object PhoneLink {
                 left = mine?.left.orEmpty().take(30), ideas = mine?.ideas.orEmpty().take(30), doneItems = mine?.done.orEmpty(),
                 journal = if (dir != null) Journal.days(p.id, 7) else emptyList(),
                 built = mine?.built.orEmpty().take(60),
+                commands = local.commands.map { it.line }.distinct().take(30),
                 goal = mine?.goal?.title.orEmpty(),
                 goalSteps = mine?.goal?.steps.orEmpty().map { MemStep(it.text, it.done) },
                 saving = dir?.let { Saving.cards.value[it.path] }?.state.orEmpty(),
