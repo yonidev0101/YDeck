@@ -17,7 +17,7 @@ class PhoneDossierTest {
             talk = listOf(MemTalk(MemTalk.USER, "תתקן"), MemTalk(MemTalk.STEP, "שינה את a.css"), MemTalk(MemTalk.CLAUDE, "תיקנתי.\n\nעוד משהו?")),
             talkTitle = "תתקן", talkBusy = true, talkAsk = "להריץ פקודה: npm test", talkError = "e", talkElsewhere = true,
             talkAskId = "r1", talkAskAlways = "Bash(npm test:*)", talkSession = "s1", talkUrl = "https://claude.ai/code/session_x",
-            insight = "כמעט גמור", commands = listOf("git status", "npm run build"), commandsBusy = true, commandsFound = "נוספו 2 פקודות")
+            insight = "כמעט גמור", commands = listOf("git status", "npm run build"), commandNames = listOf("", "בנייה"), commandsBusy = true, commandsFound = "נוספו 2 פקודות")
         val back = Snapshot.decode(Snapshot(1, "PC", JSONObject(), mapOf("p" to m)).encode()).memory.getValue("p")
         assertEquals(m, back)
     }

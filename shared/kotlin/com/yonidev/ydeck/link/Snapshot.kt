@@ -75,6 +75,8 @@ data class Memory(
     val insight: String = "",
     /** The project's commands kept on the computer (each one that ran there well is kept by itself), one tap to run again. */
     val commands: List<String> = emptyList(),
+    /** The name of each of [commands], in the same order ("" for one kept without a name). */
+    val commandNames: List<String> = emptyList(),
     /** Claude looks for the project's commands now ("Find commands"); what the last search came to, in words. */
     val commandsBusy: Boolean = false,
     val commandsFound: String = "",
@@ -213,7 +215,7 @@ class Snapshot(
             put("dossierBusy", dossierBusy); put("dossierError", dossierError)
             put("talk", JSONArray().apply { talk.forEach { put(JSONObject().put("kind", it.kind).put("text", it.text)) } })
             put("talkTitle", talkTitle); put("talkBusy", talkBusy); put("talkAsk", talkAsk); put("talkError", talkError); put("talkElsewhere", talkElsewhere)
-            put("talkAskId", talkAskId); put("talkAskAlways", talkAskAlways); put("talkSession", talkSession); put("talkUrl", talkUrl); put("insight", insight); put("commands", JSONArray(commands)); put("commandsBusy", commandsBusy); put("commandsFound", commandsFound)
+            put("talkAskId", talkAskId); put("talkAskAlways", talkAskAlways); put("talkSession", talkSession); put("talkUrl", talkUrl); put("insight", insight); put("commands", JSONArray(commands)); put("commandNames", JSONArray(commandNames)); put("commandsBusy", commandsBusy); put("commandsFound", commandsFound)
         }
 
         fun memoryOf(o: JSONObject): Memory {
@@ -235,7 +237,7 @@ class Snapshot(
                 talkTitle = o.optString("talkTitle"), talkBusy = o.optBoolean("talkBusy"), talkAsk = o.optString("talkAsk"),
                 talkError = o.optString("talkError"), talkElsewhere = o.optBoolean("talkElsewhere"),
                 talkAskId = o.optString("talkAskId"), talkAskAlways = o.optString("talkAskAlways"),
-                talkSession = o.optString("talkSession"), talkUrl = o.optString("talkUrl"), insight = o.optString("insight"), commands = strings("commands"), commandsBusy = o.optBoolean("commandsBusy"), commandsFound = o.optString("commandsFound"),
+                talkSession = o.optString("talkSession"), talkUrl = o.optString("talkUrl"), insight = o.optString("insight"), commands = strings("commands"), commandNames = o.optJSONArray("commandNames")?.let { a -> (0 until a.length()).map { a.optString(it).trim() } } ?: emptyList(), commandsBusy = o.optBoolean("commandsBusy"), commandsFound = o.optString("commandsFound"),
             )
         }
     }

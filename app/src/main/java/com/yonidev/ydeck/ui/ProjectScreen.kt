@@ -1,5 +1,7 @@
 package com.yonidev.ydeck.ui
 
+import androidx.compose.foundation.layout.RowScope
+
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -151,7 +153,7 @@ fun ProjectScreen(
         if (onEdit != null) add((if (p.archived) "החזרה מהארכיון" else "העברה לארכיון") to { onEdit(Note.ARCHIVE, if (p.archived) "0" else "1", emptyList()) })
     }
     val runsCard: (@Composable () -> Unit)? = if (onRun != null && live != null) {
-        { RunCard(runs, runOn, runOk, memory?.commands.orEmpty(), memory?.commandsBusy == true, memory?.commandsFound.orEmpty(),
+        { RunCard(runs, runOn, runOk, memory?.commands.orEmpty(), memory?.commandNames.orEmpty(), memory?.commandsBusy == true, memory?.commandsFound.orEmpty(),
             stuck = pending.any { it.kind == Note.COMMANDS_FIND && System.currentTimeMillis() - it.at > 90_000 },
             onFind = onEdit?.let { e -> { e(com.yonidev.ydeck.link.Note.COMMANDS_FIND, "", emptyList()) } }, onRun = { line -> sentAt = System.currentTimeMillis() - 1_000; onRun(line, com.yonidev.ydeck.data.RunChoice.window(context)) },
             onOpen = { watching = it }) { running = true } }
@@ -162,7 +164,7 @@ fun ProjectScreen(
         androidx.activity.compose.BackHandler { inside = null }
         PageScaffold(title = "מה יש ב־" + p.name, onBack = { inside = null }) {
             InsidePage(p, memory, live, insideTab, { inside = it }, edit, if (canWrite) { kind -> writing = kind } else null, { asking = it },
-                runs = runsCard)
+                runs = runsCard, saveOn = launchOn)
         }
     } else PageScaffold(
         title = p.name, onBack = onBack,
@@ -191,7 +193,7 @@ fun ProjectScreen(
                 if (canWrite) { next -> onWrite?.invoke(Note.DONE, next) } else null, edit, { asking = it })
         }
         if (memory != null && memory.talk.isNotEmpty()) item { LastTalk(memory) { talking = true } }
-        item { InsideRow(memory, live) { inside = "built" } }
+        item { InsideList(p, memory, live, runsCard != null) { inside = it } }
         val listed = pending.filter { it.kind !in com.yonidev.ydeck.data.Overlay.inPlace }
         if (listed.isNotEmpty()) item {
             Text("ממתין למחשב: " + listed.joinToString(" · ") { com.yonidev.ydeck.data.Overlay.words(it) }, color = c.faint, fontSize = 12.5.sp,
@@ -812,39 +814,20 @@ private fun LinksTab(p: Project, live: Live?) {
     val c = LocalDeck.current
     val context = LocalContext.current
     Column {
-        if (p.actions.isNotEmpty()) {
-            // The first link is the main one: a large tile in the project's colour. The rest, a grid of tiles.
-            val main = p.actions.first()
-            val tint = Color(p.color).let { if (android.graphics.Color.luminance(p.color) < 0.03f) c.accent else it }
-            Row(
-                Modifier.padding(start = 16.dp, end = 16.dp, top = 20.dp).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(tint)
-                    .clickable { Router.open(context, p, main) }.heightIn(min = 76.dp).padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                Box(Modifier.size(44.dp).clip(RoundedCornerShape(13.dp)).background(Color.White.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) {
-                    ServiceMark(main.service, main.faviconHost, 24.dp, tint = Color.White)
-                }
-                Column(Modifier.weight(1f)) {
-                    Text(main.label, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(Router.displayUrl(main.url), color = Color.White.copy(alpha = 0.75f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        style = TextStyle(textDirection = TextDirection.Ltr))
-                }
-            }
-            p.actions.drop(1).chunked(3).forEach { row ->
-                Row(Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    row.forEach { a ->
-                        Column(
-                            Modifier.weight(1f).clip(RoundedCornerShape(18.dp)).background(c.surface).clickable { Router.open(context, p, a) }
-                                .heightIn(min = 100.dp).padding(12.dp),
-                            verticalArrangement = Arrangement.SpaceBetween,
-                        ) {
-                            ServiceIcon(a.service, a.faviconHost, 36.dp)
-                            Text(a.label, color = c.fg, fontSize = 14.sp, fontWeight = FontWeight.Medium, lineHeight = 19.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.padding(top = 14.dp))
-                        }
+        if (p.actions.isNotEmpty()) Column(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 14.dp)) {
+            Hairline()
+            p.actions.forEach { a ->
+                Row(Modifier.fillMaxWidth().clickable { Router.open(context, p, a) }.heightIn(min = 58.dp).padding(vertical = 11.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    ServiceIcon(a.service, a.faviconHost, 22.dp)
+                    Column(Modifier.weight(1f)) {
+                        Text(a.label, color = c.fg, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(Router.displayUrl(a.url), color = c.muted, fontSize = 12.sp, fontFamily = PlexMono, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            style = TextStyle(textDirection = TextDirection.Ltr), modifier = Modifier.fillMaxWidth())
                     }
-                    repeat(3 - row.size) { Box(Modifier.weight(1f)) }
+                    Text("‹", color = c.faint, fontSize = 18.sp)
                 }
+                Hairline()
             }
         } else FootNote("אין לפרויקט קישורים. מוסיפים אותם ב־YDeck במחשב.")
         if (p.copies.isNotEmpty()) Section("העתקה בנגיעה") {
@@ -967,59 +950,73 @@ private fun ranWords(r: com.yonidev.ydeck.link.RunCommand, n: com.yonidev.ydeck.
 /** "Run a command on the computer": the lines allowed always for one tap, a new one, and the last few, with how they went. */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun RunCard(runs: List<Pair<com.yonidev.ydeck.link.RunCommand, com.yonidev.ydeck.link.Ran?>>, on: Boolean, ok: List<String>, saved: List<String>, finding: Boolean, found: String, stuck: Boolean, onFind: (() -> Unit)?, onRun: (String) -> Unit,
+private fun RunCard(runs: List<Pair<com.yonidev.ydeck.link.RunCommand, com.yonidev.ydeck.link.Ran?>>, on: Boolean, ok: List<String>, saved: List<String>, names: List<String>,
+                    finding: Boolean, found: String, stuck: Boolean, onFind: (() -> Unit)?, onRun: (String) -> Unit,
                     onOpen: (String) -> Unit, onNew: () -> Unit) {
     val c = LocalDeck.current
-    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 6.dp)) {
-        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.surface)) {
-            Row(
-                Modifier.fillMaxWidth().clickable(enabled = on, onClick = onNew).padding(horizontal = 14.dp, vertical = 11.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Box(Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).background(if (on) c.fg else c.surface2), contentAlignment = Alignment.Center) {
-                    Text(">_", color = if (on) c.bg else c.faint, fontSize = 13.sp, fontFamily = PlexMono, fontWeight = FontWeight.Medium,
-                        style = TextStyle(textDirection = TextDirection.Ltr))
+    Column(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 16.dp)) {
+        // A new one: looks like a field, opens the sheet where it's typed.
+        Row(
+            Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(14.dp)).background(c.surface).clickable(enabled = on, onClick = onNew).padding(start = 14.dp, end = 6.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(">_", color = c.faint, fontSize = 13.sp, fontFamily = PlexMono, style = TextStyle(textDirection = TextDirection.Ltr))
+            Text("פקודה חדשה במחשב", color = c.faint, fontSize = 14.5.sp, modifier = Modifier.weight(1f))
+            Text("הרצה", color = c.muted, fontSize = 13.5.sp, fontWeight = FontWeight.Medium,
+                modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(c.surface2).padding(horizontal = 14.dp, vertical = 8.dp))
+        }
+        if (!on) Text("כבוי במחשב. מדליקים ב־YDeck במחשב ← הגדרות ← טלפון.", color = c.muted, fontSize = 13.sp, lineHeight = 19.sp, modifier = Modifier.padding(top = 10.dp))
+        // The project's commands, each with its name and its line; those allowed always run at once.
+        val all = (saved.mapIndexed { i, l -> l to names.getOrElse(i) { "" } } + ok.filter { it !in saved }.map { it to "" })
+        if (all.isNotEmpty()) Column(Modifier.padding(top = 14.dp)) {
+            Hairline()
+            all.forEach { (line, name) ->
+                Row(Modifier.fillMaxWidth().clickable(enabled = on) { onRun(line) }.heightIn(min = 60.dp).padding(vertical = 11.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Column(Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            if (name.isNotBlank()) Text(name, color = c.fg, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                            else Text(line, color = c.fg, fontSize = 14.sp, fontFamily = PlexMono, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                style = TextStyle(textDirection = TextDirection.Ltr), modifier = Modifier.weight(1f, fill = false))
+                            if (line in ok) Text("· בלי אישור", color = c.closed, fontSize = 11.5.sp, maxLines = 1)
+                        }
+                        if (name.isNotBlank()) Text(line, color = c.muted, fontSize = 12.sp, fontFamily = PlexMono, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            style = TextStyle(textDirection = TextDirection.Ltr), modifier = Modifier.fillMaxWidth().padding(top = 2.dp))
+                    }
+                    Box(Modifier.size(38.dp).clip(CircleShape).border(1.dp, c.line, CircleShape), contentAlignment = Alignment.Center) {
+                        Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_s_play), "להריץ", tint = if (on) c.fg else c.faint, modifier = Modifier.size(13.dp))
+                    }
                 }
-                Column(Modifier.weight(1f)) {
-                    Text("פקודה במחשב", color = c.fg, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                    Text(if (on) "רצה רק אחרי אישור במחשב, והפלט מגיע לכאן" else "כבוי במחשב. מדליקים ב־YDeck במחשב ← הגדרות ← טלפון.",
-                        color = c.muted, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                }
+                Hairline()
             }
-            // The project's commands, one tap each: those allowed always run at once (the computer still says so on its
-            // screen); the others go to the computer for approval, as a typed one does.
-            val chips = (ok + saved).distinct()
-            if (on && chips.isNotEmpty()) androidx.compose.foundation.layout.FlowRow(
-                Modifier.padding(start = 14.dp, end = 14.dp, bottom = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                chips.forEach { line -> CommandChip(line, line in ok) { onRun(line) } }
-            }
-            // Claude looks in the project's folder for its commands, and they join the buttons above.
-            // Asked, and the computer hasn't taken it for a while: said so (YDeck may be closed there), and it can be asked again.
+        }
+        // Claude looks in the project's folder for more.
+        if (onFind != null) {
             val waiting = finding && !stuck
-            if (onFind != null) Row(
-                Modifier.fillMaxWidth().clickable(enabled = !waiting, onClick = onFind).padding(horizontal = 14.dp, vertical = 11.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
+            Row(Modifier.fillMaxWidth().clickable(enabled = !waiting, onClick = onFind).heightIn(min = 48.dp).padding(vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("✦", color = if (waiting) c.faint else CLAUDE, fontSize = 14.sp)
                 Column(Modifier.weight(1f)) {
-                    Text(if (waiting) "Claude מחפש פקודות בפרויקט…" else "למצוא פקודות עם Claude", color = if (waiting) c.muted else c.fg, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    Text(if (waiting) "Claude מחפש פקודות בפרויקט…" else if (all.isEmpty()) "למצוא פקודות עם Claude" else "למצוא עוד פקודות עם Claude",
+                        color = if (waiting) c.muted else c.fg, fontSize = 14.sp)
                     if (stuck && finding) Text("המחשב עוד לא ענה. YDeck פתוח בו?", color = c.openText, fontSize = 12.sp)
                 }
-                if (!finding && found.isNotBlank()) Text(found, color = c.faint, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (!finding && found.isNotBlank()) Text(found, color = c.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
         // The last few, newest first: the line, and how it went.
-        runs.takeLast(3).reversed().forEach { (r, n) ->
-            val (words, dot) = ranWords(r, n)
-            Row(Modifier.fillMaxWidth().padding(top = 4.dp).clip(RoundedCornerShape(10.dp)).clickable { onOpen(r.id) }.padding(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 4.dp),
-                verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Box(Modifier.padding(top = 7.dp)) { Dot(dot, 7.dp) }
-                Column(Modifier.weight(1f)) {
-                    Text(r.line, color = c.fg, fontSize = 13.sp, fontFamily = PlexMono, maxLines = 1, overflow = TextOverflow.Ellipsis, style = TextStyle(textDirection = TextDirection.Ltr))
-                    Text(words, color = if (n?.state == com.yonidev.ydeck.link.Ran.ASKING) c.openText else c.muted, fontSize = 12.sp)
+        if (runs.isNotEmpty()) Column(Modifier.padding(top = 14.dp)) {
+            Text("רצו לאחרונה", color = c.muted, fontSize = 13.sp, modifier = Modifier.padding(bottom = 4.dp))
+            Hairline()
+            runs.takeLast(3).reversed().forEach { (r, n) ->
+                val (words, _) = ranWords(r, n)
+                Row(Modifier.fillMaxWidth().clickable { onOpen(r.id) }.heightIn(min = 44.dp).padding(vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(r.line, color = c.fg, fontSize = 12.5.sp, fontFamily = PlexMono, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        style = TextStyle(textDirection = TextDirection.Ltr), modifier = Modifier.weight(1f))
+                    Text(words, color = if (n?.state == com.yonidev.ydeck.link.Ran.ASKING) c.openText else c.muted, fontSize = 12.sp, maxLines = 1)
                 }
+                Hairline()
             }
         }
     }
@@ -1589,27 +1586,21 @@ private fun androidx.compose.foundation.lazy.LazyListScope.InsidePage(
     p: Project, m: Memory?, live: Live?, tab: String, onTab: (String) -> Unit,
     edit: ((String, String, List<String>) -> Unit)?, write: ((String) -> Unit)?, ask: (TextAsk) -> Unit,
     runs: (@Composable () -> Unit)?,
+    saveOn: Boolean = false,
 ) {
     item {
         val c = LocalDeck.current
-        Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            m?.summary?.takeIf { it.isNotBlank() }?.let { Text(it, color = c.muted, fontSize = 14.sp, lineHeight = 21.sp, style = TextStyle(textDirection = dirOf(it))) }
-            val tabs = buildList {
-                add("built" to ("נבנה" + (m?.built?.size?.takeIf { it > 0 }?.let { " $it" } ?: "")))
-                add("ideas" to ("רעיונות" + (m?.ideas?.size?.takeIf { it > 0 }?.let { " $it" } ?: "")))
-                add("decisions" to ("החלטות" + (m?.decisions?.size?.takeIf { it > 0 }?.let { " $it" } ?: "")))
-                add("links" to "קישורים")
-                if (live?.hasGit == true) add("git" to "Git")
-                if (runs != null) add("runs" to "פקודות")
-            }
-            Row(Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                tabs.forEach { (k, label) ->
-                    val on = k == tab
-                    Text(label, color = if (on) c.bg else c.fg, fontSize = 13.sp, fontWeight = FontWeight.Medium,
-                        modifier = Modifier.clip(CircleShape).background(if (on) c.fg else c.surface2).clickable { onTab(k) }.padding(horizontal = 14.dp, vertical = 8.dp))
-                }
+        m?.summary?.takeIf { it.isNotBlank() }?.let { t ->
+            var more by remember { mutableStateOf(false) }
+            val long = t.length > 110
+            Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).then(if (long) Modifier.clickable { more = !more } else Modifier)) {
+                Text(t, color = c.muted, fontSize = 13.5.sp, lineHeight = 20.sp, maxLines = if (more || !long) Int.MAX_VALUE else 2, overflow = TextOverflow.Ellipsis,
+                    style = TextStyle(textDirection = dirOf(t)))
+                if (long) Text(if (more) "פחות" else "עוד", color = c.fg, fontSize = 13.sp, textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline,
+                    modifier = Modifier.padding(top = 2.dp))
             }
         }
+        UnderlineTabs(insideTabs(live, runs != null), tab, onTab)
     }
     when (tab) {
         "built" -> item {
@@ -1622,7 +1613,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.InsidePage(
         "ideas" -> item { if (m != null) IdeasOf(m, edit, ask) }
         "decisions" -> item { if (m != null) { Decisions(m, write); m.releases.firstOrNull()?.let { r -> Block("גרסה אחרונה") { Body(r.version + (if (r.note.isNotBlank()) " · " + r.note else "")) } } } }
         "links" -> item { LinksTab(p, live) }
-        "git" -> item { GitTab(live) }
+        "git" -> item { GitPane(live, m, saveOn, edit) }
         "runs" -> item { runs?.invoke() }
     }
 }
@@ -1649,5 +1640,177 @@ private fun IdeasOf(m: Memory, edit: ((String, String, List<String>) -> Unit)?, 
             modifier = Modifier.clip(RoundedCornerShape(50)).border(1.dp, c.line, RoundedCornerShape(50)).clickable {
                 ask(TextAsk("רעיון חדש", "מה הרעיון?") { edit(Note.IDEA_ADD, it, emptyList()) })
             }.padding(horizontal = 14.dp, vertical = 8.dp))
+    }
+}
+
+// ── What's in the project: a list of lines, and inside, tabs of words ──
+
+private val INSIDE = listOf("runs" to "פקודות", "git" to "Git", "links" to "קישורים", "built" to "נבנה", "ideas" to "רעיונות", "decisions" to "החלטות")
+
+private fun insideTabs(live: Live?, hasRuns: Boolean) = INSIDE.filter { (k, _) -> when (k) { "runs" -> hasRuns; "git" -> live?.hasGit == true; else -> true } }
+
+@Composable
+private fun Hairline() = Box(Modifier.fillMaxWidth().height(1.dp).background(LocalDeck.current.line))
+
+/** "What's in the project": one line each (its name, what's in it in a few words, how many), a tap opens it. */
+@Composable
+private fun InsideList(p: Project, m: Memory?, live: Live?, hasRuns: Boolean, onOpen: (String) -> Unit) {
+    val c = LocalDeck.current
+    QuestionLabel("מה יש בפרויקט")
+    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
+        Hairline()
+        insideTabs(live, hasRuns).forEach { (k, label) ->
+            when (k) {
+                "runs" -> {
+                    val lines = m?.commands.orEmpty()
+                    InsideLine(label, lines.size, { onOpen(k) }) {
+                        if (lines.isEmpty()) Peek("עוד אין. Claude יכול למצוא")
+                        else Peek(lines.take(3).joinToString(" · "), mono = true)
+                    }
+                }
+                "git" -> InsideLine(label, null, { onOpen(k) }) {
+                    val l = live!!
+                    val clean = l.changes == 0 && l.ahead == 0
+                    Box(Modifier.size(7.dp).clip(CircleShape).background(if (clean) c.closed else c.open))
+                    Text(when {
+                        l.changes == 1 -> "קובץ אחד לא שמור"
+                        l.changes > 1 -> "${l.changes} לא שמורים"
+                        l.ahead > 0 -> "↑${l.ahead} להעלאה"
+                        else -> "הכול שמור"
+                    }, color = if (clean) c.muted else c.openText, fontSize = 13.sp, maxLines = 1)
+                    if (l.branch.isNotBlank()) {
+                        Text("·", color = c.faint, fontSize = 13.sp)
+                        Peek(l.branch, mono = true)
+                    }
+                }
+                "links" -> InsideLine(label, p.actions.size, { onOpen(k) }) { Peek(p.actions.take(3).joinToString(" · ") { it.label }.ifBlank { "אין עדיין" }) }
+                "built" -> InsideLine(label, m?.built?.size ?: 0, { onOpen(k) }) { Peek(m?.built?.firstOrNull() ?: "עוד לא מולא") }
+                "ideas" -> InsideLine(label, m?.ideas?.size ?: 0, { onOpen(k) }) { Peek(m?.ideas?.take(2)?.joinToString(" · ")?.ifBlank { null } ?: "אין עדיין") }
+                "decisions" -> InsideLine(label, m?.decisions?.size ?: 0, { onOpen(k) }) { Peek(m?.decisions?.firstOrNull()?.text?.let { "אחרונה: $it" } ?: "אין עדיין") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun InsideLine(label: String, count: Int?, onClick: () -> Unit, peek: @Composable RowScope.() -> Unit) {
+    val c = LocalDeck.current
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 52.dp).padding(vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        Text(label, color = c.fg, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, modifier = Modifier.width(74.dp))
+        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp), content = peek)
+        Text(count?.takeIf { it > 0 }?.toString().orEmpty(), color = c.muted, fontSize = 13.sp, fontFamily = PlexMono,
+            textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.width(22.dp))
+        Text("‹", color = c.faint, fontSize = 18.sp)
+    }
+    Hairline()
+}
+
+@Composable
+private fun RowScope.Peek(t: String, mono: Boolean = false) {
+    val c = LocalDeck.current
+    Text(t, color = c.muted, fontSize = if (mono) 12.5.sp else 13.sp, fontFamily = if (mono) PlexMono else null, maxLines = 1, overflow = TextOverflow.Ellipsis,
+        style = TextStyle(textDirection = if (mono) TextDirection.Ltr else dirOf(t)), modifier = Modifier.weight(1f, fill = false))
+}
+
+/** The tabs inside: words in one line, all of them in sight, the chosen one underlined. */
+@Composable
+private fun UnderlineTabs(tabs: List<Pair<String, String>>, on: String, onTab: (String) -> Unit) {
+    val c = LocalDeck.current
+    Column(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 14.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            tabs.forEach { (k, label) ->
+                val sel = k == on
+                Column(Modifier.width(androidx.compose.foundation.layout.IntrinsicSize.Max).clickable { onTab(k) }.padding(top = 12.dp)) {
+                    Text(label, color = if (sel) c.fg else c.muted, fontSize = 14.sp, fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1,
+                        modifier = Modifier.padding(bottom = 9.dp, start = 2.dp, end = 2.dp))
+                    Box(Modifier.fillMaxWidth().height(2.dp).background(if (sel) c.fg else Color.Transparent))
+                }
+            }
+        }
+        Hairline()
+    }
+}
+
+/** Git inside: where saving stands in words, the files, one button to save and push, the last commits. */
+@Composable
+private fun GitPane(live: Live?, m: Memory?, on: Boolean, edit: ((String, String, List<String>) -> Unit)?) {
+    val c = LocalDeck.current
+    val context = LocalContext.current
+    if (live == null || !live.hasGit) {
+        FootNote(if (live == null) "לפרויקט הזה אין תיקייה ב־YDeck במחשב." else "התיקייה של הפרויקט הזה עוד לא ריפו של Git.")
+        return
+    }
+    val clean = live.changes == 0 && live.ahead == 0
+    Column(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 22.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(Modifier.size(8.dp).clip(CircleShape).background(if (clean) c.closed else c.open))
+                Text(when {
+                    live.changes == 1 -> "קובץ אחד לא שמור"
+                    live.changes > 1 -> "${live.changes} קבצים לא שמורים"
+                    live.ahead == 1 -> "שמירה אחת לא הועלתה"
+                    live.ahead > 1 -> "${live.ahead} שמירות לא הועלו"
+                    else -> "הכול שמור ומועלה"
+                }, color = c.fg, fontSize = 20.sp, fontWeight = FontWeight.Medium)
+            }
+            val where = listOfNotNull(
+                live.branch.takeIf { it.isNotBlank() }?.let { "בענף ⁦$it⁩" },
+                when { live.upstream.isBlank() -> "עוד לא ב־GitHub"; live.changes > 0 && live.ahead == 1 -> "שמירה אחת מחכה להעלאה"; live.changes > 0 && live.ahead > 1 -> "${live.ahead} שמירות מחכות להעלאה"; else -> null },
+                if (live.behind > 0) "${live.behind} חדשות בשרת" else null,
+            ).joinToString(" · ")
+            if (where.isNotBlank()) Text(where, color = c.muted, fontSize = 13.sp)
+        }
+        if (live.files.isNotEmpty()) Column {
+            Hairline()
+            Column(Modifier.padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                live.files.take(8).forEach { f ->
+                    val (letter, tint) = when {
+                        f.code.contains('?') || f.code.contains('A') -> "A" to c.closed
+                        f.code.contains('D') -> "D" to c.danger
+                        f.code.contains('R') -> "R" to c.muted
+                        else -> "M" to c.openText
+                    }
+                    Text(androidx.compose.ui.text.buildAnnotatedString {
+                        pushStyle(androidx.compose.ui.text.SpanStyle(color = tint)); append(letter); pop()
+                        append("  " + f.path)
+                    }, color = c.fg, fontSize = 12.5.sp, fontFamily = PlexMono, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        style = TextStyle(textDirection = TextDirection.Ltr), modifier = Modifier.fillMaxWidth())
+                }
+                if (live.changes > 8) Text("ועוד ${live.changes - 8}", color = c.faint, fontSize = 12.sp)
+            }
+            Hairline()
+        }
+        // One button that saves and pushes (the steps YDeck worked out on the computer).
+        if (!clean && m != null) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (m.savingSteps.isNotBlank() && edit != null && on) {
+                val busy = m.savingBusy
+                Box(Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(14.dp)).background(if (busy) c.surface2 else c.fg)
+                    .clickable(enabled = !busy) { edit(Note.SAVE_DO, "", emptyList()) }, contentAlignment = Alignment.Center) {
+                    Text(if (busy) "שומר…" else "לשמור ולהעלות", color = if (busy) c.muted else c.bg, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                }
+                Text(m.savingSteps, color = c.faint, fontSize = 12.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            } else if (m.saving.isNotBlank()) Text(m.saving, color = c.muted, fontSize = 13.5.sp, lineHeight = 20.sp)
+            if (m.savingSteps.isNotBlank() && edit != null && !on) Text("כדי לשמור מכאן, מדליקים במחשב: הגדרות ← טלפון.", color = c.faint, fontSize = 12.sp)
+            when {
+                m.savingResult == "ok" -> Text("נשמר.", color = c.closed, fontSize = 13.sp)
+                m.savingResult.isNotBlank() -> Text(m.savingResult, color = c.danger, fontSize = 13.sp, lineHeight = 19.sp)
+            }
+        }
+        if (live.commits.isNotEmpty()) Column {
+            Text("שמירות אחרונות", color = c.muted, fontSize = 13.sp, modifier = Modifier.padding(bottom = 4.dp))
+            Hairline()
+            live.commits.take(5).forEach { k ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
+                    Text(k.subject, color = c.fg, fontSize = 14.sp, lineHeight = 20.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                        style = TextStyle(textDirection = dirOf(k.subject)), modifier = Modifier.weight(1f))
+                    if (k.at > 0) Text(ago(k.at), color = c.faint, fontSize = 12.sp, maxLines = 1)
+                }
+                Hairline()
+            }
+        }
+        if (live.web.isNotBlank()) Text("פתיחה ב־GitHub ‹", color = c.fg, fontSize = 14.sp,
+            modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(live.web))) } }
+                .padding(vertical = 10.dp))
     }
 }
