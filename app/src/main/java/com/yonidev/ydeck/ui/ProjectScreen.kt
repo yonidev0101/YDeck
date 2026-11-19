@@ -152,13 +152,16 @@ fun ProjectScreen(
     }
     val runsCard: (@Composable () -> Unit)? = if (onRun != null && live != null) {
         { RunCard(runs, runOn, runOk, memory?.commands.orEmpty(), memory?.commandsBusy == true, memory?.commandsFound.orEmpty(),
+            stuck = pending.any { it.kind == Note.COMMANDS_FIND && System.currentTimeMillis() - it.at > 90_000 },
             onFind = onEdit?.let { e -> { e(com.yonidev.ydeck.link.Note.COMMANDS_FIND, "", emptyList()) } }, onRun = { line -> sentAt = System.currentTimeMillis() - 1_000; onRun(line, com.yonidev.ydeck.data.RunChoice.window(context)) },
             onOpen = { watching = it }) { running = true } }
     } else null
-    if (inside != null) {
+    // Read once here: the page's items are drawn later, and by then going back may have emptied it (a crash, before).
+    val insideTab = inside
+    if (insideTab != null) {
         androidx.activity.compose.BackHandler { inside = null }
         PageScaffold(title = "מה יש ב־" + p.name, onBack = { inside = null }) {
-            InsidePage(p, memory, live, inside!!, { inside = it }, edit, if (canWrite) { kind -> writing = kind } else null, { asking = it },
+            InsidePage(p, memory, live, insideTab, { inside = it }, edit, if (canWrite) { kind -> writing = kind } else null, { asking = it },
                 runs = runsCard)
         }
     } else PageScaffold(
@@ -964,7 +967,7 @@ private fun ranWords(r: com.yonidev.ydeck.link.RunCommand, n: com.yonidev.ydeck.
 /** "Run a command on the computer": the lines allowed always for one tap, a new one, and the last few, with how they went. */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun RunCard(runs: List<Pair<com.yonidev.ydeck.link.RunCommand, com.yonidev.ydeck.link.Ran?>>, on: Boolean, ok: List<String>, saved: List<String>, finding: Boolean, found: String, onFind: (() -> Unit)?, onRun: (String) -> Unit,
+private fun RunCard(runs: List<Pair<com.yonidev.ydeck.link.RunCommand, com.yonidev.ydeck.link.Ran?>>, on: Boolean, ok: List<String>, saved: List<String>, finding: Boolean, found: String, stuck: Boolean, onFind: (() -> Unit)?, onRun: (String) -> Unit,
                     onOpen: (String) -> Unit, onNew: () -> Unit) {
     val c = LocalDeck.current
     Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 6.dp)) {
@@ -993,13 +996,17 @@ private fun RunCard(runs: List<Pair<com.yonidev.ydeck.link.RunCommand, com.yonid
                 chips.forEach { line -> CommandChip(line, line in ok) { onRun(line) } }
             }
             // Claude looks in the project's folder for its commands, and they join the buttons above.
+            // Asked, and the computer hasn't taken it for a while: said so (YDeck may be closed there), and it can be asked again.
+            val waiting = finding && !stuck
             if (onFind != null) Row(
-                Modifier.fillMaxWidth().clickable(enabled = !finding, onClick = onFind).padding(horizontal = 14.dp, vertical = 11.dp),
+                Modifier.fillMaxWidth().clickable(enabled = !waiting, onClick = onFind).padding(horizontal = 14.dp, vertical = 11.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text("✦", color = if (finding) c.faint else CLAUDE, fontSize = 14.sp)
-                Text(if (finding) "Claude מחפש פקודות בפרויקט…" else "למצוא פקודות עם Claude", color = if (finding) c.muted else c.fg, fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                Text("✦", color = if (waiting) c.faint else CLAUDE, fontSize = 14.sp)
+                Column(Modifier.weight(1f)) {
+                    Text(if (waiting) "Claude מחפש פקודות בפרויקט…" else "למצוא פקודות עם Claude", color = if (waiting) c.muted else c.fg, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    if (stuck && finding) Text("המחשב עוד לא ענה. YDeck פתוח בו?", color = c.openText, fontSize = 12.sp)
+                }
                 if (!finding && found.isNotBlank()) Text(found, color = c.faint, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }

@@ -445,6 +445,14 @@ object PhoneLink {
      * The phone replies to a session waiting for the developer ([SessionAsks]): only while that's on in Settings →
      * Phone, only when fresh, and only to a question still waiting. Words for Claude, never a permission.
      */
+    /** The phone's app crashed: what went wrong, kept in phone-crashes.txt (the newest last, the file kept small). */
+    private fun crashed(note: Note) = runCatching {
+        val f = File(AppDirs.data, "phone-crashes.txt")
+        val at = java.time.Instant.ofEpochMilli(note.at.takeIf { it > 0 } ?: System.currentTimeMillis()).toString()
+        val all = (if (f.isFile) f.readText() else "") + "=== $at\n" + note.text + "\n\n"
+        f.writeText(all.takeLast(60_000))
+    }
+
     private fun reply(r: Reply): Launched {
         fun no(why: String) = Launched(r.id, false, why)
         if (!Settings.state.value.phoneReply) return no("off")
@@ -462,6 +470,7 @@ object PhoneLink {
         if (note.kind == Note.NEW_PROJECT) { newProject(note); return true }
         if (note.kind == Note.MORNING_LATER || note.kind == Note.MORNING_SKIP || note.kind == Note.MORNING_GO) { morningSaid(note); return true }
         if (note.kind == Note.MORNING_PICK) { morningPick(note); return true }
+        if (note.kind == Note.CRASH) { crashed(note); return true }
         val project = Repo.deck.value.byId(note.project) ?: return true
         val dir = Settings.state.value.localOf(project.id).dir
         val arg = { i: Int -> note.args.getOrElse(i) { "" } }

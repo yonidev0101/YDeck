@@ -259,7 +259,8 @@ object Computer {
     suspend fun write(context: Context, projectId: String, kind: String, text: String, args: List<String> = emptyList()): Boolean = withContext(Dispatchers.IO) {
         val app = context.applicationContext
         state(app)
-        val note = Note(java.util.UUID.randomUUID().toString(), projectId, kind, text.trim().take(Note.MAX), System.currentTimeMillis(), args.map { it.trim().take(Note.MAX) })
+        val long = kind == Note.TALK_SAY || kind == Note.CRASH
+        val note = Note(java.util.UUID.randomUUID().toString(), projectId, kind, text.trim().take(if (long) Note.LONG else Note.MAX), System.currentTimeMillis(), args.map { it.trim().take(Note.MAX) })
         writeOutbox(app, outbox + (note to false))
         sendPending(app)
     }

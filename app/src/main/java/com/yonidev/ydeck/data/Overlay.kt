@@ -78,7 +78,7 @@ object Overlay {
     }
 
     /** Requests the page already shows in place (the goal, saving, the conversation): not listed again as waiting. */
-    val inPlace = setOf(Note.GOAL_SUGGEST, Note.GOAL_TAKE, Note.GOAL_DISMISS, Note.GOAL_STEP, Note.SAVE_DO, Note.TALK_SAY, Note.TALK_NEW, Note.TALK_STOP, Note.TALK_ALLOW, Note.COMMANDS_FIND)
+    val inPlace = setOf(Note.GOAL_SUGGEST, Note.GOAL_TAKE, Note.GOAL_DISMISS, Note.GOAL_STEP, Note.SAVE_DO, Note.TALK_SAY, Note.TALK_NEW, Note.TALK_STOP, Note.TALK_ALLOW, Note.COMMANDS_FIND, Note.CRASH)
 
     /** A change in words, for the line that lists what still waits for the computer. */
     fun words(n: Note): String = when (n.kind) {
@@ -101,6 +101,7 @@ object Overlay {
         Note.GOAL_TAKE, Note.GOAL_DISMISS, Note.GOAL_STEP -> "היעד"
         Note.SAVE_DO -> "שמירה"
         Note.COMMANDS_FIND -> "חיפוש פקודות"
+        Note.CRASH -> "דיווח על קריסה"
         Note.TALK_SAY -> "הודעה ל־Claude"
         Note.TALK_NEW -> "שיחה חדשה"
         Note.TALK_STOP -> "עצירה"

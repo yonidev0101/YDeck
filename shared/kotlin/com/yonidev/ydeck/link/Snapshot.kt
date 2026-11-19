@@ -392,17 +392,21 @@ data class Note(val id: String, val project: String, val kind: String, val text:
         const val TALK_ALLOW = "talk.allow"
         /** "Find commands": Claude reads the project's folder for its commands, and they join the project's. */
         const val COMMANDS_FIND = "commands.find"
+        /** The phone's app crashed: [text] is what went wrong (the error and where), kept on the computer to be fixed. */
+        const val CRASH = "app.crash"
         /** How long a request that makes something happen on the computer waits on the relay before it's dropped. */
         const val FRESH_MS = 15 * 60_000L
 
         private val KINDS = setOf(NEXT, DECISION, DONE, ARCHIVE, LEFT_ADD, LEFT_DONE, LEFT_DROP, LEFT_MOVE, LEFT_EDIT, IDEA_ADD, IDEA_TAKE,
             IDEA_DROP, DONE_DROP, NAME, COLOR, KIND, LINK_ADD, LINK_EDIT, LINK_DROP, COPY_ADD, COPY_DROP, NEW_PROJECT, MORNING_LATER, MORNING_SKIP, MORNING_PICK, MORNING_GO,
-            GOAL_SUGGEST, GOAL_TAKE, GOAL_DISMISS, GOAL_STEP, SAVE_DO, TALK_SAY, TALK_NEW, TALK_STOP, TALK_ALLOW, COMMANDS_FIND)
+            GOAL_SUGGEST, GOAL_TAKE, GOAL_DISMISS, GOAL_STEP, SAVE_DO, TALK_SAY, TALK_NEW, TALK_STOP, TALK_ALLOW, COMMANDS_FIND, CRASH)
         /** Kinds whose text may be empty. */
         private val MAY_BE_EMPTY = setOf(DONE, KIND, GOAL_SUGGEST, GOAL_TAKE, GOAL_DISMISS, SAVE_DO, TALK_NEW, TALK_STOP, COMMANDS_FIND)
 
         /** The longest note the computer accepts. */
         const val MAX = 1000
+        /** A message to Claude, or a crash report, may be this long. */
+        const val LONG = 4000
 
         /** One line of plain text, never longer than MAX. */
         fun line(s: String): String = s.filter { !it.isISOControl() || it == '\n' }.replace(Regex("\\s*\\n\\s*"), " ").trim().take(MAX)
@@ -413,7 +417,7 @@ data class Note(val id: String, val project: String, val kind: String, val text:
             val kind = o.optString("note").takeIf { it in KINDS } ?: return null
             // Plain text only: no control characters, one line except for a decision, never longer than MAX.
             val raw = o.optString("text")
-            val text = if (kind == DECISION || kind == TALK_SAY) raw.filter { it == '\n' || !it.isISOControl() }.trim().take(if (kind == TALK_SAY) 4000 else MAX) else line(raw)
+            val text = if (kind == DECISION || kind == TALK_SAY || kind == CRASH) raw.filter { it == '\n' || it == '\t' || !it.isISOControl() }.trim().take(if (kind == DECISION) MAX else LONG) else line(raw)
             if (text.isEmpty() && kind !in MAY_BE_EMPTY) return null
             val args = o.optJSONArray("args")?.let { a -> (0 until minOf(a.length(), 4)).map { line(a.optString(it)) } } ?: emptyList()
             Note(o.optString("id").take(64), o.optString("project").take(100), kind, text, o.optLong("at"), args)

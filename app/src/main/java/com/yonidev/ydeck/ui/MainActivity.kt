@@ -92,6 +92,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        com.yonidev.ydeck.data.Crashes.catchIn(this)
+        com.yonidev.ydeck.data.Crashes.take(this)?.let { report -> lifecycleScope.launch { Computer.write(this@MainActivity, "", com.yonidev.ydeck.link.Note.CRASH, report) } }
         deck = Repo.deck(this)
         page = savedInstanceState?.getString(STATE_PAGE)?.let(::pageOf) ?: intent.getStringExtra(EXTRA_PROJECT)?.let { Page.Project(it) }
             ?: Page.Ask().takeIf { intent.getBooleanExtra(EXTRA_ASK, false) } ?: Page.Home
