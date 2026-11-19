@@ -53,6 +53,8 @@ data class LocalFile(
     val built: List<String> = emptyList(),
     /** The near goal, when one was set. */
     val goal: Goal? = null,
+    /** Commands Claude kept for the project (run again and again); they join the project's commands in YDeck. */
+    val commands: List<Command> = emptyList(),
 ) {
     /**
      * The handoff's next step as a suggestion: only while the handoff is the newest thing in the file. Once the next
@@ -87,10 +89,13 @@ object ProjectFiles {
             Handoff(it.optString("done").trim(), it.optString("next").trim(), runCatching { java.time.Instant.parse(it.optString("at")).toEpochMilli() }.getOrDefault(0L), it.optString("agent"))
         }?.takeIf { it.done.isNotEmpty() || it.next.isNotEmpty() }, f.lastModified(),
             left = items(o, Plan.LEFT), ideas = items(o, Plan.IDEAS), done = items(o, Plan.DONE),
-            built = items(o, BUILT), goal = goalOf(o.optJSONObject(GOAL)))
+            built = items(o, BUILT), goal = goalOf(o.optJSONObject(GOAL)),
+            commands = (o.optJSONArray(COMMANDS) ?: JSONArray()).let { a -> (0 until a.length()).mapNotNull { i -> a.optJSONObject(i)?.let { c ->
+                c.optString("line").trim().takeIf { it.isNotEmpty() && !it.contains('\n') }?.let { Command(c.optString("label").trim(), it) } } } })
     }.getOrNull()
 
     const val BUILT = "built"
+    const val COMMANDS = "commands"
     const val GOAL = "goal"
 
     /** The goal as an agent may write it: steps as objects ({"text", "done"}) or plain strings (not done yet). */
@@ -207,6 +212,29 @@ object ProjectFiles {
 
     /** The last next step seen in each folder's file (or written there), to tell Claude's change from ours. */
     private val seen = ConcurrentHashMap<String, String>()
+    /** The commands last seen in each folder's personal file: one Claude took out of it leaves YDeck too. */
+    private val seenCommands = ConcurrentHashMap<String, Set<String>>()
+
+    /**
+     * The commands in [dir]'s personal file into the project's: new ones added, a name given to one kept without, and
+     * one taken out of the file (since it was last seen there) taken out here. Those added any other way stay.
+     */
+    fun syncCommands(projectId: String, dir: File, file: LocalFile) {
+        val now = file.commands.map { it.line }.toSet()
+        val before = seenCommands.put(dir.path.lowercase(), now)
+        val cur = Settings.state.value.localOf(projectId)
+        var list = cur.commands
+        if (before != null) list = list.filterNot { it.line in before && it.line !in now }
+        file.commands.forEach { c ->
+            val i = list.indexOfFirst { it.line == c.line }
+            list = when {
+                i < 0 -> list + c
+                list[i].label.isBlank() && c.label.isNotBlank() -> list.toMutableList().also { it[i] = c }
+                else -> list
+            }
+        }
+        if (list != cur.commands) Settings.setLocal(projectId, cur.copy(commands = list))
+    }
 
     /** Brings what the files say into YDeck: new links into the project, new commands, a changed next step. */
     @Synchronized
@@ -228,7 +256,7 @@ object ProjectFiles {
                 if (cmds.isNotEmpty()) Settings.setLocal(p.id, Settings.state.value.localOf(p.id).copy(commands = local.commands + cmds))
             }
             AgentsFile.sync(dir)
-            readLocal(dir)?.next?.let { next ->
+            readLocal(dir)?.also { syncCommands(p.id, dir, it) }?.next?.let { next ->
                 val key = dir.path.lowercase()
                 if (seen[key] != next) {
                     seen[key] = next
@@ -277,6 +305,7 @@ object ProjectFiles {
             appendLine("- In the same file, \"built\" lists everything the project can do that a user sees, one short line per capability (\"Sign in with Google\", \"Pay with Stripe\"), with no limit: when you finish such a capability, add its line or update the one that's there; when one is removed, take its line out.")
             appendLine("- \"goal\" in the same file is the project's near goal: {\"title\": \"...\", \"steps\": [{\"text\": \"...\", \"done\": false}]}. When you finish one of its steps, set its \"done\" to true. Don't add, remove or reword the goal or its steps unless the user asks: they set it.")
             appendLine("- Something the user only wondered about or thought aloud (\"maybe\", \"what do you say\", \"I had an idea\") goes into \"ideas\": don't build it and don't put it in \"left\" unless they say to. They see the three lists in YDeck and move ideas on themselves.")
+            appendLine("- In the same file, \"commands\" lists the commands the user runs again and again in this project: [{\"label\": \"what it does, 1 to 3 words\", \"line\": \"the command as typed in the project's root\"}]. When you run or set up one they'll want again (the dev server, a build, tests, a deploy, a migration, a release), add it; when one changes or stops working (a script renamed, a tool replaced), fix its line or take it out. Never a secret or a token in a line. YDeck shows them as one-tap buttons, on the computer and on the phone.")
             appendLine("- When the user asks to close the project for today (\"close for today\", \"wrap up\", \"סגור להיום\"), run the /ydeck:${ClaudePlugin.CLOSE_DAY} command: it commits, pushes, stops what runs and leaves the next step, so nothing stays open.")
             if (!repo) {
                 append("The user turned off changes to files in the repository: leave $SHARED and AGENTS.md as they are.")

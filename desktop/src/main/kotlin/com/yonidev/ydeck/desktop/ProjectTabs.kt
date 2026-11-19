@@ -467,9 +467,11 @@ fun CommandsTab(p: Project, local: Local, dark: Boolean) {
         Column {
             Section(tr("Commands", "פקודות") + (if (local.commands.isEmpty()) "" else "  ${local.commands.size}")) {
                 if (Tools.claude != null) {
-                    val busy = p.id in ClaudeFill.busy.collectAsState().value
-                    TextAction(if (busy) tr("Claude is reading…", "Claude קורא…") else tr("Find commands with Claude", "למצוא פקודות עם Claude"), accent = true, enabled = !busy) {
-                        ClaudeFill.start(p, dir); Nav.set(Screen.Details(p.id))
+                    val busy = p.id in CommandFinder.busy.collectAsState().value
+                    val said = CommandFinder.results.collectAsState().value[p.id]?.second
+                    if (!busy && said != null) Text(said, color = c.muted, fontSize = 12.sp, fontFamily = PlexSans, modifier = Modifier.padding(end = 12.dp))
+                    TextAction(if (busy) tr("Claude is looking…", "Claude מחפש…") else tr("Find commands with Claude", "למצוא פקודות עם Claude"), accent = true, enabled = !busy) {
+                        CommandFinder.start(p, dir)
                     }
                 }
             }

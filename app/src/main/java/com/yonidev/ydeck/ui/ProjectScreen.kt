@@ -151,7 +151,8 @@ fun ProjectScreen(
         if (onEdit != null) add((if (p.archived) "החזרה מהארכיון" else "העברה לארכיון") to { onEdit(Note.ARCHIVE, if (p.archived) "0" else "1", emptyList()) })
     }
     val runsCard: (@Composable () -> Unit)? = if (onRun != null && live != null) {
-        { RunCard(runs, runOn, runOk, memory?.commands.orEmpty(), onRun = { line -> sentAt = System.currentTimeMillis() - 1_000; onRun(line, com.yonidev.ydeck.data.RunChoice.window(context)) },
+        { RunCard(runs, runOn, runOk, memory?.commands.orEmpty(), memory?.commandsBusy == true, memory?.commandsFound.orEmpty(),
+            onFind = onEdit?.let { e -> { e(com.yonidev.ydeck.link.Note.COMMANDS_FIND, "", emptyList()) } }, onRun = { line -> sentAt = System.currentTimeMillis() - 1_000; onRun(line, com.yonidev.ydeck.data.RunChoice.window(context)) },
             onOpen = { watching = it }) { running = true } }
     } else null
     if (inside != null) {
@@ -963,7 +964,7 @@ private fun ranWords(r: com.yonidev.ydeck.link.RunCommand, n: com.yonidev.ydeck.
 /** "Run a command on the computer": the lines allowed always for one tap, a new one, and the last few, with how they went. */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun RunCard(runs: List<Pair<com.yonidev.ydeck.link.RunCommand, com.yonidev.ydeck.link.Ran?>>, on: Boolean, ok: List<String>, saved: List<String>, onRun: (String) -> Unit,
+private fun RunCard(runs: List<Pair<com.yonidev.ydeck.link.RunCommand, com.yonidev.ydeck.link.Ran?>>, on: Boolean, ok: List<String>, saved: List<String>, finding: Boolean, found: String, onFind: (() -> Unit)?, onRun: (String) -> Unit,
                     onOpen: (String) -> Unit, onNew: () -> Unit) {
     val c = LocalDeck.current
     Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 6.dp)) {
@@ -990,6 +991,16 @@ private fun RunCard(runs: List<Pair<com.yonidev.ydeck.link.RunCommand, com.yonid
                 horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 chips.forEach { line -> CommandChip(line, line in ok) { onRun(line) } }
+            }
+            // Claude looks in the project's folder for its commands, and they join the buttons above.
+            if (onFind != null) Row(
+                Modifier.fillMaxWidth().clickable(enabled = !finding, onClick = onFind).padding(horizontal = 14.dp, vertical = 11.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text("✦", color = if (finding) c.faint else CLAUDE, fontSize = 14.sp)
+                Text(if (finding) "Claude מחפש פקודות בפרויקט…" else "למצוא פקודות עם Claude", color = if (finding) c.muted else c.fg, fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                if (!finding && found.isNotBlank()) Text(found, color = c.faint, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
         // The last few, newest first: the line, and how it went.

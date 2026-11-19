@@ -153,6 +153,8 @@ object PhoneLink {
             var waiting = SessionAsks.waiting.value
             var asking = Runs.asking.value
             var talk = Talk.chats.value
+            var finding = CommandFinder.busy.value
+            var found = CommandFinder.results.value
             var dossier = Dossier.busy.value
             var suggested = Dossier.suggested.value
             var cards = Saving.cards.value
@@ -169,6 +171,7 @@ object PhoneLink {
                 if (ClaudeLink.sessions.value !== claude) { claude = ClaudeLink.sessions.value; nudge() }
                 // The dossier, saving and the conversations on the projects' pages: the phone sees them as they move.
                 if (Talk.chats.value !== talk) { talk = Talk.chats.value; nudge() }
+                if (CommandFinder.busy.value !== finding || CommandFinder.results.value !== found) { finding = CommandFinder.busy.value; found = CommandFinder.results.value; nudge() }
                 if (Insights.lines.value !== insights) { insights = Insights.lines.value; nudge() }
                 // YDeck's line on each project, written again only when the project moved (see [Insights]).
                 if (System.currentTimeMillis() - thought > 5 * 60_000) {
@@ -487,6 +490,7 @@ object PhoneLink {
                 if (dir != null) PhoneEdits.list(dir, note.kind, note.text, arg(0))
             Note.NAME, Note.COLOR, Note.KIND, Note.LINK_ADD, Note.LINK_EDIT, Note.LINK_DROP, Note.COPY_ADD, Note.COPY_DROP ->
                 PhoneEdits.details(project, note.kind, note.text, note.args)?.let { saveProject(it) }
+            Note.COMMANDS_FIND -> if (dir != null && Settings.state.value.phoneAsk && kotlin.math.abs(System.currentTimeMillis() - note.at) <= Note.FRESH_MS) CommandFinder.start(project, dir)
             else -> if (dir != null) dossierNote(dir, note)
         }
         return true
@@ -658,6 +662,8 @@ object PhoneLink {
                 journal = if (dir != null) Journal.days(p.id, 7) else emptyList(),
                 built = mine?.built.orEmpty().take(60),
                 commands = local.commands.map { it.line }.distinct().take(30),
+                commandsBusy = p.id in CommandFinder.busy.value,
+                commandsFound = CommandFinder.results.value[p.id]?.takeIf { System.currentTimeMillis() - it.first < 30 * 60_000 }?.second.orEmpty(),
                 goal = mine?.goal?.title.orEmpty(),
                 goalSteps = mine?.goal?.steps.orEmpty().map { MemStep(it.text, it.done) },
                 saving = dir?.let { Saving.cards.value[it.path] }?.state.orEmpty(),
