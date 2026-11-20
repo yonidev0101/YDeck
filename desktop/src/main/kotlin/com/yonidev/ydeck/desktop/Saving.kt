@@ -61,7 +61,7 @@ object Saving {
         val clean: Boolean get() = info.changes == 0 && info.ahead == 0 && info.behind == 0 && unmerged.isEmpty() && info.phase == GitPhase.NONE
 
         /** Changes when anything the card speaks of changes. */
-        val signature: String get() = listOf("v5", info.branch, info.ahead, info.behind, info.upstream, info.phase, tips,
+        val signature: String get() = listOf("v6", info.branch, info.ahead, info.behind, info.upstream, info.phase, tips,
             info.files.sortedBy { it.path }.joinToString(",") { it.code + it.path }).joinToString("|").hashCode().toString(16)
     }
 
@@ -231,7 +231,7 @@ object Saving {
             add("${java.time.LocalDateTime.now().withNano(0)} branch ${f.info.branch} (ahead ${f.info.ahead}, behind ${f.info.behind}, upstream ${f.info.upstream ?: "none"}, remote ${f.info.hasRemote})")
             add("  proposal: " + o.optString("proposal").replace('\n', ' '))
             add("  files: " + f.info.files.joinToString(", ") { it.code.trim() + " " + it.path })
-            steps.forEachIndexed { i, st -> add("  " + st.toJson().toString() + " -> " + (whyNot(st, f, steps.take(i).any { it.kind == SaveStep.COMMIT }) ?: "ok")) }
+            steps.forEachIndexed { i, st -> add("  " + st.toJson().toString() + " -> " + (whyNot(st, f, steps.take(i).any { it.kind == SaveStep.COMMIT }, steps.take(i).any { it.kind == SaveStep.IGNORE }) ?: "ok")) }
         }
         val old = if (file.exists()) file.readLines() else emptyList()
         file.writeText((old + lines).takeLast(200).joinToString("\n") + "\n")
@@ -244,13 +244,14 @@ object Saving {
     }
 
     /** Why YDeck can't run [s] as said, or null when it can. [committed]: a commit comes before it in the card. */
-    fun whyNot(s: SaveStep, f: Facts, committed: Boolean = false): String? {
-        val paths = f.info.files.map { it.path }.toSet()
+    fun whyNot(s: SaveStep, f: Facts, committed: Boolean = false, ignored: Boolean = false): String? {
+        // A card that keeps files out of git changes .gitignore before its commit.
+        val paths = f.info.files.map { it.path }.toSet() + (if (ignored) setOf(".gitignore") else emptySet())
         val untracked = f.info.files.filter { it.untracked }.map { it.path }.toSet()
         return when (s.kind) {
             SaveStep.COMMIT -> when {
                 s.message.isBlank() -> "no message"
-                f.info.files.isEmpty() -> "nothing to commit"
+                f.info.files.isEmpty() && !ignored -> "nothing to commit"
                 s.paths.any { !listed(it, paths) } -> "not in the list: " + s.paths.filter { !listed(it, paths) }.joinToString()
                 else -> null
             }
@@ -280,7 +281,7 @@ object Saving {
     fun valid(all: List<SaveStep>, f: Facts): List<SaveStep> {
         // Bringing from the server when it has nothing new is a step with nothing to do: left out, not a reason to drop the rest.
         val steps = all.filterNot { it.kind == SaveStep.PULL && f.info.behind == 0 }
-        val ok = steps.filterIndexed { i, st -> whyNot(st, f, committed = steps.take(i).any { it.kind == SaveStep.COMMIT }) == null }
+        val ok = steps.filterIndexed { i, st -> whyNot(st, f, steps.take(i).any { it.kind == SaveStep.COMMIT }, steps.take(i).any { it.kind == SaveStep.IGNORE }) == null }
         // A step that doesn't hold makes the rest unsafe to run in its place (a push without its commit): none then.
         return if (ok.size == steps.size) ok else emptyList()
     }

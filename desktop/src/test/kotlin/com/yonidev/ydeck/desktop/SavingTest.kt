@@ -60,6 +60,13 @@ class SavingTest {
         assertEquals(SaveStep(SaveStep.PULL), Saving.stepOf(JSONObject("""{"kind":"pull"}""")))
     }
 
+    @Test fun gitignoreIsCommittedAfterTheCardKeepsAFileOut() {
+        val f = facts(listOf(GitChange("??", "beta.png")))
+        val steps = listOf(SaveStep(SaveStep.IGNORE, listOf("beta.png")), SaveStep(SaveStep.COMMIT, listOf(".gitignore"), "Keep beta.png out"), SaveStep(SaveStep.PUSH))
+        assertEquals(steps, Saving.valid(steps, f))
+        assertTrue(Saving.valid(listOf(SaveStep(SaveStep.COMMIT, listOf(".gitignore"), "x")), f).isEmpty())
+    }
+
     @Test fun theBranchWeAreOnMergesAfterItsCommit() {
         val f = Saving.Facts(GitInfo("rules", 1, 0, 0, files = listOf(GitChange(" M", "a.txt")), hasRemote = false), "main", emptyList(), "", "", "", emptyList(), emptyList())
         val steps = listOf(SaveStep(SaveStep.COMMIT, emptyList(), "Rules"), SaveStep(SaveStep.MERGE, branch = "rules"))
