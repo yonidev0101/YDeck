@@ -61,7 +61,7 @@ object Saving {
         val clean: Boolean get() = info.changes == 0 && info.ahead == 0 && info.behind == 0 && unmerged.isEmpty() && info.phase == GitPhase.NONE
 
         /** Changes when anything the card speaks of changes. */
-        val signature: String get() = listOf("v2", info.branch, info.ahead, info.behind, info.upstream, info.phase, tips,
+        val signature: String get() = listOf("v3", info.branch, info.ahead, info.behind, info.upstream, info.phase, tips,
             info.files.sortedBy { it.path }.joinToString(",") { it.code + it.path }).joinToString("|").hashCode().toString(16)
     }
 
@@ -185,9 +185,9 @@ object Saving {
         val language = if (I18n.rtl) "Hebrew" else "English"
         appendLine("You are YDeck, the developer's project dashboard. Below is what git says about one project. Tell the developer, in $language, plainly, where the project's git stands and what you'd do next, and give the steps that do it.")
         appendLine("- \"state\": one or two short sentences: what's open, in words (what the changes are about, a file that looks left by mistake, branches waiting to be merged, commits not on the server yet). No file lists unless there are only one or two files.")
-        appendLine("- \"proposal\": one or two short sentences: what you suggest doing next, as a partner would. Not only saving: bring first what's new on the server, split unrelated changes into separate commits, merge a finished branch, keep a stray file out of git, or, in words only, what YDeck can't do (open a pull request, delete a merged branch, resolve a conflict, release a version).")
+        appendLine("- \"proposal\": one or two short sentences: what you suggest doing next, as a partner would. Not only saving: bring what's new on the server (only when the server has commits not here), split unrelated changes into separate commits, merge a finished branch, keep a stray file out of git, or, in words only, what YDeck can't do (open a pull request, delete a merged branch, resolve a conflict, release a version).")
         appendLine("- \"steps\": the steps that do it, in order, from these only:")
-        appendLine("  {\"kind\":\"pull\"} (brings the commits from the server, only when nothing here is overwritten; first, before the rest)")
+        appendLine("  {\"kind\":\"pull\"} (brings the commits from the server, only when nothing here is overwritten; only when the server has commits not here, and first, before the rest)")
         appendLine("  {\"kind\":\"commit\",\"paths\":[the files to commit, from the list below; empty for all],\"message\":\"the commit message, in the style and language of the recent ones\"}")
         appendLine("  {\"kind\":\"ignore\",\"paths\":[new files that shouldn't be in git, from the list below]} (adds them to .gitignore)")
         appendLine("  {\"kind\":\"push\"} (sends the commits to the server; never force)")
@@ -222,7 +222,9 @@ object Saving {
         return SaveCard(o.optString("state").trim(), o.optString("proposal").trim(), valid(steps, f), f.signature)
     }
 
-    fun valid(steps: List<SaveStep>, f: Facts): List<SaveStep> {
+    fun valid(all: List<SaveStep>, f: Facts): List<SaveStep> {
+        // Bringing from the server when it has nothing new is a step with nothing to do: left out, not a reason to drop the rest.
+        val steps = all.filterNot { it.kind == SaveStep.PULL && f.info.behind == 0 }
         val paths = f.info.files.map { it.path }.toSet()
         val untracked = f.info.files.filter { it.untracked }.map { it.path }.toSet()
         val branches = f.unmerged.map { it.first }.toSet()

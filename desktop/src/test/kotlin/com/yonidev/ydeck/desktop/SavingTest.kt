@@ -54,6 +54,9 @@ class SavingTest {
         // Not clean while the server has news: Claude is asked what to do.
         assertTrue(!behind.clean)
         assertTrue(Saving.valid(listOf(SaveStep(SaveStep.PULL)), facts(listOf(GitChange(" M", "a.txt")))).isEmpty())
+        // A pull with nothing to bring is left out; the commit and push after it still stand.
+        val rest = listOf(SaveStep(SaveStep.COMMIT, listOf("a.txt"), "Fix"), SaveStep(SaveStep.PUSH))
+        assertEquals(rest, Saving.valid(listOf(SaveStep(SaveStep.PULL)) + rest, facts(listOf(GitChange(" M", "a.txt")))))
         assertEquals(SaveStep(SaveStep.PULL), Saving.stepOf(JSONObject("""{"kind":"pull"}""")))
     }
 
