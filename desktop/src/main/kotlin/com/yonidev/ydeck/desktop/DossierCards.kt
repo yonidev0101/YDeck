@@ -249,6 +249,7 @@ fun stepsWords(steps: List<SaveStep>): String = steps.joinToString(" · ") { s -
     when (s.kind) {
         SaveStep.COMMIT -> tr("commit", "שמירה")
         SaveStep.PUSH -> tr("push", "העלאה")
+        SaveStep.PULL -> tr("bring from the server", "הורדה מהשרת")
         SaveStep.IGNORE -> tr("keep out of git", "הוצאה מ־git")
         SaveStep.MERGE -> tr("merge ${s.branch}", "מיזוג ${s.branch}")
         else -> s.kind

@@ -22,7 +22,9 @@ data class SaveStep(val kind: String, val paths: List<String> = emptyList(), val
         const val PUSH = "push"
         const val IGNORE = "ignore"
         const val MERGE = "merge"
-        val KINDS = listOf(COMMIT, PUSH, IGNORE, MERGE)
+        /** Brings what's new on the server, only when nothing here is overwritten (git pull --ff-only). */
+        const val PULL = "pull"
+        val KINDS = listOf(PULL, COMMIT, PUSH, IGNORE, MERGE)
     }
 
     fun toJson(): JSONObject = JSONObject().put("kind", kind).put("paths", JSONArray(paths)).put("message", message).put("branch", branch)
@@ -56,10 +58,10 @@ object Saving {
         val untracked: List<String>,
         val log: List<String>,
     ) {
-        val clean: Boolean get() = info.changes == 0 && info.ahead == 0 && unmerged.isEmpty() && info.phase == GitPhase.NONE
+        val clean: Boolean get() = info.changes == 0 && info.ahead == 0 && info.behind == 0 && unmerged.isEmpty() && info.phase == GitPhase.NONE
 
         /** Changes when anything the card speaks of changes. */
-        val signature: String get() = listOf(info.branch, info.ahead, info.behind, info.upstream, info.phase, tips,
+        val signature: String get() = listOf("v2", info.branch, info.ahead, info.behind, info.upstream, info.phase, tips,
             info.files.sortedBy { it.path }.joinToString(",") { it.code + it.path }).joinToString("|").hashCode().toString(16)
     }
 
@@ -181,10 +183,11 @@ object Saving {
 
     fun prompt(f: Facts): String = buildString {
         val language = if (I18n.rtl) "Hebrew" else "English"
-        appendLine("You are YDeck, the developer's project dashboard. Below is what git says about one project. Tell the developer, in $language, plainly, what isn't saved yet and what to do about it, and give the steps that do it.")
+        appendLine("You are YDeck, the developer's project dashboard. Below is what git says about one project. Tell the developer, in $language, plainly, where the project's git stands and what you'd do next, and give the steps that do it.")
         appendLine("- \"state\": one or two short sentences: what's open, in words (what the changes are about, a file that looks left by mistake, branches waiting to be merged, commits not on the server yet). No file lists unless there are only one or two files.")
-        appendLine("- \"proposal\": one sentence: what you suggest doing.")
+        appendLine("- \"proposal\": one or two short sentences: what you suggest doing next, as a partner would. Not only saving: bring first what's new on the server, split unrelated changes into separate commits, merge a finished branch, keep a stray file out of git, or, in words only, what YDeck can't do (open a pull request, delete a merged branch, resolve a conflict, release a version).")
         appendLine("- \"steps\": the steps that do it, in order, from these only:")
+        appendLine("  {\"kind\":\"pull\"} (brings the commits from the server, only when nothing here is overwritten; first, before the rest)")
         appendLine("  {\"kind\":\"commit\",\"paths\":[the files to commit, from the list below; empty for all],\"message\":\"the commit message, in the style and language of the recent ones\"}")
         appendLine("  {\"kind\":\"ignore\",\"paths\":[new files that shouldn't be in git, from the list below]} (adds them to .gitignore)")
         appendLine("  {\"kind\":\"push\"} (sends the commits to the server; never force)")
@@ -228,6 +231,7 @@ object Saving {
                 SaveStep.COMMIT -> s.message.isNotBlank() && s.paths.all { it in paths } && f.info.files.isNotEmpty()
                 SaveStep.IGNORE -> s.paths.isNotEmpty() && s.paths.all { it in untracked }
                 SaveStep.PUSH -> f.info.hasRemote
+                SaveStep.PULL -> f.info.hasRemote && f.info.upstream != null && f.info.behind > 0
                 SaveStep.MERGE -> f.main != null && s.branch in branches && s.branch != f.main
                 else -> false
             }
@@ -256,6 +260,7 @@ object Saving {
                     SaveStep.IGNORE -> ignore(dir, s.paths)
                     SaveStep.COMMIT -> GitOps.commit(dir, s.message, s.paths.ifEmpty { null })
                     SaveStep.PUSH -> GitOps.push(dir)
+                    SaveStep.PULL -> GitOps.pull(dir)
                     SaveStep.MERGE -> merge(dir, s.branch, facts.main ?: return tr("No main branch", "אין ענף ראשי"))
                     else -> tr("A step YDeck doesn't run", "צעד ש־YDeck לא מריץ")
                 }

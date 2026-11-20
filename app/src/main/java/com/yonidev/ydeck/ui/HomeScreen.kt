@@ -190,8 +190,10 @@ private data class HomeNeed(val project: Project, val kind: String, val text: St
 
 private fun homeNeeds(p: Project, m: Memory?, live: com.yonidev.ydeck.link.Live?): List<HomeNeed> = buildList {
     if (m != null && m.talkAsk.isNotBlank()) add(HomeNeed(p, "ask", m.talkAsk, askId = m.talkAskId))
-    if (live?.hasGit == true && (live.changes > 0 || live.ahead > 0)) add(HomeNeed(p, "save",
-        when { live.changes == 1 -> "קובץ אחד לא שמור"; live.changes > 1 -> "${live.changes} קבצים לא שמורים"; live.ahead == 1 -> "שמירה אחת לא הועלתה"; else -> "${live.ahead} שמירות לא הועלו" },
+    // What Claude suggests for the project's git, when it has; else how much is open.
+    if (live?.hasGit == true && (live.changes > 0 || live.ahead > 0 || live.behind > 0)) add(HomeNeed(p, "save",
+        m?.savingProposal?.takeIf { it.isNotBlank() }
+            ?: when { live.changes == 1 -> "קובץ אחד לא שמור"; live.changes > 1 -> "${live.changes} קבצים לא שמורים"; live.ahead == 1 -> "שמירה אחת לא הועלתה"; live.ahead > 1 -> "${live.ahead} שמירות לא הועלו"; live.behind == 1 -> "שמירה אחת חדשה בשרת"; else -> "${live.behind} שמירות חדשות בשרת" },
         canSave = m?.savingSteps?.isNotBlank() == true, busy = m?.savingBusy == true))
 }
 
@@ -208,7 +210,7 @@ private fun NeedRow(n: HomeNeed, working: Boolean, onEdit: ((String, String, Str
         }
         val (label, act) = when {
             n.kind == "ask" && working && onEdit != null && n.askId.isNotBlank() -> "לאשר" to { onEdit(n.project.id, com.yonidev.ydeck.link.Note.TALK_ALLOW, n.askId, listOf("once")) }
-            n.kind == "save" && working && onEdit != null && n.canSave -> (if (n.busy) "שומר…" else "לשמור") to { if (!n.busy) onEdit(n.project.id, com.yonidev.ydeck.link.Note.SAVE_DO, "", emptyList()) }
+            n.kind == "save" && working && onEdit != null && n.canSave -> (if (n.busy) "עובד…" else "לעשות") to { if (!n.busy) onEdit(n.project.id, com.yonidev.ydeck.link.Note.SAVE_DO, "", emptyList()) }
             else -> "פתיחה" to onOpen
         }
         val strong = label == "לאשר"

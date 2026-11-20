@@ -48,6 +48,15 @@ class SavingTest {
         assertTrue(Saving.valid(listOf(SaveStep(SaveStep.PUSH)), facts(emptyList(), remote = false)).isEmpty())
     }
 
+    @Test fun pullOnlyWhenTheServerHasNews() {
+        val behind = Saving.Facts(GitInfo("main", 0, 0, 2, hasRemote = true, upstream = "origin/main"), "main", emptyList(), "", "", "", emptyList(), emptyList())
+        assertEquals(listOf(SaveStep(SaveStep.PULL)), Saving.valid(listOf(SaveStep(SaveStep.PULL)), behind))
+        // Not clean while the server has news: Claude is asked what to do.
+        assertTrue(!behind.clean)
+        assertTrue(Saving.valid(listOf(SaveStep(SaveStep.PULL)), facts(listOf(GitChange(" M", "a.txt")))).isEmpty())
+        assertEquals(SaveStep(SaveStep.PULL), Saving.stepOf(JSONObject("""{"kind":"pull"}""")))
+    }
+
     @Test fun unknownKindsAreDropped() {
         assertNull(Saving.stepOf(JSONObject("""{"kind":"reset"}""")))
         assertEquals(SaveStep(SaveStep.PUSH), Saving.stepOf(JSONObject("""{"kind":"push"}""")))

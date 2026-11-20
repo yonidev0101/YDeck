@@ -1467,7 +1467,7 @@ private data object SaveNeed : Need
 
 private fun needsOf(m: Memory, live: Live?): List<Need> = buildList {
     if (m.talkAsk.isNotBlank()) add(PermissionNeed)
-    if (live?.hasGit == true && (live.changes > 0 || live.ahead > 0)) add(SaveNeed)
+    if (live?.hasGit == true && (live.changes > 0 || live.ahead > 0 || live.behind > 0)) add(SaveNeed)
 }
 
 /** What needs you, each with its one button. */
@@ -1500,7 +1500,7 @@ private fun NeedsOf(needs: List<Need>, m: Memory, working: Boolean, edit: ((Stri
                                 m.savingProposal.isNotBlank() -> Text(m.savingProposal, color = c.muted, fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, style = TextStyle(textDirection = TextDirection.Content))
                             }
                         }
-                        if (working && edit != null && m.savingSteps.isNotBlank()) PillButton(if (m.savingBusy) "שומר…" else "לשמור", enabled = !m.savingBusy) { edit(Note.SAVE_DO, "", emptyList()) }
+                        if (working && edit != null && m.savingSteps.isNotBlank()) PillButton(if (m.savingBusy) "עובד…" else "לעשות", enabled = !m.savingBusy) { edit(Note.SAVE_DO, "", emptyList()) }
                     }
                 }
             }
@@ -1732,6 +1732,37 @@ private fun UnderlineTabs(tabs: List<Pair<String, String>>, on: String, onTab: (
     }
 }
 
+/** Claude's card in Git: what it suggests, what it sees, and "לעשות" for the steps YDeck can run itself. */
+@Composable
+private fun ClaudeSuggests(m: Memory, on: Boolean, edit: ((String, String, List<String>) -> Unit)?) {
+    val c = LocalDeck.current
+    val busy = m.savingBusy
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(c.surface2).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("✳", color = androidx.compose.ui.graphics.Color(0xFFD97757), fontSize = 15.sp)
+            Text("Claude מציע", color = c.muted, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        }
+        when {
+            m.savingProposal.isNotBlank() -> Text(m.savingProposal, color = c.fg, fontSize = 16.sp, lineHeight = 23.sp, fontWeight = FontWeight.Medium,
+                style = TextStyle(textDirection = TextDirection.Content))
+            busy -> Text("Claude מסתכל על מה שפתוח…", color = c.muted, fontSize = 14.sp)
+        }
+        if (m.saving.isNotBlank()) Text(m.saving, color = c.muted, fontSize = 13.5.sp, lineHeight = 20.sp, style = TextStyle(textDirection = TextDirection.Content))
+        if (m.savingSteps.isNotBlank() && edit != null && on) {
+            Box(Modifier.fillMaxWidth().padding(top = 4.dp).height(46.dp).clip(RoundedCornerShape(14.dp)).background(if (busy) c.line else c.fg)
+                .clickable(enabled = !busy) { edit(Note.SAVE_DO, "", emptyList()) }, contentAlignment = Alignment.Center) {
+                Text(if (busy) "עובד…" else "לעשות", color = if (busy) c.muted else c.bg, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            }
+            Text(m.savingSteps, color = c.faint, fontSize = 12.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.fillMaxWidth())
+        }
+        if (m.savingSteps.isNotBlank() && edit != null && !on) Text("כדי לעשות את זה מכאן, מדליקים במחשב: הגדרות ← טלפון.", color = c.faint, fontSize = 12.sp)
+        when {
+            m.savingResult == "ok" -> Text("נעשה.", color = c.closed, fontSize = 13.sp)
+            m.savingResult.isNotBlank() -> Text(m.savingResult, color = c.danger, fontSize = 13.sp, lineHeight = 19.sp)
+        }
+    }
+}
+
 /** Git inside: where saving stands in words, the files, one button to save and push, the last commits. */
 @Composable
 private fun GitPane(live: Live?, m: Memory?, on: Boolean, edit: ((String, String, List<String>) -> Unit)?) {
@@ -1741,7 +1772,7 @@ private fun GitPane(live: Live?, m: Memory?, on: Boolean, edit: ((String, String
         FootNote(if (live == null) "לפרויקט הזה אין תיקייה ב־YDeck במחשב." else "התיקייה של הפרויקט הזה עוד לא ריפו של Git.")
         return
     }
-    val clean = live.changes == 0 && live.ahead == 0
+    val clean = live.changes == 0 && live.ahead == 0 && live.behind == 0
     Column(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 22.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1751,6 +1782,8 @@ private fun GitPane(live: Live?, m: Memory?, on: Boolean, edit: ((String, String
                     live.changes > 1 -> "${live.changes} קבצים לא שמורים"
                     live.ahead == 1 -> "שמירה אחת לא הועלתה"
                     live.ahead > 1 -> "${live.ahead} שמירות לא הועלו"
+                    live.behind == 1 -> "שמירה אחת חדשה בשרת"
+                    live.behind > 1 -> "${live.behind} שמירות חדשות בשרת"
                     else -> "הכול שמור ומועלה"
                 }, color = c.fg, fontSize = 20.sp, fontWeight = FontWeight.Medium)
             }
@@ -1781,22 +1814,9 @@ private fun GitPane(live: Live?, m: Memory?, on: Boolean, edit: ((String, String
             }
             Hairline()
         }
-        // One button that saves and pushes (the steps YDeck worked out on the computer).
-        if (!clean && m != null) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (m.savingSteps.isNotBlank() && edit != null && on) {
-                val busy = m.savingBusy
-                Box(Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(14.dp)).background(if (busy) c.surface2 else c.fg)
-                    .clickable(enabled = !busy) { edit(Note.SAVE_DO, "", emptyList()) }, contentAlignment = Alignment.Center) {
-                    Text(if (busy) "שומר…" else "לשמור ולהעלות", color = if (busy) c.muted else c.bg, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                }
-                Text(m.savingSteps, color = c.faint, fontSize = 12.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.fillMaxWidth())
-            } else if (m.saving.isNotBlank()) Text(m.saving, color = c.muted, fontSize = 13.5.sp, lineHeight = 20.sp)
-            if (m.savingSteps.isNotBlank() && edit != null && !on) Text("כדי לשמור מכאן, מדליקים במחשב: הגדרות ← טלפון.", color = c.faint, fontSize = 12.sp)
-            when {
-                m.savingResult == "ok" -> Text("נשמר.", color = c.closed, fontSize = 13.sp)
-                m.savingResult.isNotBlank() -> Text(m.savingResult, color = c.danger, fontSize = 13.sp, lineHeight = 19.sp)
-            }
-        }
+        // What Claude suggests doing next (written on the computer from what git says), and one button that does it.
+        if (m != null && (m.savingProposal.isNotBlank() || m.savingSteps.isNotBlank() || (!clean && (m.saving.isNotBlank() || m.savingBusy))))
+            ClaudeSuggests(m, on, edit)
         if (live.commits.isNotEmpty()) Column {
             Text("שמירות אחרונות", color = c.muted, fontSize = 13.sp, modifier = Modifier.padding(bottom = 4.dp))
             Hairline()
