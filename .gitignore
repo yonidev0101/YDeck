@@ -43,3 +43,4 @@ store/ads/archive/
 # stats worker
 stats/.dev.vars
 stats/.wrangler/
+/beta.png
