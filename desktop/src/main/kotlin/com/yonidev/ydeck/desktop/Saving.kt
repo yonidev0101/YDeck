@@ -61,7 +61,7 @@ object Saving {
         val clean: Boolean get() = info.changes == 0 && info.ahead == 0 && info.behind == 0 && unmerged.isEmpty() && info.phase == GitPhase.NONE
 
         /** Changes when anything the card speaks of changes. */
-        val signature: String get() = listOf("v3", info.branch, info.ahead, info.behind, info.upstream, info.phase, tips,
+        val signature: String get() = listOf("v5", info.branch, info.ahead, info.behind, info.upstream, info.phase, tips,
             info.files.sortedBy { it.path }.joinToString(",") { it.code + it.path }).joinToString("|").hashCode().toString(16)
     }
 
@@ -219,25 +219,68 @@ object Saving {
     /** Claude's answer, with only the steps YDeck can run as said: files from the list, branches from the list, a message for a commit. */
     fun parse(o: JSONObject, f: Facts): SaveCard {
         val steps = o.optJSONArray("steps")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it)?.let(::stepOf) } }.orEmpty()
-        return SaveCard(o.optString("state").trim(), o.optString("proposal").trim(), valid(steps, f), f.signature)
+        val ok = valid(steps, f)
+        if (ok.isEmpty() && steps.isNotEmpty()) logDropped(o, steps, f)
+        return SaveCard(o.optString("state").trim(), o.optString("proposal").trim(), ok, f.signature)
+    }
+
+    /** Why a card came without its button: Claude's steps and what didn't hold, in saving-dropped.txt (the last 200 lines). */
+    private fun logDropped(o: JSONObject, steps: List<SaveStep>, f: Facts) = runCatching {
+        val file = File(AppDirs.data, "saving-dropped.txt")
+        val lines = buildList {
+            add("${java.time.LocalDateTime.now().withNano(0)} branch ${f.info.branch} (ahead ${f.info.ahead}, behind ${f.info.behind}, upstream ${f.info.upstream ?: "none"}, remote ${f.info.hasRemote})")
+            add("  proposal: " + o.optString("proposal").replace('\n', ' '))
+            add("  files: " + f.info.files.joinToString(", ") { it.code.trim() + " " + it.path })
+            steps.forEachIndexed { i, st -> add("  " + st.toJson().toString() + " -> " + (whyNot(st, f, steps.take(i).any { it.kind == SaveStep.COMMIT }) ?: "ok")) }
+        }
+        val old = if (file.exists()) file.readLines() else emptyList()
+        file.writeText((old + lines).takeLast(200).joinToString("\n") + "\n")
+    }
+
+    /** git lists a new folder as "dir/": a path names it with or without the slash, or names something inside it. */
+    private fun listed(path: String, among: Set<String>): Boolean {
+        val p = path.trim().removePrefix("./").trimEnd('/')
+        return among.any { a -> a.trimEnd('/') == p || (a.endsWith("/") && p.startsWith(a)) }
+    }
+
+    /** Why YDeck can't run [s] as said, or null when it can. [committed]: a commit comes before it in the card. */
+    fun whyNot(s: SaveStep, f: Facts, committed: Boolean = false): String? {
+        val paths = f.info.files.map { it.path }.toSet()
+        val untracked = f.info.files.filter { it.untracked }.map { it.path }.toSet()
+        return when (s.kind) {
+            SaveStep.COMMIT -> when {
+                s.message.isBlank() -> "no message"
+                f.info.files.isEmpty() -> "nothing to commit"
+                s.paths.any { !listed(it, paths) } -> "not in the list: " + s.paths.filter { !listed(it, paths) }.joinToString()
+                else -> null
+            }
+            SaveStep.IGNORE -> when {
+                s.paths.isEmpty() -> "no files"
+                s.paths.any { !listed(it, untracked) } -> "not a new file: " + s.paths.filter { !listed(it, untracked) }.joinToString()
+                else -> null
+            }
+            SaveStep.PUSH -> if (f.info.hasRemote) null else "no server"
+            SaveStep.PULL -> when {
+                !f.info.hasRemote -> "no server"
+                f.info.upstream == null -> "the branch isn't on the server"
+                f.info.behind == 0 -> "nothing new on the server"
+                else -> null
+            }
+            SaveStep.MERGE -> when {
+                f.main == null -> "no main branch"
+                s.branch == f.main -> "merging main into itself"
+                // The branch we're on, merged right after the card commits on it: it waits once that commit is made.
+                s.branch !in f.unmerged.map { it.first } && !(committed && s.branch == f.info.branch) -> "not a branch waiting: ${s.branch}"
+                else -> null
+            }
+            else -> "unknown step"
+        }
     }
 
     fun valid(all: List<SaveStep>, f: Facts): List<SaveStep> {
         // Bringing from the server when it has nothing new is a step with nothing to do: left out, not a reason to drop the rest.
         val steps = all.filterNot { it.kind == SaveStep.PULL && f.info.behind == 0 }
-        val paths = f.info.files.map { it.path }.toSet()
-        val untracked = f.info.files.filter { it.untracked }.map { it.path }.toSet()
-        val branches = f.unmerged.map { it.first }.toSet()
-        val ok = steps.filter { s ->
-            when (s.kind) {
-                SaveStep.COMMIT -> s.message.isNotBlank() && s.paths.all { it in paths } && f.info.files.isNotEmpty()
-                SaveStep.IGNORE -> s.paths.isNotEmpty() && s.paths.all { it in untracked }
-                SaveStep.PUSH -> f.info.hasRemote
-                SaveStep.PULL -> f.info.hasRemote && f.info.upstream != null && f.info.behind > 0
-                SaveStep.MERGE -> f.main != null && s.branch in branches && s.branch != f.main
-                else -> false
-            }
-        }
+        val ok = steps.filterIndexed { i, st -> whyNot(st, f, committed = steps.take(i).any { it.kind == SaveStep.COMMIT }) == null }
         // A step that doesn't hold makes the rest unsafe to run in its place (a push without its commit): none then.
         return if (ok.size == steps.size) ok else emptyList()
     }

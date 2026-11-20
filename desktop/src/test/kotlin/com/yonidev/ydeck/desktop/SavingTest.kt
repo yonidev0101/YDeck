@@ -60,6 +60,22 @@ class SavingTest {
         assertEquals(SaveStep(SaveStep.PULL), Saving.stepOf(JSONObject("""{"kind":"pull"}""")))
     }
 
+    @Test fun theBranchWeAreOnMergesAfterItsCommit() {
+        val f = Saving.Facts(GitInfo("rules", 1, 0, 0, files = listOf(GitChange(" M", "a.txt")), hasRemote = false), "main", emptyList(), "", "", "", emptyList(), emptyList())
+        val steps = listOf(SaveStep(SaveStep.COMMIT, emptyList(), "Rules"), SaveStep(SaveStep.MERGE, branch = "rules"))
+        assertEquals(steps, Saving.valid(steps, f))
+        // Without the commit before it, there's nothing on the branch to merge.
+        assertTrue(Saving.valid(listOf(SaveStep(SaveStep.MERGE, branch = "rules")), f).isEmpty())
+    }
+
+    @Test fun aNewFolderWithOrWithoutItsSlash() {
+        val f = facts(listOf(GitChange(" M", "a.txt"), GitChange("??", "scripts/tmp/")))
+        val steps = listOf(SaveStep(SaveStep.IGNORE, listOf("scripts/tmp")), SaveStep(SaveStep.COMMIT, listOf("a.txt"), "Fix"))
+        assertEquals(steps, Saving.valid(steps, f))
+        assertEquals(listOf(SaveStep(SaveStep.IGNORE, listOf("scripts/tmp/x.log"))), Saving.valid(listOf(SaveStep(SaveStep.IGNORE, listOf("scripts/tmp/x.log"))), f))
+        assertTrue(Saving.valid(listOf(SaveStep(SaveStep.IGNORE, listOf("scripts"))), f).isEmpty())
+    }
+
     @Test fun unknownKindsAreDropped() {
         assertNull(Saving.stepOf(JSONObject("""{"kind":"reset"}""")))
         assertEquals(SaveStep(SaveStep.PUSH), Saving.stepOf(JSONObject("""{"kind":"push"}""")))
