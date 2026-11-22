@@ -136,9 +136,11 @@ class Snapshot(
     val morningPicks: List<String> = emptyList(),
     /** The phone may look at the projects' files, read only ([FileAsk]): on in the computer's settings. */
     val files: Boolean = false,
+    /** The phone may also change files there (each save only if the file is still as the phone opened it): on in the computer's settings. */
+    val edit: Boolean = false,
 ) {
     /** The same state made at another time: what changed, without the time it was made. */
-    fun at(time: Long) = Snapshot(time, computer, deck, memory, live, applied, launch, claude, launched, beat, ask, answers, waiting, reply, replied, run, ran, runOk, morning, morningAt, morningBusy, morningError, morningPicks, files)
+    fun at(time: Long) = Snapshot(time, computer, deck, memory, live, applied, launch, claude, launched, beat, ask, answers, waiting, reply, replied, run, ran, runOk, morning, morningAt, morningBusy, morningError, morningPicks, files, edit)
 
     fun encode(): ByteArray = JSONObject().apply {
         put("app", "YDeck")
@@ -168,6 +170,7 @@ class Snapshot(
         put("morningError", morningError)
         put("morningPicks", JSONArray(morningPicks))
         put("files", files)
+        put("edit", edit)
     }.toString().toByteArray()
 
     companion object {
@@ -202,6 +205,7 @@ class Snapshot(
                 morningError = o.optString("morningError"),
                 morningPicks = o.optJSONArray("morningPicks")?.let { a -> (0 until a.length()).map { a.optString(it) } }.orEmpty(),
                 files = o.optBoolean("files"),
+                edit = o.optBoolean("edit"),
             )
         }
 

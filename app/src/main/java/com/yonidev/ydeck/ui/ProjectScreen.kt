@@ -131,6 +131,7 @@ fun ProjectScreen(
     onRun: ((line: String, window: Boolean) -> Unit)? = null,
     /** The computer shows this project's files here, read only (on in its settings). */
     filesOn: Boolean = false,
+    editOn: Boolean = false,
 ) {
     val c = LocalDeck.current
     var tab by rememberSaveable { mutableStateOf(Tab.MEMORY) }
@@ -172,7 +173,7 @@ fun ProjectScreen(
         androidx.activity.compose.BackHandler { inside = null }
         PageScaffold(title = "מה יש ב־" + p.name, onBack = { inside = null }) {
             InsidePage(p, memory, live, insideTab, { inside = it }, edit, if (canWrite) { kind -> writing = kind } else null, { asking = it },
-                runs = runsCard, saveOn = launchOn, filesOn = filesOn)
+                runs = runsCard, saveOn = launchOn, filesOn = filesOn, editOn = editOn)
         }
     } else PageScaffold(
         title = p.name, onBack = onBack,
@@ -1596,6 +1597,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.InsidePage(
     runs: (@Composable () -> Unit)?,
     saveOn: Boolean = false,
     filesOn: Boolean = false,
+    editOn: Boolean = false,
 ) {
     item {
         val c = LocalDeck.current
@@ -1624,7 +1626,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.InsidePage(
         "links" -> item { LinksTab(p, live) }
         "git" -> item { GitPane(live, m, saveOn, edit) }
         "runs" -> item { runs?.invoke() }
-        "files" -> item { FilesPane(p.id, p.name, filesOn) }
+        "files" -> item { FilesPane(p.id, p.name, filesOn, editOn) }
     }
 }
 

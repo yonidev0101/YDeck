@@ -706,7 +706,7 @@ object PhoneLink {
             run = settings.phoneRun, ran = Runs.ran.toList(), runOk = if (settings.phoneRun) settings.runOk.filterKeys { k -> deck.projects.any { it.id == k } } else emptyMap(),
             morning = morning, morningAt = if (settings.phoneMorning && settings.phoneAsk && Tools.claude != null) settings.morningAt else -1,
             morningBusy = morningBusy, morningError = morningError, morningPicks = if (settings.phoneAsk) GoodMorning.projects().map { it.id } else emptyList(),
-            files = settings.phoneFiles)
+            files = settings.phoneFiles, edit = settings.phoneFiles && settings.phoneEdit)
     }
 
     /** The conversation with Claude in the project (the one on its page, or a recent one), its last lines. */

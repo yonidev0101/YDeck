@@ -69,24 +69,10 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 /*
- * A project's folder on the computer, read only: its folders and files, one level at a time; a file opens here
- * (text, a picture), or comes to the phone to open in another app.
+ * A project's folder on the computer: its folders and files, one level at a time, each with its icon as in VS Code;
+ * a file opens full screen ([FileViewer]).
  */
 
-private val IMAGES = setOf("png", "jpg", "jpeg", "gif", "webp", "bmp", "heic", "heif", "ico")
-private val TEXTS = setOf("txt", "md", "json", "kt", "kts", "java", "js", "mjs", "cjs", "ts", "tsx", "jsx", "html", "htm", "css", "scss", "xml", "yml", "yaml",
-    "toml", "gradle", "properties", "py", "rb", "go", "rs", "c", "h", "cpp", "hpp", "cs", "sh", "ps1", "bat", "cmd", "sql", "csv", "tsv", "log", "ini", "cfg",
-    "conf", "svg", "gitignore", "gitattributes", "editorconfig", "lock", "env", "example", "swift", "dart", "vue", "svelte", "php", "pro", "txt")
-/** A file with none of these endings opens as text when it's this small and reads as text. */
-private const val TEXT_MAX = 2L * 1024 * 1024
-
-private fun extOf(name: String) = name.substringAfterLast('.', if (name.startsWith('.')) name.drop(1) else "").lowercase()
-
-private fun sizeWords(b: Long): String = when {
-    b < 1024 -> "$b B"
-    b < 1024 * 1024 -> "${b / 1024} KB"
-    else -> String.format("%.1f MB", b / (1024.0 * 1024))
-}
 
 private fun whenWords(at: Long): String {
     if (at <= 0) return ""
@@ -99,11 +85,11 @@ private fun whenWords(at: Long): String {
     }
 }
 
-private const val OFF_WORDS = "כדי לראות כאן את הקבצים, מדליקים במחשב: הגדרות ← טלפון ← \"הטלפון יכול לראות את הקבצים של הפרויקטים\"."
+
 
 /** The Files tab: [on] when the computer allows it. */
 @Composable
-fun FilesPane(projectId: String, projectName: String, on: Boolean) {
+fun FilesPane(projectId: String, projectName: String, on: Boolean, editOn: Boolean = false) {
     val c = LocalDeck.current
     val context = LocalContext.current
     if (!on) {
@@ -174,7 +160,7 @@ fun FilesPane(projectId: String, projectName: String, on: Boolean) {
             }
         }
     }
-    opened?.let { (full, e) -> FileViewer(projectId, full, e) { opened = null } }
+    opened?.let { (full, e) -> FileViewer(projectId, full, e, editOn) { opened = null } }
 }
 
 /** The icon as in VS Code and GitHub (see [FileIcons]). */
@@ -201,119 +187,3 @@ private fun EntryRow(icon: Int, dir: Boolean, name: String, detail: String, onCl
     Box(Modifier.fillMaxWidth().height(1.dp).background(c.line))
 }
 
-private sealed interface Shown {
-    data object Loading : Shown
-    data class Progress(val got: Long, val total: Long) : Shown
-    data class Words(val text: String, val cut: Boolean) : Shown
-    data class Picture(val bitmap: android.graphics.Bitmap) : Shown
-    data class Other(val bytes: ByteArray?) : Shown
-    data class Failed(val why: String) : Shown
-}
-
-/** Bytes that read as text: UTF-8, with no zero byte. */
-private fun asText(b: ByteArray): String? {
-    if (b.any { it == 0.toByte() }) return null
-    return runCatching {
-        java.nio.charset.StandardCharsets.UTF_8.newDecoder().decode(java.nio.ByteBuffer.wrap(b)).toString()
-    }.getOrNull()
-}
-
-/** One file, full screen: text, a picture, or what it is with a way to open it on the phone. */
-@Composable
-private fun FileViewer(projectId: String, path: String, e: FileEntry, onClose: () -> Unit) {
-    val c = LocalDeck.current
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val ext = extOf(e.name)
-    val picture = ext in IMAGES
-    val text = !picture && (ext in TEXTS || e.size <= 256 * 1024) && e.size <= TEXT_MAX
-    var shown by remember(path) { mutableStateOf<Shown>(if (picture || text) Shown.Loading else Shown.Other(null)) }
-
-    suspend fun fetch(what: String): ByteArray? {
-        val got = FilesLine.whole(projectId, path, what) { have, total -> shown = Shown.Progress(have, total) }
-        when {
-            got == null -> shown = Shown.Failed("המחשב לא ענה. אפשר לנסות שוב.")
-            got.second == "off" -> shown = Shown.Failed(OFF_WORDS)
-            got.second.isNotEmpty() -> shown = Shown.Failed(got.second)
-            else -> return got.first
-        }
-        return null
-    }
-
-    LaunchedEffect(path) {
-        if (picture) fetch(FileAsk.IMAGE)?.let { b ->
-            val bmp = withContext(Dispatchers.Default) { BitmapFactory.decodeByteArray(b, 0, b.size) }
-            shown = if (bmp != null) Shown.Picture(bmp) else Shown.Other(b)
-        } else if (text) fetch(FileAsk.READ)?.let { b ->
-            shown = asText(b)?.let { Shown.Words(if (it.length > 400_000) it.take(400_000) else it, it.length > 400_000) } ?: Shown.Other(b)
-        }
-    }
-
-    fun openOnPhone(bytes: ByteArray) {
-        val dir = File(context.cacheDir, "files").apply { deleteRecursively(); mkdirs() }
-        val f = File(dir, e.name.replace(Regex("[\\\\/:*?\"<>|]"), "_"))
-        f.writeBytes(bytes)
-        val uri = FileProvider.getUriForFile(context, context.packageName + ".files", f)
-        val type = android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "application/octet-stream"
-        val view = Intent(Intent.ACTION_VIEW).setDataAndType(uri, type).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        runCatching { context.startActivity(Intent.createChooser(view, e.name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-    }
-
-    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding().navigationBarsPadding()) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("✕", color = c.fg, fontSize = 18.sp, modifier = Modifier.clip(RoundedCornerShape(50)).clickable(onClick = onClose).padding(10.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(e.name, color = c.fg, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        style = TextStyle(textDirection = dirOf(e.name)))
-                    Text(sizeWords(e.size) + " · " + whenWords(e.at), color = c.faint, fontSize = 12.sp)
-                }
-            }
-            Box(Modifier.fillMaxWidth().height(1.dp).background(c.line))
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                when (val s = shown) {
-                    Shown.Loading -> CircularProgressIndicator(color = c.muted)
-                    is Shown.Progress -> Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        CircularProgressIndicator(color = c.muted)
-                        if (s.total > 0) Text("${sizeWords(s.got)} מתוך ${sizeWords(s.total)}", color = c.muted, fontSize = 13.sp)
-                    }
-                    is Shown.Words -> SelectionContainer(Modifier.fillMaxSize()) {
-                        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).horizontalScroll(rememberScrollState()).padding(16.dp)) {
-                            Text(s.text, color = c.fg, fontSize = 12.5.sp, lineHeight = 18.sp, fontFamily = PlexMono, softWrap = false,
-                                style = TextStyle(textDirection = TextDirection.Ltr))
-                            if (s.cut) Text("…הקובץ ארוך, מוצגת רק ההתחלה", color = c.faint, fontSize = 12.sp, modifier = Modifier.padding(top = 12.dp))
-                        }
-                    }
-                    is Shown.Picture -> ZoomImage(s.bitmap)
-                    is Shown.Other -> Column(Modifier.padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        Text("אי אפשר להציג את הקובץ הזה כאן.", color = c.muted, fontSize = 14.sp)
-                        if (e.size > FilePart.MAX_FILE) Text("הוא גדול מדי להורדה לטלפון (מעל 20MB).", color = c.faint, fontSize = 13.sp)
-                        else Text("להוריד ולפתוח בטלפון", color = c.bg, fontSize = 14.5.sp, fontWeight = FontWeight.Medium,
-                            modifier = Modifier.clip(RoundedCornerShape(50)).background(c.fg).clickable {
-                                val have = s.bytes
-                                if (have != null) openOnPhone(have)
-                                else scope.launch { fetch(FileAsk.READ)?.let { b -> shown = Shown.Other(b); openOnPhone(b) } }
-                            }.padding(horizontal = 20.dp, vertical = 11.dp))
-                    }
-                    is Shown.Failed -> Text(s.why, color = c.muted, fontSize = 14.sp, lineHeight = 21.sp, modifier = Modifier.padding(28.dp))
-                }
-            }
-        }
-    }
-}
-
-/** A picture that fits the screen, and zooms and moves with two fingers. */
-@Composable
-private fun ZoomImage(bitmap: android.graphics.Bitmap) {
-    var zoom by remember { mutableFloatStateOf(1f) }
-    var x by remember { mutableFloatStateOf(0f) }
-    var y by remember { mutableFloatStateOf(0f) }
-    val image = remember(bitmap) { bitmap.asImageBitmap() }
-    Image(image, null, Modifier.fillMaxSize().pointerInput(Unit) {
-        detectTransformGestures { _, pan, z, _ ->
-            zoom = (zoom * z).coerceIn(1f, 6f)
-            if (zoom == 1f) { x = 0f; y = 0f } else { x += pan.x; y += pan.y }
-        }
-    }.graphicsLayer { scaleX = zoom; scaleY = zoom; translationX = x; translationY = y })
-}

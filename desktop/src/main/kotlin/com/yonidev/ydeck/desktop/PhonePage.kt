@@ -147,6 +147,11 @@ fun PhoneSettings() {
                             "כבוי עד שמדליקים כאן. רק לצפייה: הטלפון רואה את התיקייה של כל פרויקט ופותח את הקבצים שבה (טקסט, תמונות, ושאר הקבצים להורדה), ולא יכול לשנות או למחוק כלום. סודות (.env, מפתחות) ו־.git לא מוצגים אף פעם.")) {
                         Toggle(settings.phoneFiles) { on -> Settings.update { it.copy(phoneFiles = on) }; PhoneLink.nudge() }
                     }
+                    if (settings.phoneFiles) Setting(tr("The phone can edit those files", "הטלפון יכול גם לערוך את הקבצים"),
+                        hint = tr("Off until you turn it on here. Only a file that's already there, and only if it hasn't changed here since the phone opened it, so nothing done here is written over. Git shows every change.",
+                            "כבוי עד שמדליקים כאן. רק קובץ שכבר קיים, ורק אם הוא לא השתנה כאן מאז שהטלפון פתח אותו, כך ששום דבר שנעשה כאן לא נדרס. Git מראה כל שינוי.")) {
+                        Toggle(settings.phoneEdit) { on -> Settings.update { it.copy(phoneEdit = on) }; PhoneLink.nudge() }
+                    }
                     // What was approved always, each one undone with a click.
                     settings.runOk.forEach { (pid, lines) ->
                         val name = Repo.deck.value.byId(pid)?.name ?: return@forEach

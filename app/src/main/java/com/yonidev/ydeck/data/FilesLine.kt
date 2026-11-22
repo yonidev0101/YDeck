@@ -68,8 +68,27 @@ object FilesLine {
     }
 
     /** Asks and waits; null when nothing came back in [seconds] (the computer is off, or looking at files is off there). */
-    suspend fun ask(project: String, path: String, what: String, from: Long = 0, seconds: Long = 45): FilePart? {
-        val a = FileAsk(UUID.randomUUID().toString().take(12), project, path, what, from)
+    suspend fun ask(project: String, path: String, what: String, from: Long = 0, seconds: Long = 45, rev: String = ""): FilePart? =
+        ask(FileAsk(UUID.randomUUID().toString().take(12), project, path, what, from, rev), seconds)
+
+    /**
+     * Saves [bytes] as the file at [path], piece by piece, if it's still the one opened ([base], its SHA-256). Returns the
+     * answer: its [FilePart.hash] when written, or its [FilePart.error] ("changed", "editoff", or words). Null: no answer.
+     */
+    suspend fun put(project: String, path: String, base: String, bytes: ByteArray): FilePart? {
+        val up = UUID.randomUUID().toString().take(12)
+        var from = 0L
+        while (true) {
+            val to = minOf(bytes.size.toLong(), from + FilePart.PIECE).toInt()
+            val part = ask(FileAsk(UUID.randomUUID().toString().take(12), project, path, FileAsk.PUT, from, up, base, bytes.size.toLong(),
+                bytes.copyOfRange(from.toInt(), to)), 45) ?: return null
+            if (part.error.isNotEmpty() || part.hash.isNotEmpty()) return part
+            if (part.from <= from && bytes.isNotEmpty()) return part.copy(error = "משהו השתבש בדרך. אפשר לשמור שוב.")
+            from = part.from
+        }
+    }
+
+    private suspend fun ask(a: FileAsk, seconds: Long): FilePart? {
         val d = CompletableDeferred<FilePart>()
         waiting[a.id] = a to d
         try {
@@ -92,11 +111,11 @@ object FilesLine {
     }
 
     /** A whole file (or picture), piece by piece; [progress] gets how much came, of how much. Null with no answer. */
-    suspend fun whole(project: String, path: String, what: String, progress: (Long, Long) -> Unit = { _, _ -> }): Pair<ByteArray?, String>? {
+    suspend fun whole(project: String, path: String, what: String, rev: String = "", progress: (Long, Long) -> Unit = { _, _ -> }): Pair<ByteArray?, String>? {
         val out = java.io.ByteArrayOutputStream()
         var from = 0L
         while (true) {
-            val part = ask(project, path, what, from) ?: return null
+            val part = ask(project, path, what, from, rev = rev) ?: return null
             if (part.error.isNotEmpty()) return null to part.error
             if (part.from != from) continue
             withContext(Dispatchers.IO) { out.write(part.data) }
