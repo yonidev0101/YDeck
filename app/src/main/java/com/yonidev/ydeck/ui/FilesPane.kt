@@ -27,6 +27,16 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.Image
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -127,14 +137,21 @@ fun FilesPane(projectId: String, projectName: String, on: Boolean) {
     }
     if (path.isNotEmpty()) BackHandler { path = path.substringBeforeLast('/', "") }
     Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 14.dp)) {
-        // Where we are: the project, then each folder; a tap goes back up to it.
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
-            val parts = path.split('/').filter { it.isNotEmpty() }
-            Crumb(projectName, parts.isEmpty()) { path = "" }
-            parts.forEachIndexed { i, n ->
-                Text(" / ", color = c.faint, fontSize = 13.sp)
-                Crumb(n, i == parts.lastIndex) { path = parts.take(i + 1).joinToString("/") }
+        // Where we are, and the way back: "back to <the folder above>" at the start, this folder's name at the end.
+        val parts = path.split('/').filter { it.isNotEmpty() }
+        Row(Modifier.fillMaxWidth().heightIn(min = 44.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (parts.isNotEmpty()) {
+                val up = parts.dropLast(1).lastOrNull() ?: projectName
+                Row(Modifier.weight(1f, fill = false).clip(RoundedCornerShape(50)).background(c.surface2).clickable { path = parts.dropLast(1).joinToString("/") }
+                    .padding(start = 10.dp, end = 14.dp, top = 8.dp, bottom = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, null, tint = c.fg, modifier = Modifier.size(18.dp))
+                    Text("חזרה ל־$up", color = c.fg, fontSize = 13.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
             }
+            Spacer(Modifier.weight(1f))
+            Text(parts.lastOrNull() ?: projectName, color = c.fg, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                style = TextStyle(textDirection = dirOf(parts.lastOrNull() ?: projectName)), modifier = Modifier.weight(1f, fill = false))
         }
         Box(Modifier.fillMaxWidth().padding(top = 10.dp).height(1.dp).background(c.line))
         val list = entries
@@ -150,10 +167,11 @@ fun FilesPane(projectId: String, projectName: String, on: Boolean) {
             }
             list.isEmpty() -> Text("התיקייה ריקה.", color = c.muted, fontSize = 14.sp, modifier = Modifier.padding(vertical = 20.dp))
             else -> {
-                if (path.isNotEmpty()) EntryRow("‹", "למעלה", "") { path = path.substringBeforeLast('/', "") }
                 list.forEach { e ->
                     val full = if (path.isEmpty()) e.name else "$path/${e.name}"
-                    EntryRow(if (e.dir) "▸" else "·", e.name, if (e.dir) "" else sizeWords(e.size) + " · " + whenWords(e.at)) {
+                    val detail = if (e.dir) when (e.size) { 0L -> "ריקה"; 1L -> "פריט אחד"; else -> "${e.size} פריטים" }
+                        else sizeWords(e.size) + " · " + whenWords(e.at)
+                    EntryRow(iconOf(e), e.dir, e.name, detail) {
                         if (e.dir) path = full else opened = full to e
                     }
                 }
@@ -164,23 +182,29 @@ fun FilesPane(projectId: String, projectName: String, on: Boolean) {
     opened?.let { (full, e) -> FileViewer(projectId, full, e) { opened = null } }
 }
 
-@Composable
-private fun Crumb(name: String, last: Boolean, onClick: () -> Unit) {
-    val c = LocalDeck.current
-    Text(name, color = if (last) c.fg else c.accentText, fontSize = 13.5.sp, fontWeight = if (last) FontWeight.Medium else FontWeight.Normal, maxLines = 1,
-        style = TextStyle(textDirection = dirOf(name)), modifier = Modifier.clickable(enabled = !last, onClick = onClick).padding(vertical = 4.dp))
+private fun iconOf(e: FileEntry): ImageVector {
+    val ext = extOf(e.name)
+    return when {
+        e.dir -> Icons.Outlined.Folder
+        ext in IMAGES -> Icons.Outlined.Image
+        ext in TEXTS -> Icons.Outlined.Description
+        else -> Icons.AutoMirrored.Outlined.InsertDriveFile
+    }
 }
 
 @Composable
-private fun EntryRow(mark: String, name: String, detail: String, onClick: () -> Unit) {
+private fun EntryRow(icon: ImageVector, dir: Boolean, name: String, detail: String, onClick: () -> Unit) {
     val c = LocalDeck.current
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 50.dp).padding(vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(mark, color = c.muted, fontSize = 16.sp, modifier = Modifier.width(14.dp))
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 56.dp).padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        Box(Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(c.surface2), contentAlignment = Alignment.Center) {
+            Icon(icon, null, tint = if (dir) c.accentText else c.muted, modifier = Modifier.size(20.dp))
+        }
         Column(Modifier.weight(1f)) {
             Text(name, color = c.fg, fontSize = 14.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, style = TextStyle(textDirection = dirOf(name)))
-            if (detail.isNotEmpty()) Text(detail, color = c.faint, fontSize = 12.sp, maxLines = 1)
+            Text(detail, color = c.faint, fontSize = 12.sp, maxLines = 1)
         }
+        if (dir) Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null, tint = c.faint, modifier = Modifier.size(20.dp))
     }
     Box(Modifier.fillMaxWidth().height(1.dp).background(c.line))
 }

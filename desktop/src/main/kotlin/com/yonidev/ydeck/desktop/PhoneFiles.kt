@@ -66,7 +66,8 @@ object PhoneFiles {
                     if (!f.isDirectory) return no(tr("Not a folder.", "זו לא תיקייה."))
                     val all = f.listFiles().orEmpty().filter { !hidden(it.name) }
                     val entries = all.sortedWith(compareBy<File>({ !it.isDirectory }, { it.name.lowercase() })).take(MAX_ENTRIES)
-                        .map { FileEntry(it.name, it.isDirectory, if (it.isDirectory) 0 else it.length(), it.lastModified()) }
+                        // A folder's size is how many things are in it (as shown: without the hidden ones).
+                        .map { FileEntry(it.name, it.isDirectory, if (it.isDirectory) (it.list()?.count { n -> !hidden(n) } ?: 0).toLong() else it.length(), it.lastModified()) }
                     FilePart(a.id, a.path, a.what, entries = entries, total = all.size.toLong())
                 }
                 FileAsk.IMAGE -> {

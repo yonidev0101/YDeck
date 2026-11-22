@@ -1,5 +1,11 @@
 package com.yonidev.ydeck.ui
 
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.layout.RowScope
 
 import androidx.compose.foundation.horizontalScroll
@@ -1722,18 +1728,50 @@ private fun RowScope.Peek(t: String, mono: Boolean = false) {
 @Composable
 private fun UnderlineTabs(tabs: List<Pair<String, String>>, on: String, onTab: (String) -> Unit) {
     val c = LocalDeck.current
-    Column(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 14.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+    // More tabs than fit: the row scrolls sideways, the chosen one comes into the middle, and the edges fade so the
+    // rest shows it's there.
+    val scroll = rememberScrollState()
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val centers = remember { mutableMapOf<String, Pair<Int, Int>>() }
+    var width by remember { mutableStateOf(0) }
+    val rtlNow = androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl
+    LaunchedEffect(on, width, scroll.maxValue) {
+        val (x, w) = centers[on] ?: return@LaunchedEffect
+        // x is from the content's left; in RTL the scroll is counted from its right.
+        val fromLeft = x + w / 2 - width / 2
+        val target = if (rtlNow) scroll.maxValue - fromLeft else fromLeft
+        scroll.animateScrollTo(target.coerceIn(0, scroll.maxValue))
+    }
+    val fade = with(density) { 28.dp.toPx() }
+    Column(Modifier.fillMaxWidth().padding(top = 14.dp)) {
+        Row(Modifier.fillMaxWidth()
+            .onSizeChanged { width = it.width }
+            .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+            .drawWithContent {
+                drawContent()
+                // In RTL the row starts at the right: the start fades when scrolled from it, the end while there's more.
+                val startFade = if (scroll.value > 0) fade else 0f
+                val endFade = if (scroll.value < scroll.maxValue) fade else 0f
+                val rtl = layoutDirection == androidx.compose.ui.unit.LayoutDirection.Rtl
+                val (left, right) = if (rtl) endFade to startFade else startFade to endFade
+                if (left > 0) drawRect(Brush.horizontalGradient(listOf(Color.Transparent, Color.Black), startX = 0f, endX = left), blendMode = androidx.compose.ui.graphics.BlendMode.DstIn)
+                if (right > 0) drawRect(Brush.horizontalGradient(listOf(Color.Black, Color.Transparent), startX = size.width - right, endX = size.width), blendMode = androidx.compose.ui.graphics.BlendMode.DstIn)
+            }
+            .horizontalScroll(scroll)
+            .padding(horizontal = 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(22.dp)) {
             tabs.forEach { (k, label) ->
                 val sel = k == on
-                Column(Modifier.width(androidx.compose.foundation.layout.IntrinsicSize.Max).clickable { onTab(k) }.padding(top = 12.dp)) {
-                    Text(label, color = if (sel) c.fg else c.muted, fontSize = 14.sp, fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1,
+                Column(Modifier.width(androidx.compose.foundation.layout.IntrinsicSize.Max)
+                    .onGloballyPositioned { centers[k] = it.positionInParent().x.toInt() to it.size.width }
+                    .clickable { onTab(k) }.padding(top = 12.dp)) {
+                    Text(label, color = if (sel) c.fg else c.muted, fontSize = 14.5.sp, fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1,
                         modifier = Modifier.padding(bottom = 9.dp, start = 2.dp, end = 2.dp))
                     Box(Modifier.fillMaxWidth().height(2.dp).background(if (sel) c.fg else Color.Transparent))
                 }
             }
         }
-        Hairline()
+        Box(Modifier.padding(horizontal = 24.dp)) { Hairline() }
     }
 }
 
