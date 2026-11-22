@@ -70,6 +70,40 @@ class PhoneFilesTest {
         }
     }
 
+    /** The graph: every branch, each commit's parents and names; a commit's files; a deleted file's change. */
+    @Test fun historyIsAGraph() {
+        if (!Git.installed) return
+        val was = Settings.state.value
+        val repo = Files.createTempDirectory("ydeck-graph").toFile()
+        fun git(vararg a: String) = Git.run(repo, listOf("-c", "user.name=T", "-c", "user.email=t@t", "-c", "commit.gpgsign=false") + a.toList()).also { assertTrue(a.joinToString(" ") + ": " + it.out, it.ok) }
+        try {
+            git("init", "-b", "main")
+            File(repo, "a.txt").writeText("1\n"); File(repo, "gone.txt").writeText("x\n"); git("add", "."); git("commit", "-m", "first")
+            git("switch", "-c", "side"); File(repo, "a.txt").writeText("1\n2\n"); git("commit", "-am", "on side")
+            git("switch", "main"); File(repo, "b.txt").writeText("b\n"); git("add", "."); git("rm", "-q", "gone.txt"); git("commit", "-m", "on main")
+            git("merge", "--no-ff", "-m", "merge side", "side")
+            Settings.preview(Settings.State(local = mapOf("p" to Local(folder = repo.path)), phoneFiles = true))
+
+            val all = PhoneFiles.answer(FileAsk("1", "p", "", FileAsk.HISTORY)).commits
+            assertEquals("merge side", all.first().subject)
+            assertEquals("first", all.last().subject)
+            assertEquals(setOf("merge side", "on main", "on side", "first"), all.map { it.subject }.toSet())
+            assertEquals(2, all[0].parents.size)
+            assertTrue(all[0].refs, all[0].refs.contains("main"))
+
+            val file = PhoneFiles.answer(FileAsk("2", "p", "a.txt", FileAsk.HISTORY)).commits
+            assertEquals(setOf("on side", "first"), file.map { it.subject }.filter { it != "merge side" }.toSet())
+
+            val onMain = all.first { it.subject == "on main" }.hash
+            val changed = PhoneFiles.answer(FileAsk("3", "p", "", FileAsk.COMMIT, rev = onMain)).entries
+            assertEquals(setOf("b.txt", "gone.txt"), changed.map { it.name }.toSet())
+            val diff = String(PhoneFiles.answer(FileAsk("4", "p", "gone.txt", FileAsk.DIFF, rev = onMain)).data)
+            assertTrue(diff, diff.contains("-x"))
+        } finally {
+            Settings.preview(was)
+        }
+    }
+
     @Test fun piecesFitTheLine() {
         // Sealed (gzip + AES) a piece of random bytes, as base64 in JSON, stays under the relay's 64 KB.
         val b = ByteArray(FilePart.PIECE).also { java.util.Random(1).nextBytes(it) }

@@ -115,7 +115,7 @@ private fun bytesOf(w: Shown.Words, text: String): ByteArray =
     ((if (w.bom) "﻿" else "") + (if (w.crlf) text.replace("\n", "\r\n") else text)).toByteArray(Charsets.UTF_8)
 
 /** How code is shown, as last chosen. */
-private object CodePrefs {
+internal object CodePrefs {
     private fun p(c: Context) = c.getSharedPreferences("code", Context.MODE_PRIVATE)
     fun size(c: Context) = p(c).getFloat("size", 12.5f)
     fun wrap(c: Context) = p(c).getBoolean("wrap", false)
@@ -267,7 +267,7 @@ internal fun FileViewer(projectId: String, path: String, e: FileEntry, editOn: B
                         if (cm == null) when {
                             historyError.isNotEmpty() -> Text(historyError, color = c.muted, fontSize = 14.sp, modifier = Modifier.padding(24.dp))
                             commits == null -> CircularProgressIndicator(color = DarkPlus.gutter)
-                            else -> Box(Modifier.fillMaxSize().background(c.bg)) { HistoryList(commits!!) { commit = it } }
+                            else -> Box(Modifier.fillMaxSize().background(c.bg)) { GitGraphList(commits!!) { commit = it } }
                         } else Column(Modifier.fillMaxSize()) {
                             Row(Modifier.fillMaxWidth().background(DarkPlus.bar).clickable { commit = null }.padding(horizontal = 12.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {

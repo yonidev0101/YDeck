@@ -1,5 +1,7 @@
 package com.yonidev.ydeck.ui
 
+import androidx.compose.foundation.layout.requiredWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.graphicsLayer
@@ -1624,7 +1626,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.InsidePage(
         "ideas" -> item { if (m != null) IdeasOf(m, edit, ask) }
         "decisions" -> item { if (m != null) { Decisions(m, write); m.releases.firstOrNull()?.let { r -> Block("גרסה אחרונה") { Body(r.version + (if (r.note.isNotBlank()) " · " + r.note else "")) } } } }
         "links" -> item { LinksTab(p, live) }
-        "git" -> item { GitPane(live, m, saveOn, edit) }
+        "git" -> item { GitPane(live, m, saveOn, edit, p.id, filesOn) }
         "runs" -> item { runs?.invoke() }
         "files" -> item { FilesPane(p.id, p.name, filesOn, editOn) }
     }
@@ -1777,6 +1779,55 @@ private fun UnderlineTabs(tabs: List<Pair<String, String>>, on: String, onTab: (
     }
 }
 
+/** The project's history on every branch, as a graph; a commit opens to its files. */
+@Composable
+private fun GraphSection(projectId: String) {
+    val c = LocalDeck.current
+    val context = LocalContext.current
+    DisposableEffect(projectId) {
+        com.yonidev.ydeck.data.FilesLine.start(context)
+        onDispose { com.yonidev.ydeck.data.FilesLine.stop() }
+    }
+    var commits by remember { mutableStateOf<List<com.yonidev.ydeck.link.FileCommit>?>(null) }
+    var error by remember { mutableStateOf("") }
+    var show by remember { mutableStateOf(30) }
+    var reload by remember { mutableStateOf(0) }
+    var open by remember { mutableStateOf<com.yonidev.ydeck.link.FileCommit?>(null) }
+    LaunchedEffect(projectId, reload) {
+        error = ""
+        val part = com.yonidev.ydeck.data.FilesLine.ask(projectId, "", com.yonidev.ydeck.link.FileAsk.HISTORY)
+        when {
+            part == null -> error = "המחשב לא ענה, אז הגרף לא נטען."
+            part.error.isNotEmpty() -> error = part.error
+            else -> commits = part.commits
+        }
+    }
+    Column {
+        Text("היסטוריה", color = c.muted, fontSize = 13.sp, modifier = Modifier.padding(bottom = 4.dp))
+        Hairline()
+        val list = commits
+        when {
+            error.isNotEmpty() && list == null -> Column(Modifier.padding(vertical = 14.dp)) {
+                Text(error, color = c.muted, fontSize = 13.5.sp)
+                Text("לנסות שוב", color = c.accentText, fontSize = 13.5.sp, modifier = Modifier.padding(top = 8.dp).clickable { reload++ })
+            }
+            list == null -> Row(Modifier.padding(vertical = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                androidx.compose.material3.CircularProgressIndicator(Modifier.size(16.dp), color = c.muted, strokeWidth = 2.dp)
+                Text("טוען את הגרף מהמחשב…", color = c.muted, fontSize = 13.5.sp)
+            }
+            // Edge to edge (the page has margins): the graph starts at the screen's side, as in VS Code.
+            else -> Box(Modifier.requiredWidth(androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.dp)) {
+                Column {
+                    GitGraphColumn(list, show) { open = it }
+                    if (list.size > show) Text("עוד ${minOf(30, list.size - show)} קומיטים", color = c.accentText, fontSize = 14.sp,
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp).clickable { show += 30 })
+                }
+            }
+        }
+    }
+    open?.let { cm -> CommitView(projectId, cm) { open = null } }
+}
+
 /** Claude's card in Git: what it suggests, what it sees, and "לעשות" for the steps YDeck can run itself. */
 @Composable
 private fun ClaudeSuggests(m: Memory, on: Boolean, edit: ((String, String, List<String>) -> Unit)?) {
@@ -1810,7 +1861,7 @@ private fun ClaudeSuggests(m: Memory, on: Boolean, edit: ((String, String, List<
 
 /** Git inside: where saving stands in words, the files, one button to save and push, the last commits. */
 @Composable
-private fun GitPane(live: Live?, m: Memory?, on: Boolean, edit: ((String, String, List<String>) -> Unit)?) {
+private fun GitPane(live: Live?, m: Memory?, on: Boolean, edit: ((String, String, List<String>) -> Unit)?, projectId: String = "", filesOn: Boolean = false) {
     val c = LocalDeck.current
     val context = LocalContext.current
     if (live == null || !live.hasGit) {
@@ -1862,7 +1913,9 @@ private fun GitPane(live: Live?, m: Memory?, on: Boolean, edit: ((String, String
         // What Claude suggests doing next (written on the computer from what git says), and one button that does it.
         if (m != null && (m.savingProposal.isNotBlank() || m.savingSteps.isNotBlank() || (!clean && (m.saving.isNotBlank() || m.savingBusy))))
             ClaudeSuggests(m, on, edit)
-        if (live.commits.isNotEmpty()) Column {
+        // With files on, every branch as a graph (from the computer, on the live line); else the last commits from the state.
+        if (filesOn) GraphSection(projectId)
+        else if (live.commits.isNotEmpty()) Column {
             Text("שמירות אחרונות", color = c.muted, fontSize = 13.sp, modifier = Modifier.padding(bottom = 4.dp))
             Hairline()
             live.commits.take(5).forEach { k ->

@@ -27,7 +27,8 @@ data class FileWake(val at: Long) {
 
 /**
  * One ask: [LIST] a folder, [READ] a file from byte [from] on, [IMAGE] a picture made small enough to send,
- * [HISTORY] the commits that changed a file, [DIFF] what commit [rev] changed in it (from byte [from] on), or [PUT]
+ * [HISTORY] the commits that changed a file or folder ("" the whole project, on every branch), [COMMIT] the files a
+ * commit changed, [DIFF] what commit [rev] changed in a file (from byte [from] on), or [PUT]
  * a piece of a file's new content: bytes [from]–[from]+[data].size of [total], written once all came, and only if the
  * file is still the one the phone opened (its SHA-256 is [base]).
  */
@@ -53,7 +54,10 @@ data class FileAsk(
         const val HISTORY = "history"
         const val DIFF = "diff"
         const val PUT = "put"
-        private val WHATS = setOf(LIST, READ, IMAGE, HISTORY, DIFF, PUT)
+        /** The files commit [rev] changed: [FilePart.entries], each with its path as the name, lines added as the size and
+         *  lines removed as the time (-1 each for a binary file). */
+        const val COMMIT = "commit"
+        private val WHATS = setOf(LIST, READ, IMAGE, HISTORY, DIFF, PUT, COMMIT)
 
         fun decode(bytes: ByteArray): FileAsk? = runCatching {
             val o = JSONObject(String(bytes))
@@ -69,8 +73,8 @@ data class FileAsk(
     }
 }
 
-/** A commit that changed a file. */
-data class FileCommit(val hash: String, val at: Long, val author: String, val subject: String)
+/** A commit: [parents] (short hashes, for the graph) and [refs] (git's "HEAD -> main, origin/main, tag: v1" line). */
+data class FileCommit(val hash: String, val at: Long, val author: String, val subject: String, val parents: List<String> = emptyList(), val refs: String = "")
 
 /** One thing in a folder: a folder ([dir]) or a file, its size in bytes and when it last changed. */
 data class FileEntry(val name: String, val dir: Boolean, val size: Long, val at: Long)
@@ -93,12 +97,12 @@ data class FilePart(
     /** [FileAsk.PUT]: the file's SHA-256 now, once written. */
     val hash: String = "",
 ) {
-    val done: Boolean get() = error.isNotEmpty() || what == FileAsk.LIST || what == FileAsk.HISTORY || from + data.size >= total
+    val done: Boolean get() = error.isNotEmpty() || what == FileAsk.LIST || what == FileAsk.HISTORY || what == FileAsk.COMMIT || from + data.size >= total
 
     fun encode(): ByteArray = JSONObject().put("app", "YDeck").put("kind", "filepart").put("id", id).put("path", path).put("what", what)
         .put("entries", JSONArray().apply { entries.forEach { put(JSONObject().put("n", it.name).put("d", it.dir).put("s", it.size).put("t", it.at)) } })
         .put("data", Base64.getEncoder().encodeToString(data)).put("from", from).put("total", total).put("error", error)
-        .put("commits", JSONArray().apply { commits.forEach { put(JSONObject().put("h", it.hash).put("t", it.at).put("a", it.author).put("s", it.subject)) } })
+        .put("commits", JSONArray().apply { commits.forEach { put(JSONObject().put("h", it.hash).put("t", it.at).put("a", it.author).put("s", it.subject).put("p", JSONArray(it.parents)).put("r", it.refs)) } })
         .put("hash", hash)
         .toString().toByteArray()
 
@@ -116,7 +120,8 @@ data class FilePart(
             FilePart(o.optString("id"), o.optString("path"), o.optString("what"),
                 (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { FileEntry(it.optString("n"), it.optBoolean("d"), it.optLong("s"), it.optLong("t")) },
                 Base64.getDecoder().decode(o.optString("data")), o.optLong("from"), o.optLong("total"), o.optString("error"),
-                (0 until cs.length()).mapNotNull { cs.optJSONObject(it) }.map { FileCommit(it.optString("h"), it.optLong("t"), it.optString("a"), it.optString("s")) },
+                (0 until cs.length()).mapNotNull { cs.optJSONObject(it) }.map { FileCommit(it.optString("h"), it.optLong("t"), it.optString("a"), it.optString("s"),
+                    it.optJSONArray("p")?.let { p -> (0 until p.length()).map { i -> p.optString(i) } }.orEmpty(), it.optString("r")) },
                 o.optString("hash"))
         }.getOrNull()
     }

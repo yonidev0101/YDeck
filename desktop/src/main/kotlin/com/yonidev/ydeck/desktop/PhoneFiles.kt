@@ -61,7 +61,8 @@ object PhoneFiles {
         lastAt = System.currentTimeMillis()
         val dir = Settings.state.value.localOf(a.project).dir ?: return no(tr("This project has no folder on the computer.", "לפרויקט הזה אין תיקייה במחשב."))
         val f = resolve(dir, a.path) ?: return no(tr("Not shown.", "לא מוצג."))
-        if (!f.exists()) return no(tr("It's not there any more.", "זה כבר לא שם."))
+        // A file a commit changed may be gone since (deleted, renamed): its change can still be shown.
+        if (!f.exists() && a.what != FileAsk.DIFF) return no(tr("It's not there any more.", "זה כבר לא שם."))
         return runCatching {
             when (a.what) {
                 FileAsk.LIST -> {
@@ -73,22 +74,38 @@ object PhoneFiles {
                     FilePart(a.id, a.path, a.what, entries = entries, total = all.size.toLong())
                 }
                 FileAsk.HISTORY -> {
-                    if (!f.isFile) return no(tr("Not a file.", "זה לא קובץ."))
-                    val rel = rel(dir, f)
-                    val r = Git.run(dir, listOf("log", "--follow", "-n", "60", "--format=%h%x09%ct%x09%an%x09%s", "--", rel), errors = false)
+                    // On every branch, with each commit's parents (as seen through this path) and its branch and tag names: a graph.
+                    val rel = rel(dir, f).ifEmpty { "." }
+                    val r = Git.run(dir, listOf("log", "HEAD", "--branches", "--tags", "--remotes", "--topo-order", "--parents", "-n", "150",
+                        "--format=%h%x09%p%x09%ct%x09%an%x09%D%x09%s", "--", rel), errors = false)
                     if (!r.ok) return no(tr("No Git history here.", "אין כאן היסטוריית Git."))
                     val commits = r.out.lines().mapNotNull { l ->
                         val p = l.split('\t')
-                        if (p.size < 4) null else FileCommit(p[0], (p[1].toLongOrNull() ?: 0) * 1000, p[2], p.drop(3).joinToString("\t"))
+                        if (p.size < 6) null
+                        else FileCommit(p[0], (p[2].toLongOrNull() ?: 0) * 1000, p[3], p.drop(5).joinToString("\t"), p[1].split(' ').filter { it.isNotBlank() }, p[4])
                     }
                     FilePart(a.id, a.path, a.what, commits = commits)
                 }
+                FileAsk.COMMIT -> {
+                    if (!Regex("^[0-9a-f]{4,40}$").matches(a.rev)) return no(tr("No such commit.", "אין קומיט כזה."))
+                    // Paths from the project's folder (it may sit inside a bigger repository), and only what's in it.
+                    val r = Git.run(dir, listOf("show", "--format=", "--numstat", "--relative", "--no-color", a.rev), errors = false)
+                    if (!r.ok) return no(tr("Couldn't read that commit.", "לא הצלחתי לקרוא את הקומיט הזה."))
+                    val entries = r.out.lines().mapNotNull { l ->
+                        val p = l.split('\t')
+                        if (p.size < 3) null else FileEntry(p.drop(2).joinToString("\t").replace(Regex("\\{(.*) => (.*)\\}"), "$2").replace(Regex("^.* => "), ""),
+                            false, p[0].toLongOrNull() ?: -1, p[1].toLongOrNull() ?: -1)
+                    }.filter { e -> e.name.split('/').none { hidden(it) } }
+                    FilePart(a.id, a.path, a.what, entries = entries.take(MAX_ENTRIES), total = entries.size.toLong())
+                }
                 FileAsk.DIFF -> {
-                    if (!f.isFile) return no(tr("Not a file.", "זה לא קובץ."))
+                    if (f.isDirectory) return no(tr("Not a file.", "זה לא קובץ."))
                     if (!Regex("^[0-9a-f]{4,40}$").matches(a.rev)) return no(tr("No such commit.", "אין קומיט כזה."))
                     val all = cached("diff|" + dir.path + "|" + a.rev + "|" + a.path) {
-                        // The file's path in that commit may differ (renamed since): --follow's names, the latest that matches.
-                        val r = Git.run(dir, listOf("log", "--follow", "-p", "-n", "1", "--format=", "--no-color", "--no-ext-diff", a.rev, "--", rel(dir, f)), errors = false)
+                        // The file's path in that commit may differ (renamed since): --follow's names. A file gone since: as it was.
+                        val args = if (f.isFile) listOf("log", "--follow", "-p", "-n", "1", "--format=", "--no-color", "--no-ext-diff", a.rev, "--", rel(dir, f))
+                            else listOf("show", "--format=", "--no-color", "--no-ext-diff", a.rev, "--", rel(dir, f))
+                        val r = Git.run(dir, args, errors = false)
                         if (r.ok) r.out.toByteArray().let { if (it.size > 2_000_000) it.copyOf(2_000_000) else it } else null
                     } ?: return no(tr("Couldn't read that commit.", "לא הצלחתי לקרוא את הקומיט הזה."))
                     piece(a, all)
