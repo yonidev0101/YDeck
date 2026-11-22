@@ -35,8 +35,8 @@ android {
         applicationId = if (legacy) "com.yonidev.projectdeck" else "com.yonidev.ydeck"
         minSdk = 31
         targetSdk = 36
-        versionCode = 44
-        versionName = "0.9.35"
+        versionCode = 45
+        versionName = "0.9.36"
         resValue("string", "app_name", if (legacy) "YDeck (ישן)" else "YDeck")
     }
 

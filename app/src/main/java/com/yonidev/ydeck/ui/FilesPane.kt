@@ -30,12 +30,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.Icon
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
-import androidx.compose.material.icons.outlined.Description
-import androidx.compose.material.icons.outlined.Folder
-import androidx.compose.material.icons.outlined.Image
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -182,23 +177,20 @@ fun FilesPane(projectId: String, projectName: String, on: Boolean) {
     opened?.let { (full, e) -> FileViewer(projectId, full, e) { opened = null } }
 }
 
-private fun iconOf(e: FileEntry): ImageVector {
-    val ext = extOf(e.name)
-    return when {
-        e.dir -> Icons.Outlined.Folder
-        ext in IMAGES -> Icons.Outlined.Image
-        ext in TEXTS -> Icons.Outlined.Description
-        else -> Icons.AutoMirrored.Outlined.InsertDriveFile
-    }
+/** The icon as in VS Code and GitHub (see [FileIcons]). */
+@Composable
+private fun iconOf(e: FileEntry): Int {
+    val context = LocalContext.current
+    return remember(e.name, e.dir) { FileIcons.of(context, e.name, e.dir) }
 }
 
 @Composable
-private fun EntryRow(icon: ImageVector, dir: Boolean, name: String, detail: String, onClick: () -> Unit) {
+private fun EntryRow(icon: Int, dir: Boolean, name: String, detail: String, onClick: () -> Unit) {
     val c = LocalDeck.current
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 56.dp).padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-        Box(Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(c.surface2), contentAlignment = Alignment.Center) {
-            Icon(icon, null, tint = if (dir) c.accentText else c.muted, modifier = Modifier.size(20.dp))
+        Box(Modifier.size(36.dp), contentAlignment = Alignment.Center) {
+            Image(androidx.compose.ui.res.painterResource(icon), null, modifier = Modifier.size(26.dp))
         }
         Column(Modifier.weight(1f)) {
             Text(name, color = c.fg, fontSize = 14.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, style = TextStyle(textDirection = dirOf(name)))
