@@ -144,6 +144,9 @@ object Settings {
         /** The paired phone may ask to run its own command lines in a project (see [Runs]): each waits for approval here,
          *  once or always. Off until turned on here, at the computer. */
         val phoneRun: Boolean = false,
+        /** The paired phone may look at the files in the projects' folders, read only (see [PhoneFiles]): never secrets (.env,
+         *  keys) or .git. Off until turned on here, at the computer. */
+        val phoneFiles: Boolean = false,
         /** Command lines approved always, by project id: that exact line, in that project. Kept on this PC only. */
         val runOk: Map<String, List<String>> = emptyMap(),
         /** A good morning on the phone (see [PhoneLink]): Claude Code here goes over the projects and writes to the
@@ -206,6 +209,7 @@ object Settings {
                 put("sessionReplies", s.sessionReplies)
                 put("phoneReply", s.phoneReply)
                 put("phoneRun", s.phoneRun)
+                put("phoneFiles", s.phoneFiles)
                 put("phoneMorning", s.phoneMorning)
                 put("morningAt", s.morningAt)
                 put("morningWeekend", s.morningWeekend)
@@ -264,6 +268,7 @@ object Settings {
             sessionReplies = o.optBoolean("sessionReplies", true),
             phoneReply = o.optBoolean("phoneReply", false),
             phoneRun = o.optBoolean("phoneRun", false),
+            phoneFiles = o.optBoolean("phoneFiles", false),
             phoneMorning = o.optBoolean("phoneMorning", false),
             morningAt = o.optInt("morningAt", 8 * 60).coerceIn(0, 24 * 60 - 1),
             morningWeekend = o.optBoolean("morningWeekend", false),

@@ -76,6 +76,8 @@ object Computer {
         val replies: List<Pair<Reply, Launched?>> = emptyList(),
         /** The computer takes command lines from here (each waits for approval there, unless allowed always). */
         val canRun: Boolean = false,
+        /** The computer shows its projects' files here, read only (on in its settings). */
+        val canFiles: Boolean = false,
         /** Commands sent from here, and what became of each (null: not heard yet). */
         val runs: List<Pair<com.yonidev.ydeck.link.RunCommand, com.yonidev.ydeck.link.Ran?>> = emptyList(),
         /** Lines allowed always, by project: offered for one tap. */
@@ -162,6 +164,7 @@ object Computer {
             waiting = mem?.optJSONArray("waiting")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) } }.orEmpty().map(Waiting::of),
             canReply = mem?.optBoolean("reply") ?: false,
             canRun = mem?.optBoolean("run") ?: false,
+            canFiles = mem?.optBoolean("files") ?: false,
             runOk = mem?.optJSONObject("runOk")?.let { r -> r.keys().asSequence().associateWith { k -> r.optJSONArray(k)?.let { a -> (0 until a.length()).map { a.optString(it) } }.orEmpty() } }.orEmpty(),
             morningAt = mem?.optInt("morningAt", -1) ?: -1,
             morning = mem?.optJSONObject("morning")?.let(com.yonidev.ydeck.link.Morning::of),
@@ -426,6 +429,7 @@ object Computer {
             put("waiting", org.json.JSONArray().apply { snapshot.waiting.forEach { put(it.toJson()) } })
             put("reply", snapshot.reply)
             put("run", snapshot.run)
+            put("files", snapshot.files)
             put("runOk", JSONObject().apply { snapshot.runOk.forEach { (k, v) -> put(k, org.json.JSONArray(v)) } })
             put("morningAt", snapshot.morningAt)
             snapshot.morning?.let { put("morning", it.toJson()) }
@@ -450,7 +454,7 @@ object Computer {
         _state.value = State(paired = true, name = snapshot.computer, stateAt = snapshot.at, checkedAt = now, memory = snapshot.memory, live = snapshot.live,
             pending = outbox.map { it.first }, canLaunch = snapshot.launch, claudeHere = snapshot.claude, launches = launches, beat = snapshot.beat,
             canAsk = snapshot.ask, chat = state(app).chat, waiting = snapshot.waiting, canReply = snapshot.reply, replies = replies,
-            canRun = snapshot.run, runs = runs, runOk = snapshot.runOk, morningAt = snapshot.morningAt,
+            canRun = snapshot.run, canFiles = snapshot.files, runs = runs, runOk = snapshot.runOk, morningAt = snapshot.morningAt,
             morning = snapshot.morning, morningBusy = snapshot.morningBusy, morningError = snapshot.morningError, morningPicks = snapshot.morningPicks)
         DeckWidget().updateAll(app)
         Result.UPDATED

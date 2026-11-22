@@ -184,6 +184,7 @@ class MainActivity : ComponentActivity() {
                                 replies = computer?.replies.orEmpty(),
                                 onReply = if (computer?.paired == true) ::reply else null,
                                 runOn = computer?.canRun == true,
+                                filesOn = computer?.canFiles == true,
                                 runs = computer?.runs.orEmpty().filter { it.first.project == project.id },
                                 runOk = computer?.runOk?.get(project.id).orEmpty(),
                                 onRun = if (computer?.paired == true) { line, window -> run(project.id, line, window) } else null,

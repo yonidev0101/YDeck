@@ -142,6 +142,11 @@ fun PhoneSettings() {
                             "כבוי עד שמדליקים כאן. פקודה שנכתבת בטלפון מחכה לך כאן: להריץ פעם אחת, לאשר תמיד את השורה הזו בדיוק בפרויקט הזה, או לא. היא רצה בחלון טרמינל חדש, בתיקיית הפרויקט, לעיני כל.")) {
                         Toggle(settings.phoneRun) { on -> Settings.update { it.copy(phoneRun = on) }; PhoneLink.nudge() }
                     }
+                    Setting(tr("The phone can look at the projects' files", "הטלפון יכול לראות את הקבצים של הפרויקטים"),
+                        hint = tr("Off until you turn it on here. Read only: the phone sees each project's folder and opens its files (text, pictures, the rest to download), and can't change or delete anything. Secrets (.env, keys) and .git are never shown.",
+                            "כבוי עד שמדליקים כאן. רק לצפייה: הטלפון רואה את התיקייה של כל פרויקט ופותח את הקבצים שבה (טקסט, תמונות, ושאר הקבצים להורדה), ולא יכול לשנות או למחוק כלום. סודות (.env, מפתחות) ו־.git לא מוצגים אף פעם.")) {
+                        Toggle(settings.phoneFiles) { on -> Settings.update { it.copy(phoneFiles = on) }; PhoneLink.nudge() }
+                    }
                     // What was approved always, each one undone with a click.
                     settings.runOk.forEach { (pid, lines) ->
                         val name = Repo.deck.value.byId(pid)?.name ?: return@forEach

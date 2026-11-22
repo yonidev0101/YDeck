@@ -345,6 +345,8 @@ object PhoneLink {
             // Or a command line to run (sealed as "run"): it waits for approval here, see [Runs].
             if (note == null) runCatching { com.yonidev.ydeck.link.RunCommand.decode(p.open("run", sealed)) }.getOrNull()?.let { r -> Runs.request(r); asked = true }
             // Or a question (sealed as "ask").
+            // Or the phone's Files page opened (sealed as "files"): the live line opens for it.
+            if (note == null) runCatching { com.yonidev.ydeck.link.FileWake.decode(p.open("files", sealed)) }.getOrNull()?.let { PhoneFiles.woke() }
             if (note == null) runCatching { Ask.decode(p.open("ask", sealed)) }.getOrNull()?.let { a ->
                 if (answers.none { it.id == a.id }) { ask(a); asked = true }
             }
@@ -703,7 +705,8 @@ object PhoneLink {
             waiting = SessionAsks.waiting.value, reply = settings.phoneReply, replied = replied.toList(),
             run = settings.phoneRun, ran = Runs.ran.toList(), runOk = if (settings.phoneRun) settings.runOk.filterKeys { k -> deck.projects.any { it.id == k } } else emptyMap(),
             morning = morning, morningAt = if (settings.phoneMorning && settings.phoneAsk && Tools.claude != null) settings.morningAt else -1,
-            morningBusy = morningBusy, morningError = morningError, morningPicks = if (settings.phoneAsk) GoodMorning.projects().map { it.id } else emptyList())
+            morningBusy = morningBusy, morningError = morningError, morningPicks = if (settings.phoneAsk) GoodMorning.projects().map { it.id } else emptyList(),
+            files = settings.phoneFiles)
     }
 
     /** The conversation with Claude in the project (the one on its page, or a recent one), its last lines. */

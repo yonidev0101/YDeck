@@ -35,7 +35,7 @@ object LiveLine {
             while (true) {
                 runCatching {
                     val p = PhoneLink.pairingNow
-                    val want = p != null && Runs.live()
+                    val want = p != null && (Runs.live() || PhoneFiles.wanted())
                     val open = ws
                     when {
                         open != null && (!want || on !== p) -> close()
@@ -91,6 +91,13 @@ object LiveLine {
                 // Only what opens with our key and is a "watch"; anything else is dropped unread.
                 runCatching { RunWatch.decode(p.open("watch", sealed)) }.getOrNull()?.let { watch ->
                     Thread { send(Runs.since(watch.id, watch.have)) }.apply { isDaemon = true }.start()
+                }
+                // Or the phone looking at a project's files (read only, see [PhoneFiles]).
+                runCatching { com.yonidev.ydeck.link.FileAsk.decode(p.open("fileask", sealed)) }.getOrNull()?.let { ask ->
+                    Thread {
+                        val part = PhoneFiles.answer(ask)
+                        synchronized(sending) { runCatching { w.sendBinary(ByteBuffer.wrap(p.seal("filepart", part.encode())), true).get(10, TimeUnit.SECONDS) } }
+                    }.apply { isDaemon = true }.start()
                 }
             }
             w.request(1)

@@ -123,6 +123,8 @@ fun ProjectScreen(
     runs: List<Pair<com.yonidev.ydeck.link.RunCommand, com.yonidev.ydeck.link.Ran?>> = emptyList(),
     runOk: List<String> = emptyList(),
     onRun: ((line: String, window: Boolean) -> Unit)? = null,
+    /** The computer shows this project's files here, read only (on in its settings). */
+    filesOn: Boolean = false,
 ) {
     val c = LocalDeck.current
     var tab by rememberSaveable { mutableStateOf(Tab.MEMORY) }
@@ -164,7 +166,7 @@ fun ProjectScreen(
         androidx.activity.compose.BackHandler { inside = null }
         PageScaffold(title = "מה יש ב־" + p.name, onBack = { inside = null }) {
             InsidePage(p, memory, live, insideTab, { inside = it }, edit, if (canWrite) { kind -> writing = kind } else null, { asking = it },
-                runs = runsCard, saveOn = launchOn)
+                runs = runsCard, saveOn = launchOn, filesOn = filesOn)
         }
     } else PageScaffold(
         title = p.name, onBack = onBack,
@@ -1587,6 +1589,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.InsidePage(
     edit: ((String, String, List<String>) -> Unit)?, write: ((String) -> Unit)?, ask: (TextAsk) -> Unit,
     runs: (@Composable () -> Unit)?,
     saveOn: Boolean = false,
+    filesOn: Boolean = false,
 ) {
     item {
         val c = LocalDeck.current
@@ -1615,6 +1618,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.InsidePage(
         "links" -> item { LinksTab(p, live) }
         "git" -> item { GitPane(live, m, saveOn, edit) }
         "runs" -> item { runs?.invoke() }
+        "files" -> item { FilesPane(p.id, p.name, filesOn) }
     }
 }
 
@@ -1645,9 +1649,9 @@ private fun IdeasOf(m: Memory, edit: ((String, String, List<String>) -> Unit)?, 
 
 // ── What's in the project: a list of lines, and inside, tabs of words ──
 
-private val INSIDE = listOf("runs" to "פקודות", "git" to "Git", "links" to "קישורים", "built" to "נבנה", "ideas" to "רעיונות", "decisions" to "החלטות")
+private val INSIDE = listOf("runs" to "פקודות", "files" to "קבצים", "git" to "Git", "links" to "קישורים", "built" to "נבנה", "ideas" to "רעיונות", "decisions" to "החלטות")
 
-private fun insideTabs(live: Live?, hasRuns: Boolean) = INSIDE.filter { (k, _) -> when (k) { "runs" -> hasRuns; "git" -> live?.hasGit == true; else -> true } }
+private fun insideTabs(live: Live?, hasRuns: Boolean) = INSIDE.filter { (k, _) -> when (k) { "runs" -> hasRuns; "files" -> live != null; "git" -> live?.hasGit == true; else -> true } }
 
 @Composable
 private fun Hairline() = Box(Modifier.fillMaxWidth().height(1.dp).background(LocalDeck.current.line))
@@ -1683,6 +1687,7 @@ private fun InsideList(p: Project, m: Memory?, live: Live?, hasRuns: Boolean, on
                         Peek(l.branch, mono = true)
                     }
                 }
+                "files" -> InsideLine(label, null, { onOpen(k) }) { Peek("התיקייה במחשב, לצפייה") }
                 "links" -> InsideLine(label, p.actions.size, { onOpen(k) }) { Peek(p.actions.take(3).joinToString(" · ") { it.label }.ifBlank { "אין עדיין" }) }
                 "built" -> InsideLine(label, m?.built?.size ?: 0, { onOpen(k) }) { Peek(m?.built?.firstOrNull() ?: "עוד לא מולא") }
                 "ideas" -> InsideLine(label, m?.ideas?.size ?: 0, { onOpen(k) }) { Peek(m?.ideas?.take(2)?.joinToString(" · ")?.ifBlank { null } ?: "אין עדיין") }

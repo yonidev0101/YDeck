@@ -134,9 +134,11 @@ class Snapshot(
     val morningError: String = "",
     /** The projects the good morning goes over now (picked, or worked on lately), by id. */
     val morningPicks: List<String> = emptyList(),
+    /** The phone may look at the projects' files, read only ([FileAsk]): on in the computer's settings. */
+    val files: Boolean = false,
 ) {
     /** The same state made at another time: what changed, without the time it was made. */
-    fun at(time: Long) = Snapshot(time, computer, deck, memory, live, applied, launch, claude, launched, beat, ask, answers, waiting, reply, replied, run, ran, runOk, morning, morningAt, morningBusy, morningError, morningPicks)
+    fun at(time: Long) = Snapshot(time, computer, deck, memory, live, applied, launch, claude, launched, beat, ask, answers, waiting, reply, replied, run, ran, runOk, morning, morningAt, morningBusy, morningError, morningPicks, files)
 
     fun encode(): ByteArray = JSONObject().apply {
         put("app", "YDeck")
@@ -165,6 +167,7 @@ class Snapshot(
         put("morningBusy", morningBusy)
         put("morningError", morningError)
         put("morningPicks", JSONArray(morningPicks))
+        put("files", files)
     }.toString().toByteArray()
 
     companion object {
@@ -198,6 +201,7 @@ class Snapshot(
                 morningBusy = o.optBoolean("morningBusy"),
                 morningError = o.optString("morningError"),
                 morningPicks = o.optJSONArray("morningPicks")?.let { a -> (0 until a.length()).map { a.optString(it) } }.orEmpty(),
+                files = o.optBoolean("files"),
             )
         }
 
