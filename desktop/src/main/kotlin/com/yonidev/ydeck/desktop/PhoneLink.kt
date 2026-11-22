@@ -544,12 +544,20 @@ object PhoneLink {
         }
     }
 
-    /** A project made on the phone: a name and a colour, no folder yet (that is connected here). */
+    /**
+     * A project made on the phone: a name and a colour. It gets a new, empty folder next to the other projects' folders
+     * (with git), connected at once, so Claude can be opened in it from the phone. No folder when there's nowhere to put it.
+     */
     private fun newProject(note: Note) {
         val id = note.project.filter { it.isLetterOrDigit() || it == '-' || it == '_' }.take(40)
         if (id.isEmpty() || Repo.deck.value.byId(id) != null) return
-        saveProject(Project.blank().copy(id = id, name = note.text.take(80), mono = note.text.trim().take(1).uppercase(),
-            color = DeckJson.parseColor(note.args.getOrElse(0) { "" }) ?: Project.blank().color))
+        val p = Project.blank().copy(id = id, name = note.text.take(80), mono = note.text.trim().take(1).uppercase(),
+            color = DeckJson.parseColor(note.args.getOrElse(0) { "" }) ?: Project.blank().color)
+        saveProject(p)
+        val home = NewFolders.home(Settings.state.value.local.values.mapNotNull { it.folder }) ?: return
+        val dir = NewFolders.make(home, p.name) ?: return
+        GitOps.init(dir)
+        connectFolder(Repo.deck.value.byId(id) ?: p, dir)
     }
 
     /**
