@@ -384,6 +384,8 @@ object PhoneLink {
         }
         // The conversation YDeck runs on the project's page goes to the terminal: YDeck lets go of it first (one writer).
         if (resume != null && Talk.chats.value[dir.path]?.session == resume) Talk.handOff(dir)
+        // Nobody is at the computer to answer "trust this folder?": the project's own folder is trusted first.
+        ClaudeTrust.trust(dir)
         val ok = Tools.claudeIn(dir, project.name, resume, remote = project.name.takeIf { l.remote }, prompt = l.prompt.ifBlank { null })
         if (ok) opened.tryEmit(project.name)
         return if (ok) Launched(l.id, true) else no("start")
@@ -560,6 +562,7 @@ object PhoneLink {
         val dir = NewFolders.make(home, p.name) ?: return
         GitOps.init(dir)
         connectFolder(Repo.deck.value.byId(id) ?: p, dir)
+        ClaudeTrust.trust(dir)
     }
 
     /**
