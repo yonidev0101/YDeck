@@ -44,8 +44,9 @@ const COPY = {
       ['wait', 'Needs you', 'Notification', 'It stopped to ask.'], ['gone', 'Closed', 'SessionEnd', 'The session is over, and where it stopped is kept.']],
     facts: [['Claude writes the memory.', 'Where things stand and what’s next go to a personal file (.ydeck.local.json); decisions and links to one in the repo (.ydeck.json). The instructions are shown in Settings, and the repo file can be turned off.'],
       ['YDeck reads git itself.', 'What isn’t saved, what isn’t pushed, which key is missing. Nothing is sent anywhere.']],
-    pr: [['On your machine.', 'Your code stays there. No account; a paired phone goes through a relay that sees only encrypted bytes.'], ['No AI of its own.', 'It works with the agents you already use: Claude Code, and Codex through the sessions it writes.'], ['Never destructive.', 'Nothing it does throws work away. Everything can be undone.'], ['Free.', 'For every developer, on Windows. Mac is next.']],
+    pr: [['On your machine.', 'Your code stays there. No account; a paired phone goes through a relay that sees only encrypted bytes.'], ['No AI of its own.', 'It works with the agents you already use: Claude Code, and Codex through the sessions it writes.'], ['Never destructive.', 'Nothing it does throws work away. Everything can be undone.'], ['Free.', 'For every developer, on Windows. Mac is next.'], ['Updated all the time.', 'A new version comes every few days, and YDeck updates itself. I work on it every day and read every note and review.']],
     endA: 'Nothing left open.', endB: 'Free and open source, for Windows.',
+    fb: ['Something missing, or something that bothers you? Tell me:', 'GitHub'],
     phone: ['On the phone too:', 'YDeck for Android', '/android'],
     mobK: 'On the phone', mobH: 'Your projects, from anywhere.',
     mobP: 'Pair your phone once, and YDeck for Android shows what your computer shows: who waits for you, each project’s path, and Git. And you can work from there too, end-to-end encrypted.',
@@ -82,8 +83,9 @@ const COPY = {
       ['wait', 'מחכה לך', 'Notification', 'הוא עצר לשאול.'], ['gone', 'נסגר', 'SessionEnd', 'הסשן נגמר, ומה שנעשה בו נשמר.']],
     facts: [['Claude כותב את הזיכרון.', 'איפה עומדים ומה הלאה נכתבים לקובץ אישי (.ydeck.local.json), והחלטות וקישורים לקובץ שבריפו (.ydeck.json). ההוראות גלויות בהגדרות, ואת הקובץ שבריפו אפשר לכבות.'],
       ['YDeck קורא את git בעצמו.', 'מה לא נשמר, מה לא נדחף, ואיזה מפתח חסר. שום דבר לא נשלח לשום מקום.']],
-    pr: [['על המחשב שלך.', 'הקוד נשאר שם. בלי חשבון; טלפון מחובר עובר דרך ממסר שרואה רק בתים מוצפנים.'], ['בלי AI משלו.', 'עובד עם הסוכנים שכבר יש לך: Claude Code, ו־Codex דרך הסשנים שהוא כותב.'], ['אף פעם לא הורס.', 'שום דבר שהוא עושה לא זורק עבודה. הכול אפשר לבטל.'], ['חינם.', 'לכל מפתח, ב־Windows. Mac בדרך.']],
+    pr: [['על המחשב שלך.', 'הקוד נשאר שם. בלי חשבון; טלפון מחובר עובר דרך ממסר שרואה רק בתים מוצפנים.'], ['בלי AI משלו.', 'עובד עם הסוכנים שכבר יש לך: Claude Code, ו־Codex דרך הסשנים שהוא כותב.'], ['אף פעם לא הורס.', 'שום דבר שהוא עושה לא זורק עבודה. הכול אפשר לבטל.'], ['חינם.', 'לכל מפתח, ב־Windows. Mac בדרך.'], ['מתעדכן כל הזמן.', 'גרסה חדשה יוצאת כל כמה ימים, ו־YDeck מתעדכן לבד. אני עובד עליו כל יום וקורא כל הערה וביקורת.']],
     endA: 'שום דבר לא נשאר פתוח.', endB: 'חינם וקוד פתוח, ל־Windows.',
+    fb: ['חסר לך משהו, או משהו מפריע? ספר לי:', 'GitHub'],
     phone: ['גם בטלפון:', 'YDeck לאנדרואיד', '/android'],
     mobK: 'בטלפון', mobH: 'הפרויקטים שלך, מכל מקום.',
     mobP: 'מחברים את הטלפון פעם אחת, ו־YDeck לאנדרואיד מראה מה שהמחשב רואה: מי מחכה לך, המסלול של כל פרויקט, ו־Git. ומשם אפשר גם לעבוד, מוצפן מקצה לקצה.',
@@ -466,6 +468,7 @@ ${RING(72)}
 <p class="rise d1">${esc(c.endB)}</p>
 <a class="pill big rise d2" href="${beta}">${c.beta}</a>
 ${phone}
+<p class="phone rise d2">${esc(c.fb[0])} <a href="mailto:${email}">${email}</a> · <a href="https://github.com/yonidev0101/YDeck/issues">${c.fb[1]}</a></p>
 </section>
 </main>
 <footer><div class="wrap">
