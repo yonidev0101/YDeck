@@ -5,11 +5,11 @@ const { execFileSync } = require('child_process'), path = require('path'), fs = 
 const SRC = path.join(__dirname, '../desktop/build/film-renders'), OUT = path.join(__dirname, 'src/cards');
 // [card, screen, x, y, width, height] in the Hebrew screen's pixels (3600×2340); the English one is mirrored.
 const CARDS = [
-  ['now-orbit', 'loops', 230, 345, 2520, 915],          // Orbit on Now: Claude waits for you, last time, what's open
-  ['now-nova', 'loops', 230, 1310, 2520, 920],          // Nova behind it: at work, a server, a key missing
-  ['receipt', 'orbit-session', 120, 845, 1440, 1150],   // the session's receipt and its diff
-  ['memory', 'orbit', 130, 880, 2610, 980],             // the next step, last time, what's open in the project
-  ['clear', 'loops-clear', 250, 430, 2490, 1090],       // nothing is open, and every project saved
+  ['now-orbit', 'loops', 230, 700, 2520, 950],          // Orbit on Now: Claude waits for you, last time, what's open
+  ['now-nova', 'loops', 230, 1720, 2520, 620],          // Nova behind it: at work, a server, a key missing
+  ['receipt', 'orbit-session', 130, 1285, 1375, 1050],   // the session's receipt and its diff
+  ['memory', 'orbit-tall', 125, 2200, 2615, 1060],      // the project's path: what was done, the next step, what's left
+  ['clear', 'loops-clear', 260, 700, 2470, 1140],       // nothing is open, and every project saved
 ];
 // The crops are 3×; the site gets them at 2× (sharp on a retina screen at the size they're shown).
 const SCALE = 2 / 3;

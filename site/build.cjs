@@ -8,8 +8,8 @@ const fs = require('fs'), path = require('path'), crypto = require('crypto'), { 
 const ROOT = path.join(__dirname, '..'), SRC = path.join(__dirname, 'src'), DIST = path.join(__dirname, 'dist'), CACHE = path.join(__dirname, '.cache');
 const SITE_URL = 'https://ydeck-app.pages.dev';
 const EMAIL = 'yonidev0101@gmail.com';
-const VERSION = '0.8', APK_SRC = path.join(ROOT, 'releases', 'YDeck-0.8-glasspreview.apk'), APK_NAME = `YDeck-${VERSION}.apk`;
-const UPDATED = '11 באוקטובר 2026', RELEASED = '11.10.2026';
+const VERSION = '0.9.38', APK_SRC = path.join(ROOT, 'dist', `YDeck-${VERSION}.apk`), APK_NAME = `YDeck-${VERSION}.apk`;
+const UPDATED = '24 בנובמבר 2026', RELEASED = '24.11.2026';
 const PLAYWRIGHT = 'C:/Users/user/Desktop/YoniDev projects/al-hamacom-dev/node_modules/playwright';
 
 // ── the app's catalog ──

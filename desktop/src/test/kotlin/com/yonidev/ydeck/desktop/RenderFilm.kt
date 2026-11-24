@@ -91,7 +91,7 @@ class RenderFilm {
                 orbit.id to Local(folder = o.path, note = "Ship deposits"),
                 nova.id to Local(folder = n.path, note = "Move sign-in to the new design system"),
                 pulse.id to Local(folder = p.path, note = "Streaks on the home screen"),
-            ), welcomed = true))
+            ), welcomed = true, statsAsked = true))  // the usage-counts card is asked once, not part of the film
 
             // Orbit: a session that changed three files and isn't committed, then Claude asks before it runs the tests.
             Receipts.begin("orbit-session$suffix", Agent.CLAUDE, o.path, "Add the Stripe webhook for deposits, with tests", now - 14 * 60_000)
@@ -127,6 +127,7 @@ class RenderFilm {
                 DeckTheme(true) { Box(Modifier.fillMaxSize().background(LocalDeck.current.bg)) { AppContent(deck, screen, true, AppActions(null, {}, {}, {}, {}, {})) } }
             }
             app("orbit", Screen.Project(orbit.id, Tab.OVERVIEW))
+            app("orbit-tall", Screen.Project(orbit.id, Tab.OVERVIEW), 1500)  // the whole page, down to the path (the site's memory card)
             app("nova", Screen.Project(nova.id, Tab.OVERVIEW))
             app("orbit-git", Screen.Project(orbit.id, Tab.GIT))
             app("orbit-links", Screen.Project(orbit.id, Tab.LINKS))

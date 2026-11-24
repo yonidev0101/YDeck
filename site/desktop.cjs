@@ -36,7 +36,7 @@ const COPY = {
     moments: [
       ['wait', 'Now', 'Who needs you, and why.', 'The project that needs you first is on top: what Claude is waiting for, what it did last time, and what’s still open in it. Each line comes with what closes it.', 'now'],
       ['work', 'Receipts', 'What Claude did, exactly.', 'What you asked, and every file it touched, line by line. Keep it in one commit, or put it back exactly as it was.', 'receipt'],
-      ['note', 'Memory', 'Every project remembers where it stopped.', 'What it is, what was decided, what the last session did and what comes next. Claude writes it down at the end of the work, and every new session starts from there.', 'memory'],
+      ['note', 'Memory', 'Every project remembers where it stopped.', 'Its path: what was done, the next step and what’s left, with ideas set aside and decisions. Claude keeps it at the end of each piece of work, and every new session starts from there.', 'memory'],
       ['clean', 'The end of the day', 'Close the day in one click.', 'Claude commits what’s left, pushes, stops the servers and writes tomorrow’s next step. Then nothing is open.', 'clear'],
     ],
     howK: 'How it works', howH: 'A small plugin for Claude Code. Everything else stays as it was.',
@@ -44,9 +44,14 @@ const COPY = {
       ['wait', 'Needs you', 'Notification', 'It stopped to ask.'], ['gone', 'Closed', 'SessionEnd', 'The session is over, and where it stopped is kept.']],
     facts: [['Claude writes the memory.', 'Where things stand and what’s next go to a personal file (.ydeck.local.json); decisions and links to one in the repo (.ydeck.json). The instructions are shown in Settings, and the repo file can be turned off.'],
       ['YDeck reads git itself.', 'What isn’t saved, what isn’t pushed, which key is missing. Nothing is sent anywhere.']],
-    pr: [['On your machine.', 'Your code never leaves it. No account, no server of ours.'], ['No AI of its own.', 'It works with the agents you already use: Claude Code, and Codex through the sessions it writes.'], ['Never destructive.', 'Nothing it does throws work away. Everything can be undone.'], ['Free.', 'For every developer, on Windows. Mac is next.']],
+    pr: [['On your machine.', 'Your code stays there. No account; a paired phone goes through a relay that sees only encrypted bytes.'], ['No AI of its own.', 'It works with the agents you already use: Claude Code, and Codex through the sessions it writes.'], ['Never destructive.', 'Nothing it does throws work away. Everything can be undone.'], ['Free.', 'For every developer, on Windows. Mac is next.']],
     endA: 'Nothing left open.', endB: 'Free and open source, for Windows.',
-    phone: ['On the phone too:', 'YDeck for Android, in beta on Google Play', '/download'],
+    phone: ['On the phone too:', 'YDeck for Android', '/android'],
+    mobK: 'On the phone', mobH: 'Your projects, from anywhere.',
+    mobP: 'Pair your phone once, and YDeck for Android shows what your computer shows: who waits for you, each project’s path, and Git. And you can work from there too, end-to-end encrypted.',
+    mobList: [['wait', 'Write to Claude in a project', 'and answer its permission requests: allow, always, or no.'], ['work', 'Git, as on the computer', 'what isn’t saved, save and push with one button, Claude’s suggestion, and every branch as a graph.'],
+      ['open', 'Files and code', 'the project’s folder, code coloured as in VS Code, a file’s history, and editing if you allow it.'], ['clean', 'Commands and new projects', 'run the project’s commands with their output live; a new project gets its own folder.']],
+    mobNote: 'Each of these is off until you turn it on at the computer (Settings → Phone). The app is in Hebrew for now.',
     foot: ['Privacy', 'YDeck for Android', 'Download'],
   },
   he: {
@@ -69,7 +74,7 @@ const COPY = {
     moments: [
       ['wait', 'עכשיו', 'מי מחכה לך, ולמה.', 'הפרויקט שצריך אותך ראשון נמצא למעלה: על מה Claude מחכה, מה הוא עשה בפעם הקודמת, ומה עוד פתוח בו. ליד כל שורה, הפעולה שסוגרת אותה.', 'now'],
       ['work', 'קבלות', 'מה Claude עשה, בדיוק.', 'מה ביקשת, וכל קובץ שהוא נגע בו, שורה אחרי שורה. שומרים בקומיט אחד, או מחזירים בדיוק למה שהיה.', 'receipt'],
-      ['note', 'זיכרון', 'כל פרויקט זוכר איפה עצר.', 'מה הפרויקט, מה הוחלט, מה נעשה בסשן האחרון ומה הצעד הבא. Claude כותב את זה בעצמו בסוף העבודה, וכל סשן חדש מתחיל משם.', 'memory'],
+      ['note', 'זיכרון', 'כל פרויקט זוכר איפה עצר.', 'המסלול שלו: מה נעשה, מה הצעד הבא ומה נשאר, עם רעיונות שחנו בצד והחלטות. Claude מעדכן אותו בסוף כל קטע עבודה, וכל סשן חדש מתחיל משם.', 'memory'],
       ['clean', 'סוף היום', 'סוגרים את היום בלחיצה.', 'Claude עושה קומיט למה שנשאר, דוחף, עוצר את השרתים וכותב את הצעד הבא למחר. אחר כך שום דבר לא פתוח.', 'clear'],
     ],
     howK: 'איך זה עובד', howH: 'פלאגין קטן ל־Claude Code. כל השאר נשאר כמו שהיה.',
@@ -77,9 +82,14 @@ const COPY = {
       ['wait', 'מחכה לך', 'Notification', 'הוא עצר לשאול.'], ['gone', 'נסגר', 'SessionEnd', 'הסשן נגמר, ומה שנעשה בו נשמר.']],
     facts: [['Claude כותב את הזיכרון.', 'איפה עומדים ומה הלאה נכתבים לקובץ אישי (.ydeck.local.json), והחלטות וקישורים לקובץ שבריפו (.ydeck.json). ההוראות גלויות בהגדרות, ואת הקובץ שבריפו אפשר לכבות.'],
       ['YDeck קורא את git בעצמו.', 'מה לא נשמר, מה לא נדחף, ואיזה מפתח חסר. שום דבר לא נשלח לשום מקום.']],
-    pr: [['על המחשב שלך.', 'הקוד לא יוצא ממנו. בלי חשבון, בלי שרת שלנו.'], ['בלי AI משלו.', 'עובד עם הסוכנים שכבר יש לך: Claude Code, ו־Codex דרך הסשנים שהוא כותב.'], ['אף פעם לא הורס.', 'שום דבר שהוא עושה לא זורק עבודה. הכול אפשר לבטל.'], ['חינם.', 'לכל מפתח, ב־Windows. Mac בדרך.']],
+    pr: [['על המחשב שלך.', 'הקוד נשאר שם. בלי חשבון; טלפון מחובר עובר דרך ממסר שרואה רק בתים מוצפנים.'], ['בלי AI משלו.', 'עובד עם הסוכנים שכבר יש לך: Claude Code, ו־Codex דרך הסשנים שהוא כותב.'], ['אף פעם לא הורס.', 'שום דבר שהוא עושה לא זורק עבודה. הכול אפשר לבטל.'], ['חינם.', 'לכל מפתח, ב־Windows. Mac בדרך.']],
     endA: 'שום דבר לא נשאר פתוח.', endB: 'חינם וקוד פתוח, ל־Windows.',
-    phone: ['גם בטלפון:', 'YDeck לאנדרואיד, בטא ב־Google Play', '/beta'],
+    phone: ['גם בטלפון:', 'YDeck לאנדרואיד', '/android'],
+    mobK: 'בטלפון', mobH: 'הפרויקטים שלך, מכל מקום.',
+    mobP: 'מחברים את הטלפון פעם אחת, ו־YDeck לאנדרואיד מראה מה שהמחשב רואה: מי מחכה לך, המסלול של כל פרויקט, ו־Git. ומשם אפשר גם לעבוד, מוצפן מקצה לקצה.',
+    mobList: [['wait', 'לכתוב ל־Claude בפרויקט', 'ולענות לבקשות ההרשאה שלו: לאשר, תמיד, או לא.'], ['work', 'Git, כמו במחשב', 'מה לא נשמר, שמירה ודחיפה בכפתור אחד, ההצעה של Claude, וכל ענף כגרף.'],
+      ['open', 'קבצים וקוד', 'התיקייה של הפרויקט, קוד בצבעים כמו ב־VS Code, ההיסטוריה של קובץ, ועריכה אם מרשים.'], ['clean', 'פקודות ופרויקטים חדשים', 'מריצים את הפקודות של הפרויקט והפלט מגיע חי; פרויקט חדש מקבל תיקייה משלו.']],
+    mobNote: 'כל אחד מאלה כבוי עד שמדליקים אותו במחשב (הגדרות ← טלפון).',
     foot: ['פרטיות', 'YDeck לאנדרואיד', 'הורדה'],
   },
 };
@@ -105,7 +115,9 @@ const CARDS = { now: [['now-nova', true], ['now-orbit']], receipt: [['receipt', 
 // edge, 100 its right; mirrored for English). Rows begin on the right; the diff's code reads from the left.
 const FOCUS = { 'now-orbit': 100, receipt: 0, memory: 100, clear: 50 };
 // the card's size, for the page to keep its room before the image loads (site/cards.cjs: the crop × 2/3)
-const CARD_SIZE = { 'now-orbit': [1680, 610], 'now-nova': [1680, 614], receipt: [960, 766], memory: [1740, 654], clear: [1660, 726] };
+const CARD_SIZE = { 'now-orbit': [1680, 634], 'now-nova': [1680, 414], receipt: [917, 700], memory: [1743, 706], clear: [1647, 760] };
+// The phone section: the Android app's own screens (site/src/phone, from the emulator's sample project), in Hebrew.
+const PHONE_SHOTS = ['project', 'inside', 'git'];
 
 const CSS = `
 :root{--night:#0B0B0D;--ink:#F4F4F5;--soft:#C8C8CE;--mute:#8B8B93;--faint:#5A5A62;--card:#131316;--line:#24242A;--amber:#F5A524;--indigo:#3D35E0;--indigo-t:#A7A3FF;--think:#6E66F8;--green:#34C77B;
@@ -248,6 +260,21 @@ html[dir=rtl] .xp-bar{padding:0 14px 0 6px}
 .js .vis:not(.in) .card:not(.behind){transform:translateY(18px)}
 .js .vis:not(.in) .card.behind{transform:translateX(-50%) scale(.93) translateY(30px);opacity:0}
 
+/* ── the phone: three of its screens, and what it does ── */
+.mob{padding:16vh 0 4vh}
+.mob .copy{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:64px;align-items:end;margin-bottom:48px}
+.mob .copy .kicker{grid-column:1/-1}
+.mob h2{margin:0;font-weight:300;font-size:clamp(34px,4.6vw,56px);line-height:1.08;letter-spacing:-.035em}
+html[lang=he] .mob h2{letter-spacing:-.015em;line-height:1.15}
+.mob .copy p{margin:0;padding-bottom:6px;font-size:19px;line-height:1.6;color:var(--soft)}
+.shots{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:clamp(14px,2.4vw,32px);direction:rtl}
+.shot{margin:0;border-radius:26px;overflow:hidden;background:#0B0B0D;border:1px solid rgba(255,255,255,.1);box-shadow:0 30px 80px -20px rgba(0,0,0,.75)}
+.shot img{display:block;width:100%;height:auto}
+.mob ul{list-style:none;margin:56px 0 0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:56px}
+.mob li{display:flex;gap:14px;align-items:baseline;padding:20px 0;border-top:1px solid var(--line);font-size:16px;color:var(--soft);line-height:1.6}
+.mob li b{color:var(--ink);font-weight:400}
+.mob .note{margin:22px 0 0;font-size:14px;color:var(--mute)}
+.mob .note a{font-size:14px}
 /* ── how it works: the legend of the dot ── */
 .how{padding:18vh 0 12vh;text-align:center}
 .how h2{margin:0 auto;font-weight:300;font-size:clamp(34px,5vw,60px);line-height:1.1;letter-spacing:-.035em;max-width:860px}
@@ -306,6 +333,12 @@ footer a:hover{color:var(--ink)}
   .card{aspect-ratio:1.12}
   .card img{width:100%;height:100%;object-fit:cover;object-position:var(--fx) 50%}
   html[lang=en] .card img{object-position:calc(100% - var(--fx)) 50%}
+  .mob{padding:12vh 0 0}
+  .mob .copy{grid-template-columns:minmax(0,1fr);margin-bottom:32px}
+  .mob .copy p{margin-top:20px}
+  .shots{grid-template-columns:repeat(3,72%);overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:8px}
+  .shot{scroll-snap-align:center}
+  .mob ul{grid-template-columns:minmax(0,1fr)}
   .legend{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:48px}
   .legend::before{display:none}
   .facts{grid-template-columns:minmax(0,1fr);gap:32px}
@@ -409,6 +442,13 @@ ${c.moments.map(([st, k, h, p, vis], i) => `<section class="moment" data-dot="m$
 </section>`).join('\n')}
 </div>
 
+<section class="wrap mob" id="phone" data-dot="phone">
+<div class="copy rise"><div class="kicker">${dt('work')}${esc(c.mobK)}</div><h2>${amber(esc(c.mobH))}</h2><p>${esc(c.mobP)}</p></div>
+<div class="shots rise">${PHONE_SHOTS.map(n => `<figure class="shot"><img src="/media/phone-${n}.jpg" alt="" loading="lazy" width="540" height="825"></figure>`).join('')}</div>
+<ul>${c.mobList.map(([st, b, t]) => `<li class="rise">${dt(st)}<span><b>${esc(b)}</b>: ${esc(t)}</span></li>`).join('')}</ul>
+<p class="note">${esc(c.mobNote)} <a class="text-link" href="/android">${c.lang === 'he' ? 'YDeck לאנדרואיד ←' : 'YDeck for Android →'}</a></p>
+</section>
+
 <section class="how" id="how" data-dot="gone"><div class="wrap">
 <div class="kicker rise">${dt('open')}${esc(c.howK)}</div>
 <h2 class="rise d1">${amber(esc(c.howH))}</h2>
@@ -448,6 +488,8 @@ function build({ DIST, ROOT, EMAIL, SITE_URL }) {
   const cards = path.join(__dirname, 'src/cards');
   fs.mkdirSync(path.join(DIST, 'media'), { recursive: true });
   for (const f of fs.readdirSync(cards)) fs.copyFileSync(path.join(cards, f), path.join(DIST, 'media', 'card-' + f));
+  const shots = path.join(__dirname, 'src/phone');
+  for (const f of fs.readdirSync(shots)) fs.copyFileSync(path.join(shots, f), path.join(DIST, 'media', 'phone-' + f));
   const stills = path.join(ROOT, 'store/brand/logo/out');
   for (const [lang, file] of [['en', 'sting-end.png'], ['he', 'sting-end-he.png']]) {
     const src = path.join(stills, file);
