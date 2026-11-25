@@ -77,6 +77,8 @@ class MainActivity : ComponentActivity() {
 
     /** A scanned code waiting for "replace the projects here?". */
     private var pendingPair by mutableStateOf<String?>(null)
+    /** A "Let's go" asking first: a note for Claude, and where it runs (see [GoSheet]). */
+    private var going by mutableStateOf<Going?>(null)
 
     /** What was done here with each topic of the good morning (see [MorningCard]). */
     private var handled by mutableStateOf<Map<String, Handled>>(emptyMap())
@@ -203,6 +205,7 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                 }
+                going?.let { g -> GoSheet(g, onDismiss = { going = null }) }
                 pendingPair?.let { code ->
                     AlertDialog(
                         onDismissRequest = { pendingPair = null },
@@ -271,10 +274,13 @@ class MainActivity : ComponentActivity() {
             return
         }
         val m = computer.morning ?: return
-        confirmOwner("פתיחת Claude במחשב") {
-            mark(m, t, TopicDone.GO)
-            write(t.project, com.yonidev.ydeck.link.Note.MORNING_GO, t.say)
-            send(t.project, com.yonidev.ydeck.link.Launch.NEW, "", t.step.ifBlank { t.say }, false)
+        going = Going(t.project, deck.byId(t.project)?.name ?: t.project, t.step.ifBlank { t.say }) { text, terminal, remote ->
+            confirmOwner(if (terminal) "פתיחת Claude במחשב" else "לכתוב ל־Claude בפרויקט") {
+                mark(m, t, TopicDone.GO)
+                write(t.project, com.yonidev.ydeck.link.Note.MORNING_GO, t.say)
+                if (terminal) send(t.project, com.yonidev.ydeck.link.Launch.NEW, "", text, remote)
+                else { write(t.project, com.yonidev.ydeck.link.Note.TALK_SAY, text); page = Page.Project(t.project) }
+            }
         }
     }
 
@@ -292,11 +298,14 @@ class MainActivity : ComponentActivity() {
                     toast("כדי לפתוח את Claude מהטלפון, מדליקים פעם אחת במחשב: הגדרות ← טלפון ← ״הטלפון יכול לפתוח את Claude Code״.")
                     return
                 }
-                // Claude works on it in the project, in the conversation on its page, here on the phone.
-                confirmOwner("לכתוב ל־Claude בפרויקט") {
-                    done()
-                    write(item.project, com.yonidev.ydeck.link.Note.TALK_SAY, item.text)
-                    page = Page.Project(item.project)
+                // First a note for Claude and where it runs: the conversation on the project's page, or a Claude Code window.
+                going = Going(item.project, deck.byId(item.project)?.name ?: item.project, item.text) { text, terminal, remote ->
+                    confirmOwner(if (terminal) "פתיחת Claude במחשב" else "לכתוב ל־Claude בפרויקט") {
+                        done()
+                        if (terminal) send(item.project, com.yonidev.ydeck.link.Launch.NEW, "", text, remote)
+                        else write(item.project, com.yonidev.ydeck.link.Note.TALK_SAY, text)
+                        page = Page.Project(item.project)
+                    }
                 }
             }
             CardAct.DONE -> { done(); write(item.project, com.yonidev.ydeck.link.Note.LEFT_DONE, item.text) }
