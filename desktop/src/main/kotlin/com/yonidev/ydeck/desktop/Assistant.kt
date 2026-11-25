@@ -446,6 +446,8 @@ private fun TurnView(t: Assistant.Turn, working: Boolean, step: String?) {
 private fun Acts(t: Assistant.Turn) {
     val c = LocalDeck.current
     var done by remember(t.at, t.question) { mutableStateOf<Map<Int, String>>(emptyMap()) }
+    // The suggestion whose "Let's go" is open: a note on it, and where to run it.
+    var going by remember(t.at, t.question) { mutableStateOf<Int?>(null) }
     val deck = Repo.deck.collectAsState().value
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         t.acts.forEachIndexed { i, a ->
@@ -457,8 +459,9 @@ private fun Acts(t: Assistant.Turn) {
                 Partner.NEXT -> tr("Make it the next step", "לצעד הבא")
                 else -> tr("Add to About me", "ל״עליי״")
             }
-            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.surface2).padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.surface2).padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     if (project != null) Text(project, color = c.faint, fontSize = 11.5.sp, fontFamily = PlexSans)
                     Text(a.text, color = c.fg, fontSize = 13.sp, lineHeight = 19.sp, fontFamily = PlexSans, maxLines = 4, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
@@ -467,15 +470,59 @@ private fun Acts(t: Assistant.Turn) {
                 Spacer(Modifier.width(10.dp))
                 val was = done[i]
                 if (was != null) Text(was, color = if (was == DONE_WORD) c.liveText else c.danger, fontSize = 12.5.sp, fontFamily = PlexSans)
-                else Pill(label, if (a.kind == Partner.GO) Tone.PRIMARY else Tone.TINT, small = true) {
-                    done = done + (i to (Partner.run(a) ?: DONE_WORD))
+                else if (going != i) Pill(label, if (a.kind == Partner.GO) Tone.PRIMARY else Tone.TINT, small = true) {
+                    if (a.kind == Partner.GO) going = i else done = done + (i to (Partner.run(a) ?: DONE_WORD))
                 }
+            }
+            if (going == i && done[i] == null) GoPanel(onCancel = { going = null }) { note, terminal, remote ->
+                going = null
+                done = done + (i to (Partner.go(a, note, terminal, remote) ?: if (terminal) tr("Opened in a terminal", "נפתח בטרמינל") else DONE_WORD))
+            }
             }
         }
     }
 }
 
 private val DONE_WORD: String get() = tr("Done", "נעשה")
+
+/**
+ * Before "Let's go" runs: a note for Claude on the suggestion (to explain it first, or change something), and where it
+ * runs: on the project's page, or in a new Claude Code terminal, with Remote Control if picked. The last pick is kept.
+ */
+@Composable
+internal fun GoPanel(onCancel: () -> Unit, onGo: (note: String, terminal: Boolean, remote: Boolean) -> Unit) {
+    val c = LocalDeck.current
+    val s = Settings.state.collectAsState().value
+    var note by remember { mutableStateOf("") }
+    var remote by remember { mutableStateOf(s.goRemote) }
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    val shape = RoundedCornerShape(10.dp)
+    Box(Modifier.fillMaxWidth().clip(shape).background(c.surface).border(1.dp, c.line, shape).padding(horizontal = 12.dp, vertical = 9.dp)) {
+        val style = TextStyle(color = c.fg, fontSize = 13.5.sp, fontFamily = PlexSans, lineHeight = 20.sp, textDirection = TextDirection.Content)
+        if (note.isEmpty()) Text(tr("Anything to add for Claude? (optional) For example: explain it to me first, or change…",
+            "להוסיף משהו ל־Claude? (לא חובה) למשל: תסביר לי קודם, או תשנה ל…"), style = style.copy(color = c.faint))
+        BasicTextField(note, { note = it.take(2000) }, textStyle = style, cursorBrush = SolidColor(c.accent), maxLines = 5,
+            modifier = Modifier.fillMaxWidth().focusRequester(focus))
+    }
+    fun go(terminal: Boolean) {
+        Settings.update { it.copy(goWhere = if (terminal) "terminal" else "ydeck", goRemote = remote) }
+        onGo(note, terminal, remote)
+    }
+    val inTerminal = s.goWhere == "terminal"
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Pill(tr("Run in YDeck", "להריץ ב־YDeck"), if (inTerminal) Tone.TINT else Tone.PRIMARY, small = true) { go(false) }
+        Pill(tr("Open in Claude Code", "לפתוח ב־Claude Code"), if (inTerminal) Tone.PRIMARY else Tone.TINT, enabled = Tools.claude != null, small = true) { go(true) }
+        Spacer(Modifier.weight(1f))
+        TextAction(tr("Cancel", "ביטול"), onClick = onCancel)
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Toggle(remote) { remote = it }
+        Spacer(Modifier.width(8.dp))
+        Text(tr("In Claude Code, with Remote Control (shows in the Claude app too)", "ב־Claude Code, עם Remote Control (יופיע גם באפליקציה של Claude)"),
+            color = c.muted, fontSize = 12.5.sp, fontFamily = PlexSans, modifier = Modifier.clickable { remote = !remote })
+    }
+}
 
 /** About me: how the developer works, their goals, what they focus on, in their words. Read into every conversation. */
 @Composable

@@ -124,6 +124,10 @@ object Settings {
         val repoFiles: Boolean = true,
         /** When a Claude session that changed files ends, Claude writes where the work stands (see [Handoffs]). */
         val handoffs: Boolean = true,
+        /** Where "Let's go" on Ask YDeck's suggestion runs, as last picked: on the project's page ("ydeck") or in a new
+         *  Claude Code terminal ("terminal"), there with Remote Control when [goRemote] (see [GoPanel]). */
+        val goWhere: String = "ydeck",
+        val goRemote: Boolean = false,
         /** A tagged folder's icon shows an agent at work (indigo dot) or waiting (amber), see [FolderBadges]. */
         val folderStatus: Boolean = true,
         /** A tagged folder's icon shows a small amber dot while it has changes not yet committed, see [FolderBadges]. */
@@ -203,6 +207,8 @@ object Settings {
                 put("claudeAlerts", s.claudeAlerts)
                 put("gitFetch", s.gitFetch)
                 put("handoffs", s.handoffs)
+                put("goWhere", s.goWhere)
+                put("goRemote", s.goRemote)
                 put("repoFiles", s.repoFiles)
                 put("folderStatus", s.folderStatus)
                 put("folderGit", s.folderGit)
@@ -262,6 +268,8 @@ object Settings {
             claudeAlerts = o.optBoolean("claudeAlerts", true),
             gitFetch = o.optBoolean("gitFetch", true),
             handoffs = o.optBoolean("handoffs", true),
+            goWhere = o.optString("goWhere", "ydeck"),
+            goRemote = o.optBoolean("goRemote", false),
             repoFiles = o.optBoolean("repoFiles", true),
             folderStatus = o.optBoolean("folderStatus", true),
             folderGit = o.optBoolean("folderGit", true),

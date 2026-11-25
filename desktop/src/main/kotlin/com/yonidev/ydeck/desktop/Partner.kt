@@ -77,14 +77,32 @@ Kinds: "go" work on it now (YDeck opens a conversation with Claude in that proje
             LEFT -> Plan.add(dir, Plan.LEFT, a.text)
             IDEA -> Plan.add(dir, Plan.IDEAS, a.text)
             NEXT -> { ProjectFiles.writeNext(dir, a.text); Settings.setNote(p.id, a.text) }
-            GO -> {
-                Nav.set(Screen.Project(p.id))
-                Nav.front.value++
-                Talk.load(dir)
-                if (Talk.chats.value[dir.path]?.busy == true) return tr("Claude is already working in this project", "Claude כבר עובד בפרויקט הזה")
-                if (Talk.elsewhere(Talk.chats.value[dir.path]?.session)) Talk.fresh(dir)
-                Talk.send(dir, a.text)
-            }
+            GO -> return go(a)
+        }
+        Pulses.refreshSoon()
+        return null
+    }
+
+    /**
+     * "Let's go": [a] to Claude in its project, with the developer's [note] on it when there is one. On the project's
+     * page (YDeck runs the conversation), or in a new Claude Code terminal, there with Remote Control when [remote] so it
+     * shows in the Claude app too. Returns null when it worked, else why not, in words.
+     */
+    fun go(a: Act, note: String = "", terminal: Boolean = false, remote: Boolean = false): String? {
+        val p = Repo.deck.value.byId(a.project) ?: return tr("The project isn't here any more", "הפרויקט כבר לא כאן")
+        val dir = Settings.state.value.localOf(p.id).dir ?: return tr("The project has no folder on this PC", "לפרויקט אין תיקייה במחשב הזה")
+        val text = note.trim().let { n -> if (n.isEmpty()) a.text else a.text + "\n\n" + tr("My note: ", "ההערה שלי: ") + n }
+        if (terminal) {
+            if (Tools.claude == null) return tr("Claude Code isn't installed on this PC", "Claude Code לא מותקן במחשב הזה")
+            ClaudeTrust.trust(dir)
+            if (!Tools.claudeIn(dir, p.name, remote = p.name.takeIf { remote }, prompt = text)) return tr("The terminal didn't open", "הטרמינל לא נפתח")
+        } else {
+            Nav.set(Screen.Project(p.id))
+            Nav.front.value++
+            Talk.load(dir)
+            if (Talk.chats.value[dir.path]?.busy == true) return tr("Claude is already working in this project", "Claude כבר עובד בפרויקט הזה")
+            if (Talk.elsewhere(Talk.chats.value[dir.path]?.session)) Talk.fresh(dir)
+            Talk.send(dir, text)
         }
         Pulses.refreshSoon()
         return null
