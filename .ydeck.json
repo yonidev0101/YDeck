@@ -131,6 +131,11 @@
   ],
   "releases": [
     {
+      "version": "Windows 1.42.2",
+      "date": "2026-11-25",
+      "note": "״יאללה״ על הצעה שואל קודם: הערה ל־Claude, ולהריץ ב־YDeck או בטרמינל של Claude Code עם Remote Control"
+    },
+    {
       "version": "Windows 1.42.1",
       "date": "2026-11-24",
       "note": "הטלפון כשלט רחוק, עמוד פרויקט עם יעד ומסלול, Claude מציע ב־Git, קבצים וקוד בטלפון (Android 0.9.38)"
